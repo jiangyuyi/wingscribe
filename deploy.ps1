@@ -688,43 +688,44 @@ function Install-PythonDependencies {
         Log-Warn "pip upgrade failed, continuing..."
     }
 
-    # 检查是否安装了 CUDA，并安装对应版本的 PyTorch
-    $cudaStatus = Test-CUDA
-    if ($cudaStatus.is_available -and $cudaStatus.cuda_version) {
-        # 根据 CUDA 版本选择对应的 PyTorch
-        $cudaVersion = $cudaStatus.cuda_version
-        $torchIndexUrl = ""
+    # 检查是否有 GPU 可用，安装对应版本的 PyTorch
+    # 注意：检测 GPU (nvidia-smi) 而不是 CUDA Toolkit (nvcc)
+    # 因为大多数用户只有驱动没有 CUDA Toolkit
+    $hasGpu = $false
+    if (Test-Command "nvidia-smi") {
+        try {
+            $gpuName = nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | Select-Object -First 1
+            if ($gpuName) {
+                $hasGpu = $true
+                Log-Info "GPU detected: $gpuName"
+            }
+        } catch { }
+    }
 
-        # CUDA 12.x
-        if ($cudaVersion -match "^12\.") {
-            $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-            Log-Info "Installing PyTorch with CUDA 12.1 support..."
-        }
-        # CUDA 11.x
-        elseif ($cudaVersion -match "^11\.") {
-            $torchIndexUrl = "https://download.pytorch.org/whl/cu118"
-            Log-Info "Installing PyTorch with CUDA 11.8 support..."
-        }
+    if ($hasGpu) {
+        # 有 GPU，尝试安装 CUDA 版本的 PyTorch
+        # 使用 CUDA 12.1 作为默认版本（兼容性最好）
+        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+        Log-Info "GPU detected, installing PyTorch with CUDA 12.1 support..."
 
-        if ($torchIndexUrl) {
-            # 先卸载 CPU 版本的 torch（如果存在）
-            Log-Info "Uninstalling any existing CPU torch..."
-            $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+        # 尝试安装 CUDA 版本的 PyTorch
+        # 先卸载 CPU 版本的 torch（如果存在）
+        Log-Info "Uninstalling any existing CPU torch..."
+        $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-            # 安装 CUDA 版本的 torch
-            Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-            $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
+        # 安装 CUDA 版本的 torch
+        Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
+        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
 
-            if ($pipInstallTorch.ExitCode -eq 0) {
-                Log-Success "CUDA PyTorch installed"
-            } else {
-                Log-Warn "CUDA PyTorch install failed, falling back to CPU version"
-                # 回退到 CPU 版本
-                Log-Info "Installing CPU PyTorch..."
-                $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
-                if ($pipInstallCpu.ExitCode -eq 0) {
-                    Log-Success "CPU PyTorch installed (fallback)"
-                }
+        if ($pipInstallTorch.ExitCode -eq 0) {
+            Log-Success "CUDA PyTorch installed"
+        } else {
+            Log-Warn "CUDA PyTorch install failed, falling back to CPU version"
+            # 回退到 CPU 版本
+            Log-Info "Installing CPU PyTorch..."
+            $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+            if ($pipInstallCpu.ExitCode -eq 0) {
+                Log-Success "CPU PyTorch installed (fallback)"
             }
         }
     } else {
@@ -1027,35 +1028,35 @@ function Invoke-Main {
                     Write-Host ""
                     Log-Step "Reinstalling PyTorch..."
 
-                    # 复用 Install-PythonDependencies 中的逻辑
-                    $cudaStatus = Test-CUDA
-
-                    if ($cudaStatus.is_available -and $cudaStatus.cuda_version) {
-                        $cudaVersion = $cudaStatus.cuda_version
-                        $torchIndexUrl = ""
-
-                        if ($cudaVersion -match "^12\.") {
-                            $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-                            Log-Info "Installing PyTorch with CUDA 12.1 support..."
-                        }
-                        elseif ($cudaVersion -match "^11\.") {
-                            $torchIndexUrl = "https://download.pytorch.org/whl/cu118"
-                            Log-Info "Installing PyTorch with CUDA 11.8 support..."
-                        }
-
-                        if ($torchIndexUrl) {
-                            # 卸载并重新安装 CUDA 版本
-                            Log-Info "Uninstalling old PyTorch..."
-                            $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
-
-                            Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-                            $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
-
-                            if ($pipInstall.ExitCode -eq 0) {
-                                Log-Success "CUDA PyTorch installed successfully"
-                            } else {
-                                Log-Error "Failed to install CUDA PyTorch"
+                    # 检测 GPU 是否可用，安装对应版本的 PyTorch
+                    # 检测 GPU (nvidia-smi) 而不是 CUDA Toolkit (nvcc)
+                    $hasGpu = $false
+                    if (Test-Command "nvidia-smi") {
+                        try {
+                            $gpuName = nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | Select-Object -First 1
+                            if ($gpuName) {
+                                $hasGpu = $true
+                                Log-Info "GPU detected: $gpuName"
                             }
+                        } catch { }
+                    }
+
+                    if ($hasGpu) {
+                        # 有 GPU，安装 CUDA 版本的 PyTorch
+                        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+                        Log-Info "Installing PyTorch with CUDA 12.1 support..."
+
+                        # 卸载并重新安装 CUDA 版本
+                        Log-Info "Uninstalling old PyTorch..."
+                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+
+                        Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
+                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
+
+                        if ($pipInstall.ExitCode -eq 0) {
+                            Log-Success "CUDA PyTorch installed successfully"
+                        } else {
+                            Log-Error "Failed to install CUDA PyTorch"
                         }
                     } else {
                         # CPU 模式

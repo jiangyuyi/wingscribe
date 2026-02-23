@@ -717,8 +717,13 @@ function Install-PythonDependencies {
         $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
         # 安装 CUDA 版本的 torch
+        # 重要：清除镜像配置，确保从 PyTorch 官方源下载
+        Log-Info "Clearing pip mirror config for CUDA installation..."
+        & $pythonVenv -m pip config unset global.index-url 2>&1 | Out-Null
+        & $pythonVenv -m pip config unset global.extra-index-url 2>&1 | Out-Null
+
         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
+        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
 
         if ($pipInstallTorch.ExitCode -eq 0) {
             Log-Success "CUDA PyTorch installed"
@@ -1058,8 +1063,13 @@ function Invoke-Main {
                         Log-Info "Uninstalling CPU torch..."
                         $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
+                        # 重要：清除镜像配置，确保从 PyTorch 官方源下载
+                        Log-Info "Clearing pip mirror config for CUDA installation..."
+                        & $venvPython -m pip config unset global.index-url 2>&1 | Out-Null
+                        & $venvPython -m pip config unset global.extra-index-url 2>&1 | Out-Null
+
                         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
+                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
 
                         if ($pipInstall.ExitCode -eq 0) {
                             Log-Success "CUDA PyTorch installed successfully"

@@ -57,13 +57,16 @@
 
 ---
 
-### 4. GPU 库未正确安装到 venv [待开始]
-**问题**: Python venv 中无法正常调用显卡，始终回落到 CPU 执行
+### 4. GPU 库未正确安装到 venv [已完成]
+**状态**: ✅ 完成
 
-**排查步骤**:
-1. 检查 venv 中安装的 PyTorch 版本是否支持 CUDA
-2. 检查是否安装了正确的 CUDA 版本对应的 PyTorch
-3. 检查 deploy.ps1 中 pip 安装逻辑是否正确
+**问题原因**: requirements.txt 中只写了 `torch`，pip 默认安装 CPU 版本
+
+**修复方案**:
+- [X] 修改 deploy.ps1，在安装依赖前检测 CUDA 版本
+- [X] 根据 CUDA 12.x/11.x 安装对应版本的 PyTorch
+- [X] 从 PyTorch 官方源安装（download.pytorch.org）
+- [X] 提交: `3a01a8d`
 
 ---
 

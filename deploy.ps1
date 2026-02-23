@@ -719,10 +719,24 @@ function Install-PythonDependencies {
                 Log-Success "CUDA PyTorch installed"
             } else {
                 Log-Warn "CUDA PyTorch install failed, falling back to CPU version"
+                # 回退到 CPU 版本
+                Log-Info "Installing CPU PyTorch..."
+                $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                if ($pipInstallCpu.ExitCode -eq 0) {
+                    Log-Success "CPU PyTorch installed (fallback)"
+                }
             }
         }
     } else {
         Log-Info "No CUDA detected, installing CPU PyTorch..."
+        # 安装 CPU 版本的 PyTorch（从 PyPI）
+        Log-Info "Installing CPU PyTorch..."
+        $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+        if ($pipInstallCpu.ExitCode -eq 0) {
+            Log-Success "CPU PyTorch installed"
+        } else {
+            Log-Warn "CPU PyTorch install failed, will try via requirements.txt"
+        }
     }
 
     # 安装其他依赖（排除 torch，因为我们单独安装了）

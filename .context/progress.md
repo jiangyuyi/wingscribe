@@ -70,8 +70,8 @@
 
 ---
 
-### 5. PyTorch 不支持 RTX 50 系列 (sm_120) [进行中]
-**状态**: 🔄 进行中
+### 5. PyTorch 不支持 RTX 50 系列 (sm_120) [已完成]
+**状态**: ✅ 完成
 
 **错误**:
 ```
@@ -81,16 +81,17 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 ```
 
 **分析**:
-- RTX 50 系列是 2025 年发布的新显卡 (sm_120)
-- PyTorch 稳定版 2.10.0 不支持 sm_120
-- nightly 版本尝试中：cu124 版本没有 torchaudio，已跳过
-- nightly 版本仍无法支持 sm_120（测试中）
+- RTX 50 系列是 2025 年发布的新显卡 (sm_120/Blackwell架构)
+- PyTorch 稳定版最高支持 sm_90
+- **关键发现**: 需要使用 **CUDA 12.8 (cu128)** 版本的 nightly，而不是 cu121/cu124
 
-**已尝试**:
+**修复方案**:
 - [X] 自动检测 RTX 50 系列 GPU
 - [X] 使用 nightly 版本代替稳定版
-- [X] nightly 从 cu121 改为 cu124
-- [X] nightly 跳过 torchaudio
+- [X] **nightly 从 cu124 改为 cu128 (CUDA 12.8)**
+- [X] 完全卸载旧版本后再安装
+- [X] 添加 pip cache purge
+- [X] 验证通过
 
 ---
 

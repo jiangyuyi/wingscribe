@@ -727,18 +727,20 @@ function Install-PythonDependencies {
         $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
         # 根据 GPU 类型选择 PyTorch 版本
+        # RTX 50 系列 (sm_120/Blackwell) 需要 CUDA 12.8 的 nightly 版本
         $torchIndexUrl = ""
         if ($needsNightly) {
-            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
-            Log-Info "Installing nightly PyTorch for newer GPU support..."
+            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu128"
+            Log-Info "Installing nightly PyTorch with CUDA 12.8 for RTX 50 series (sm_120) support..."
         } else {
             $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
             Log-Info "Installing stable CUDA PyTorch..."
         }
 
-        # 卸载 CPU 版本
-        Log-Info "Uninstalling CPU torch..."
-        $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision" -NoNewWindow -Wait -PassThru
+        # 完全卸载旧版本 PyTorch (包括 CPU 版本)
+        Log-Info "Uninstalling any existing PyTorch..."
+        & $pythonVenv -m pip uninstall -y torch torchvision torchaudio 2>&1 | Out-Null
+        & $pythonVenv -m pip cache purge 2>&1 | Out-Null
 
         # 清除所有镜像配置，使用官方源
         Log-Info "Clearing pip config and using official PyTorch source..."
@@ -758,10 +760,10 @@ function Install-PythonDependencies {
             if ($pipStdErr) {
                 Log-Warn "Error: $pipStdErr"
             }
-            # 如果不是 nightly 且失败了，尝试 nightly
+            # 如果不是 nightly 且失败了，尝试 nightly (使用 cu128 支持 sm_120)
             if (-not $needsNightly) {
-                Log-Info "Trying nightly version..."
-                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
+                Log-Info "Trying nightly version with CUDA 12.8..."
+                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu128"
                 Log-Info "Using nightly index: $torchIndexUrl"
                 $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                 if ($pipInstallTorch.ExitCode -eq 0) {
@@ -1114,17 +1116,19 @@ function Invoke-Main {
                         $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
                         # 根据 GPU 类型选择 PyTorch 版本
+                        # RTX 50 系列 (sm_120/Blackwell) 需要 CUDA 12.8 的 nightly 版本
                         if ($needsNightly) {
-                            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
-                            Log-Info "Installing nightly PyTorch for newer GPU support..."
+                            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu128"
+                            Log-Info "Installing nightly PyTorch with CUDA 12.8 for RTX 50 series (sm_120) support..."
                         } else {
                             $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
                             Log-Info "Installing stable CUDA PyTorch..."
                         }
 
-                        # 卸载 CPU 版本
-                        Log-Info "Uninstalling CPU torch..."
-                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision" -NoNewWindow -Wait -PassThru
+                        # 完全卸载旧版本 PyTorch (包括 CPU 版本)
+                        Log-Info "Uninstalling any existing PyTorch..."
+                        & $venvPython -m pip uninstall -y torch torchvision torchaudio 2>&1 | Out-Null
+                        & $venvPython -m pip cache purge 2>&1 | Out-Null
 
                         # 清除所有镜像配置
                         Log-Info "Clearing pip config..."
@@ -1144,10 +1148,10 @@ function Invoke-Main {
                             if ($pipStdErr) {
                                 Log-Warn "Error: $pipStdErr"
                             }
-                            # 如果不是 nightly 且失败了，尝试 nightly
+                            # 如果不是 nightly 且失败了，尝试 nightly (使用 cu128 支持 sm_120)
                             if (-not $needsNightly) {
-                                Log-Info "Trying nightly version..."
-                                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
+                                Log-Info "Trying nightly version with CUDA 12.8..."
+                                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu128"
                                 Log-Info "Using nightly index: $torchIndexUrl"
                                 $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                                 if ($pipInstall.ExitCode -eq 0) {

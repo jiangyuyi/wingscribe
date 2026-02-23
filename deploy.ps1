@@ -704,13 +704,16 @@ function Install-PythonDependencies {
 
     if ($hasGpu) {
         # 有 GPU，尝试安装 CUDA 版本的 PyTorch
-        # 使用 CUDA 12.1 作为默认版本（兼容性最好）
-        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-        Log-Info "GPU detected, installing PyTorch with CUDA 12.1 support..."
+        # 先安装 CPU 版本保底（因为 CUDA 源可能没有对应 Python 版本的预编译包）
+        Log-Info "Installing CPU PyTorch as fallback..."
+        $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-        # 尝试安装 CUDA 版本的 PyTorch
-        # 先卸载 CPU 版本的 torch（如果存在）
-        Log-Info "Uninstalling any existing CPU torch..."
+        # 然后尝试安装 CUDA 版本的 PyTorch
+        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+        Log-Info "Attempting to install CUDA PyTorch..."
+
+        # 卸载 CPU 版本
+        Log-Info "Uninstalling CPU torch..."
         $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
         # 安装 CUDA 版本的 torch
@@ -720,12 +723,12 @@ function Install-PythonDependencies {
         if ($pipInstallTorch.ExitCode -eq 0) {
             Log-Success "CUDA PyTorch installed"
         } else {
-            Log-Warn "CUDA PyTorch install failed, falling back to CPU version"
-            # 回退到 CPU 版本
-            Log-Info "Installing CPU PyTorch..."
+            Log-Warn "CUDA PyTorch install failed (Python version may not have prebuilt binaries), using CPU version"
+            # 重新安装 CPU 版本
+            Log-Info "Reinstalling CPU PyTorch..."
             $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
             if ($pipInstallCpu.ExitCode -eq 0) {
-                Log-Success "CPU PyTorch installed (fallback)"
+                Log-Success "CPU PyTorch installed"
             }
         }
     } else {
@@ -1042,12 +1045,17 @@ function Invoke-Main {
                     }
 
                     if ($hasGpu) {
-                        # 有 GPU，安装 CUDA 版本的 PyTorch
-                        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-                        Log-Info "Installing PyTorch with CUDA 12.1 support..."
+                        # 有 GPU，尝试安装 CUDA 版本的 PyTorch
+                        # 先安装 CPU 版本保底
+                        Log-Info "Installing CPU PyTorch as fallback..."
+                        $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-                        # 卸载并重新安装 CUDA 版本
-                        Log-Info "Uninstalling old PyTorch..."
+                        # 然后尝试安装 CUDA 版本
+                        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+                        Log-Info "Attempting to install CUDA PyTorch..."
+
+                        # 卸载 CPU 版本
+                        Log-Info "Uninstalling CPU torch..."
                         $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
                         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
@@ -1056,7 +1064,13 @@ function Invoke-Main {
                         if ($pipInstall.ExitCode -eq 0) {
                             Log-Success "CUDA PyTorch installed successfully"
                         } else {
-                            Log-Error "Failed to install CUDA PyTorch"
+                            Log-Warn "CUDA PyTorch install failed (Python version may not have prebuilt binaries), using CPU version"
+                            # 重新安装 CPU 版本
+                            Log-Info "Reinstalling CPU PyTorch..."
+                            $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                            if ($pipInstallCpu.ExitCode -eq 0) {
+                                Log-Success "CPU PyTorch installed"
+                            }
                         }
                     } else {
                         # CPU 模式

@@ -721,16 +721,16 @@ function Install-PythonDependencies {
         Log-Info "Uninstalling CPU torch..."
         $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-        # 清除镜像配置，使用阿里云 extra-index-url
-        Log-Info "Setting pip to use Aliyun mirror for PyTorch CUDA..."
+        # 清除所有镜像配置，只使用阿里云 find-links
+        Log-Info "Setting pip to use Aliyun find-links..."
         & $pythonVenv -m pip config unset global.index-url 2>&1 | Out-Null
         & $pythonVenv -m pip config unset global.extra-index-url 2>&1 | Out-Null
-        # 使用 extra-index-url 让 pip 从官方源获取索引，但文件从阿里云下载
-        & $pythonVenv -m pip config set global.extra-index-url $torchMirrorUrl 2>&1 | Out-Null
+        & $pythonVenv -m pip config unset global.find-links 2>&1 | Out-Null
+        & $pythonVenv -m pip config set global.find-links $torchMirrorUrl 2>&1 | Out-Null
         & $pythonVenv -m pip config set global.trusted-host "mirrors.aliyun.com" 2>&1 | Out-Null
 
         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --no-cache-dir" -NoNewWindow -Wait -PassThru
+        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --no-cache-dir --prefer-binary" -NoNewWindow -Wait -PassThru
 
         if ($pipInstallTorch.ExitCode -eq 0) {
             Log-Success "CUDA PyTorch installed"
@@ -1070,15 +1070,16 @@ function Invoke-Main {
                         Log-Info "Uninstalling CPU torch..."
                         $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-                        # 使用 extra-index-url 让 pip 从官方源获取索引，但文件从阿里云下载
-                        Log-Info "Setting pip to use Aliyun mirror for PyTorch CUDA..."
+                        # 清除所有镜像配置，使用 find-links 直接从阿里云目录查找
+                        Log-Info "Setting pip to use Aliyun find-links..."
                         & $venvPython -m pip config unset global.index-url 2>&1 | Out-Null
                         & $venvPython -m pip config unset global.extra-index-url 2>&1 | Out-Null
-                        & $venvPython -m pip config set global.extra-index-url $torchMirrorUrl 2>&1 | Out-Null
+                        & $venvPython -m pip config unset global.find-links 2>&1 | Out-Null
+                        & $venvPython -m pip config set global.find-links $torchMirrorUrl 2>&1 | Out-Null
                         & $venvPython -m pip config set global.trusted-host "mirrors.aliyun.com" 2>&1 | Out-Null
 
                         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --no-cache-dir" -NoNewWindow -Wait -PassThru
+                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --no-cache-dir --prefer-binary" -NoNewWindow -Wait -PassThru
 
                         if ($pipInstall.ExitCode -eq 0) {
                             Log-Success "CUDA PyTorch installed successfully"

@@ -57,6 +57,16 @@
 
 ---
 
+### 4. GPU 库未正确安装到 venv [待开始]
+**问题**: Python venv 中无法正常调用显卡，始终回落到 CPU 执行
+
+**排查步骤**:
+1. 检查 venv 中安装的 PyTorch 版本是否支持 CUDA
+2. 检查是否安装了正确的 CUDA 版本对应的 PyTorch
+3. 检查 deploy.ps1 中 pip 安装逻辑是否正确
+
+---
+
 ### 3. 升级 YOLO 到 v11 [待开始]
 **目标**: 将 YOLOv8 升级到 YOLOv11
 

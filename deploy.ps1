@@ -747,19 +747,27 @@ function Install-PythonDependencies {
         & $pythonVenv -m pip config unset global.find-links 2>&1 | Out-Null
 
         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
+        Log-Info "Using index: $torchIndexUrl"
+        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err.log"
+        $pipStdErr = Get-Content "$env:TEMP\pip_err.log" -ErrorAction SilentlyContinue
 
         if ($pipInstallTorch.ExitCode -eq 0) {
             Log-Success "CUDA PyTorch installed"
         } else {
-            Log-Warn "CUDA PyTorch install failed, trying nightly if not already..."
+            Log-Warn "CUDA PyTorch install failed (exit code: $($pipInstallTorch.ExitCode))"
+            if ($pipStdErr) {
+                Log-Warn "Error: $pipStdErr"
+            }
             # 如果不是 nightly 且失败了，尝试 nightly
             if (-not $needsNightly) {
                 Log-Info "Trying nightly version..."
                 $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
-                $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
+                Log-Info "Using nightly index: $torchIndexUrl"
+                $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                 if ($pipInstallTorch.ExitCode -eq 0) {
                     Log-Success "Nightly CUDA PyTorch installed"
+                } else {
+                    Log-Warn "Nightly install also failed (exit code: $($pipInstallTorch.ExitCode))"
                 }
             }
 
@@ -1125,19 +1133,27 @@ function Invoke-Main {
                         & $venvPython -m pip config unset global.find-links 2>&1 | Out-Null
 
                         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
-                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
+                        Log-Info "Using index: $torchIndexUrl"
+                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err.log"
+                        $pipStdErr = Get-Content "$env:TEMP\pip_err.log" -ErrorAction SilentlyContinue
 
                         if ($pipInstall.ExitCode -eq 0) {
                             Log-Success "CUDA PyTorch installed successfully"
                         } else {
-                            Log-Warn "CUDA PyTorch install failed, trying nightly if not already..."
+                            Log-Warn "CUDA PyTorch install failed (exit code: $($pipInstall.ExitCode))"
+                            if ($pipStdErr) {
+                                Log-Warn "Error: $pipStdErr"
+                            }
                             # 如果不是 nightly 且失败了，尝试 nightly
                             if (-not $needsNightly) {
                                 Log-Info "Trying nightly version..."
                                 $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
-                                $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
+                                Log-Info "Using nightly index: $torchIndexUrl"
+                                $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                                 if ($pipInstall.ExitCode -eq 0) {
                                     Log-Success "Nightly CUDA PyTorch installed"
+                                } else {
+                                    Log-Warn "Nightly install also failed (exit code: $($pipInstall.ExitCode))"
                                 }
                             }
 

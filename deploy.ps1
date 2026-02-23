@@ -21,6 +21,9 @@ $GITEE_MIRROR = "https://gitee.com/jiangyuyi/wingscribe.git"
 $GITHUB_ORIGIN = "https://github.com/jiangyuyi/wingscribe.git"
 $PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
+# PyTorch CUDA 镜像（清华没有 CUDA 版本，使用阿里云）
+$PYTORCH_CUDA_MIRROR = "https://mirrors.aliyun.com/pytorch-wheels"
+
 $COLORS = @{
     RED     = "Red"
     GREEN   = "Green"
@@ -709,8 +712,8 @@ function Install-PythonDependencies {
         $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
         # 然后尝试安装 CUDA 版本的 PyTorch
-        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-        Log-Info "Attempting to install CUDA PyTorch..."
+        $torchIndexUrl = "$PYTORCH_CUDA_MIRROR/cu121"
+        Log-Info "Attempting to install CUDA PyTorch using Aliyun mirror..."
 
         # 卸载 CPU 版本
         Log-Info "Uninstalling CPU torch..."
@@ -1056,7 +1059,7 @@ function Invoke-Main {
                         $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
                         # 然后尝试安装 CUDA 版本
-                        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+                        $torchIndexUrl = "$PYTORCH_CUDA_MIRROR/cu121"
                         Log-Info "Attempting to install CUDA PyTorch..."
 
                         # 卸载 CPU 版本

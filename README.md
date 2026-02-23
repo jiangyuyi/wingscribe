@@ -1,13 +1,13 @@
 # WingScribe (飞羽志) - 智能鸟类摄影管理系统
 
 **版本:** 2.0.0
-**状态:** 新版发布 (云端识别 + 分离部署支持)
+**状态:** 新版发布
 
 WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它利用计算机视觉 (YOLOv8) 和多模态大模型 (BioCLIP) 技术，自动完成照片的**检测、筛选、物种识别、元数据注入**以及**层级归档**，并提供一个支持人工校对的本地 Web 界面。
 
 本项目是我个人的第一个从零开始完全使用Vibe Coding的项目，使用了Gemini CLI 、Claude Code with MiniMax2.1/GLM4.7，作为一个观鸟爱好者，图片库的识别和整理一直是我的一大痛点，这个项目也算是圆了几年前的一个小梦想。
 
-本项目支持**本地 GPU/CPU 识别**和**云平台 API 识别**两种模式，支持分离部署架构。
+本项目支持**本地 GPU/CPU 识别**和**云平台 API 识别**两种模式。
 
 [查看更新日志](docs/CHANGELOG_v1.6_zh.md) | [架构文档](docs/ARCHITECTURE.md) | [云端识别方案](docs/云端识别与分离部署方案.md)
 
@@ -63,6 +63,10 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
 #### Windows 用户
 
 ```powershell
+#先创建一个空文件夹
+mkdir wingscribe
+cd wingscribe
+
 # 国内用户（Gitee，无需梯子）：
 Invoke-WebRequest -Uri "https://gitee.com/jiangyuyi/wingscribe/raw/master/scripts/deploy.ps1" -OutFile deploy.ps1; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; .\deploy.ps1
 
@@ -86,35 +90,33 @@ curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/scripts
 
 #### 可用命令
 
-| 命令 | 说明 |
-|------|------|
-| `deploy` | 完整部署流程 (推荐) |
-| `install` | 仅安装依赖 |
-| `config` | 运行配置向导 |
-| `update` | 更新项目 |
-| `cuda` | 安装 CUDA (GPU 支持) |
-| `web` | 启动 Web 服务 |
-| `docker:local` | Docker 本地部署 |
-| `docker:cpu` | Docker CPU 识别服务 |
-| `docker:gpu` | Docker GPU 识别服务 |
-| `docker:all` | Docker 完整分离部署 |
-| `cloud:config` | 配置云平台 API |
-| `cloud:list` | 列出可用云平台 |
-| `help` | 显示帮助 |
+| 命令             | 说明                 |
+| ---------------- | -------------------- |
+| `deploy`       | 完整部署流程 (推荐)  |
+| `install`      | 仅安装依赖           |
+| `config`       | 运行配置向导         |
+| `update`       | 更新项目             |
+| `cuda`         | 安装 CUDA (GPU 支持) |
+| `web`          | 启动 Web 服务        |
+| `docker:local` | Docker 本地部署      |
+| `docker:cpu`   | Docker CPU 识别服务  |
+| `cloud:config` | 配置云平台 API       |
+| `cloud:list`   | 列出可用云平台       |
+| `help`         | 显示帮助             |
 
 #### 部署流程
 
 脚本会自动执行以下步骤：
 
-| 步骤 | 操作 | 说明 |
-|------|------|------|
-| 1 | 环境检测 | 检测 Python、Git、ExifTool、GPU |
-| 2 | 自动安装 | 缺失的软件通过包管理器自动安装 |
-| 3 | 切换镜像 | pip 和 HuggingFace 切换到国内源 |
-| 4 | 克隆项目 | 从 Gitee 镜像克隆 (国内用户友好) |
-| 5 | 安装依赖 | 创建虚拟环境并安装 Python 包 |
-| 6 | 配置向导 | 交互式设置照片源目录、输出目录等 |
-| 7 | 生成配置 | 自动生成 `settings.yaml` 和 `secrets.yaml` |
+| 步骤 | 操作     | 说明                                           |
+| ---- | -------- | ---------------------------------------------- |
+| 1    | 环境检测 | 检测 Python、Git、ExifTool、GPU                |
+| 2    | 自动安装 | 缺失的软件通过包管理器自动安装                 |
+| 3    | 切换镜像 | pip 和 HuggingFace 切换到国内源                |
+| 4    | 克隆项目 | 从 Gitee 镜像克隆 (国内用户友好)               |
+| 5    | 安装依赖 | 创建虚拟环境并安装 Python 包                   |
+| 6    | 配置向导 | 交互式设置照片源目录、输出目录等               |
+| 7    | 生成配置 | 自动生成 `settings.yaml` 和 `secrets.yaml` |
 
 #### 交互式界面预览
 
@@ -138,90 +140,19 @@ curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/scripts
 
 ---
 
-### 🐳 Docker 部署
-
-WingScribe 支持 Docker 容器化部署，提供 CPU 和 GPU 两个版本。
-
-#### Docker 一键启动
-
-```bash
-# 本地一体化部署
-bash scripts/deploy.sh docker:local
-
-# 仅启动 CPU 识别服务
-bash scripts/deploy.sh docker:cpu
-
-# 仅启动 GPU 识别服务（需要 NVIDIA Docker）
-bash scripts/deploy.sh docker:gpu
-
-# 完整分离部署（Web + CPU + GPU + Redis）
-bash scripts/deploy.sh docker:all
-```
-
-#### Docker Compose 配置
-
-**本地一体化部署 (docker-compose.yml):**
-```yaml
-services:
-  wingscribe:
-    build: .
-    ports:
-      - "8000:8000"
-```
-
-**分离部署 (docker-compose.remote.yml):**
-```yaml
-services:
-  # CPU 识别服务
-  recognition-cpu:
-    build:
-      dockerfile: Dockerfile.cpu
-    ports:
-      - "8080:8000"
-
-  # GPU 识别服务
-  recognition-gpu:
-    build:
-      dockerfile: Dockerfile.gpu
-    ports:
-      - "8081:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  # 消息队列（大批量任务）
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-```
-
-#### Docker 镜像说明
-
-| 镜像 | Dockerfile | 说明 |
-|------|-----------|------|
-| CPU 版 | `Dockerfile.cpu` | 无 GPU 环境使用，资源占用约 4GB |
-| GPU 版 | `Dockerfile.gpu` | 需要 NVIDIA Docker，支持 CUDA 加速 |
-
----
-
 ### ☁️ 云平台配置
 
 WingScribe 支持多种云平台识别服务，无需本地 GPU 即可获得高质量识别结果。
 
 #### 支持的云平台
 
-| 平台 | 说明 | 获取方式 |
-|------|------|---------|
-| **HuggingFace** | BioCLIP 等开源模型 | [获取 Token](https://huggingface.co/settings/tokens) |
+| 平台                        | 说明                   | 获取方式                                           |
+| --------------------------- | ---------------------- | -------------------------------------------------- |
+| **HuggingFace**       | BioCLIP 等开源模型     | [获取 Token](https://huggingface.co/settings/tokens)  |
 | **魔搭 (ModelScope)** | 国内镜像，鸟类分类模型 | [获取 Token](https://modelscope.cn/my/settings/token) |
-| **懂鸟 (Dongniao)** | 国内专业鸟类识别 API | [申请 Access Key](https://ai.open.hhodata.com/) |
-| **阿里云** | 图像标签识别服务 | [控制台](https://ram.console.aliyun.com/) |
-| **百度智能云** | 图像识别 API | [控制台](https://ai.baidu.com/) |
+| **懂鸟 (Dongniao)**   | 国内专业鸟类识别 API   | [申请 Access Key](https://ai.open.hhodata.com/)       |
+| **阿里云**            | 图像标签识别服务       | [控制台](https://ram.console.aliyun.com/)             |
+| **百度智能云**        | 图像识别 API           | [控制台](https://ai.baidu.com/)                       |
 
 #### 配置方法
 
@@ -272,53 +203,6 @@ curl -X POST http://localhost:8000/api/recognition/batch \
     ],
     "webhook_url": "https://your-callback.com/notify"
   }'
-```
-
----
-
-### 🔧 分离部署架构
-
-对于大规模部署场景，WingScribe 支持将 Web 服务和识别服务分离部署：
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    本地 WingScribe                  │
-│  ┌─────────────┐  ┌────────────────────────────┐   │
-│  │  Web UI     │  │  Pipeline                  │   │
-│  │  :8000      │  │  YOLO Detection            │   │
-│  └─────────────┘  └────────────┬───────────────┘   │
-│                               │                     │
-│                      ┌────────▼────────┐           │
-│                      │  Batch API      │           │
-│                      │  /api/recognize │           │
-│                      └────────┬────────┘           │
-│                               │                     │
-└───────────────────────────────┼─────────────────────┘
-                                │ HTTP
-                                ▼
-                    ┌─────────────────────┐
-                    │  识别服务集群        │
-                    ├─────────────────────┤
-                    │ recognition-cpu:8080│
-                    │ recognition-gpu:8081│
-                    │ redis:6379          │
-                    └─────────────────────┘
-```
-
-#### 启动分离部署
-
-```bash
-# 1. 启动识别服务
-docker compose -f docker-compose.remote.yml up -d recognition-cpu
-
-# 2. 配置 Web 服务指向识别服务
-# 编辑 config/settings.yaml
-# recognition:
-#   mode: "api"
-#   api_endpoint: "http://localhost:8080"
-
-# 3. 启动 Web 服务
-python src/web/app.py
 ```
 
 ---
@@ -422,7 +306,6 @@ WingScribe 使用 YAML 进行配置。
        secret_key: ${BAIDU_SECRET_KEY}
    EOF
    ```
-
 3. **API 认证 (可选)**: 如需对外提供 API 服务，可启用认证：
 
    ```yaml
@@ -513,17 +396,20 @@ A: 确保系统区域设置支持 UTF-8，或使用英文路径。
 
 **Q: 如何选择使用本地识别还是云平台识别？**
 A: 根据需求选择：
+
 - **本地 BioCLIP**: 免费、隐私保护好、无需网络，适合日常使用
 - **云平台**: 无需 GPU 硬件、模型更新及时、适合批量处理
 
 **Q: 云平台识别的费用是多少？**
 A: 各平台定价不同：
+
 - HuggingFace: 免费额度有限，超出后按调用计费
 - 魔搭社区: 提供免费额度
 - 阿里云/百度云: 按调用次数计费，价格较低
 
 **Q: 批量识别 API 如何使用？**
 A: 批量识别支持异步处理：
+
 ```python
 import requests
 

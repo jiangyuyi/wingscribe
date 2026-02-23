@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WingScribe (飞羽志) is an automated bird photography management system that uses computer vision (YOLOv8) and multimodal AI models (BioCLIP) to automatically detect, filter, identify species, inject metadata, and organize bird photos into a hierarchical archive with a local web interface for manual verification.
+WingScribe (飞羽志) is an automated bird photography management system that uses computer vision (YOLOv11) and multimodal AI models (BioCLIP) to automatically detect, filter, identify species, inject metadata, and organize bird photos into a hierarchical archive with a local web interface for manual verification.
 
-**Technology Stack:** Python 3.10+, PyTorch, YOLOv8, BioCLIP (OpenCLIP), FastAPI, SQLite, ExifTool
+**Technology Stack:** Python 3.10+, PyTorch, YOLOv11, BioCLIP (OpenCLIP), FastAPI, MySQL/PostgreSQL, ExifTool
 
 ## Common Commands
 
@@ -70,7 +70,7 @@ python scripts/check_gpu.py
 The `WingScribePipeline` class orchestrates the entire ETL process:
 
 1. **Smart Scanning**: Uses `SmartScanner` to walk directories with date-based pruning to skip irrelevant folders
-2. **Detection**: `BirdDetector` (YOLOv8) finds birds in images
+2. **Detection**: `BirdDetector` (YOLOv11) finds birds in images
 3. **Cropping**: `ImageProcessor` creates standardized crops with padding
 4. **Recognition**: One of `LocalBirdRecognizer`, `DongniaoRecognizer`, or `APIBirdRecognizer`
 5. **Archiving**: Files saved to `data/processed` using configurable template, metadata injected via `ExifWriter`
@@ -161,7 +161,7 @@ Web UI only serves files from `allowed_roots` defined in config. When adding new
 ```
 src/
 ├── core/
-│   ├── detector.py          # YOLOv8 bird detection
+│   ├── detector.py          # YOLOv11 bird detection
 │   ├── processor.py         # Image cropping/resizing
 │   ├── quality.py           # Blur detection (Laplacian variance)
 │   └── io/
@@ -190,7 +190,7 @@ src/
 ## Dependencies
 
 Key external libraries:
-- `ultralytics`: YOLOv8 for bird detection
+- `ultralytics`: YOLOv11 for bird detection
 - `open_clip`: BioCLIP model for species recognition
 - `fastapi` + `uvicorn`: Web server
 - `PyExifTool`: EXIF metadata writing
@@ -198,3 +198,21 @@ Key external libraries:
 - `sqlalchemy`: Database ORM (though IOCManager uses raw SQL)
 
 **Critical**: ExifTool must be installed and in system PATH for metadata writing.
+
+## Database
+
+The system uses MySQL/PostgreSQL instead of SQLite for remote access support.
+
+### Configuration
+
+Database connection is configured in `config/settings.yaml`:
+
+```yaml
+database:
+  type: "mysql"  # or "postgresql"
+  host: "localhost"
+  port: 3306
+  username: "wingscribe"
+  password: "your_password"
+  database: "wingscribe"
+```

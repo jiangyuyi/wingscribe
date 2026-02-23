@@ -708,15 +708,33 @@ function Install-PythonDependencies {
     }
 
     if ($hasGpu) {
-        # 有 GPU，尝试安装 CUDA 版本的 PyTorch
-        # 先安装 CPU 版本保底（因为 CUDA 源可能没有对应 Python 版本的预编译包）
+        # 检测 GPU 型号，判断是否需要 nightly 版本
+        $gpuName = ""
+        $needsNightly = $false
+        if (Test-Command "nvidia-smi") {
+            try {
+                $gpuName = nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | Select-Object -First 1
+                # 检测 RTX 50 系列或更新的显卡
+                if ($gpuName -match "RTX\s*5[0-9]|RTX\s*9[0-9]|GeForce\s*5[0-9]|GeForce\s*9[0-9]") {
+                    $needsNightly = $true
+                    Log-Warn "Detected newer GPU: $gpuName - will try nightly PyTorch"
+                }
+            } catch { }
+        }
+
+        # 先安装 CPU 版本保底
         Log-Info "Installing CPU PyTorch as fallback..."
         $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-        # 然后尝试安装 CUDA 版本的 PyTorch
-        # 使用官方源（阿里云镜像目录结构不同，下载了 CPU 版本）
-        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-        Log-Info "Attempting to install CUDA PyTorch from official source..."
+        # 根据 GPU 类型选择 PyTorch 版本
+        $torchIndexUrl = ""
+        if ($needsNightly) {
+            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+            Log-Info "Installing nightly PyTorch for newer GPU support..."
+        } else {
+            $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+            Log-Info "Installing stable CUDA PyTorch..."
+        }
 
         # 卸载 CPU 版本
         Log-Info "Uninstalling CPU torch..."
@@ -734,12 +752,25 @@ function Install-PythonDependencies {
         if ($pipInstallTorch.ExitCode -eq 0) {
             Log-Success "CUDA PyTorch installed"
         } else {
-            Log-Warn "CUDA PyTorch install failed (Python version may not have prebuilt binaries), using CPU version"
-            # 重新安装 CPU 版本
-            Log-Info "Reinstalling CPU PyTorch..."
-            $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
-            if ($pipInstallCpu.ExitCode -eq 0) {
-                Log-Success "CPU PyTorch installed"
+            Log-Warn "CUDA PyTorch install failed, trying nightly if not already..."
+            # 如果不是 nightly 且失败了，尝试 nightly
+            if (-not $needsNightly) {
+                Log-Info "Trying nightly version..."
+                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+                $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
+                if ($pipInstallTorch.ExitCode -eq 0) {
+                    Log-Success "Nightly CUDA PyTorch installed"
+                }
+            }
+
+            if ($pipInstallTorch.ExitCode -ne 0) {
+                Log-Warn "CUDA PyTorch install failed, using CPU version"
+                # 重新安装 CPU 版本
+                Log-Info "Reinstalling CPU PyTorch..."
+                $pipInstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                if ($pipInstallCpu.ExitCode -eq 0) {
+                    Log-Success "CPU PyTorch installed"
+                }
             }
         }
     } else {
@@ -1056,22 +1087,39 @@ function Invoke-Main {
                     }
 
                     if ($hasGpu) {
-                        # 有 GPU，尝试安装 CUDA 版本的 PyTorch
+                        # 检测 GPU 型号，判断是否需要 nightly 版本
+                        $gpuName = ""
+                        $needsNightly = $false
+                        if (Test-Command "nvidia-smi") {
+                            try {
+                                $gpuName = nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | Select-Object -First 1
+                                # 检测 RTX 50 系列或更新的显卡
+                                if ($gpuName -match "RTX\s*5[0-9]|RTX\s*9[0-9]|GeForce\s*5[0-9]|GeForce\s*9[0-9]") {
+                                    $needsNightly = $true
+                                    Log-Warn "Detected newer GPU: $gpuName - will try nightly PyTorch"
+                                }
+                            } catch { }
+                        }
+
                         # 先安装 CPU 版本保底
                         Log-Info "Installing CPU PyTorch as fallback..."
                         $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-                        # 然后尝试安装 CUDA 版本
-                        # 使用官方源（阿里云镜像目录结构不同，下载了 CPU 版本）
-                        $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
-                        Log-Info "Attempting to install CUDA PyTorch from official source..."
+                        # 根据 GPU 类型选择 PyTorch 版本
+                        if ($needsNightly) {
+                            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+                            Log-Info "Installing nightly PyTorch for newer GPU support..."
+                        } else {
+                            $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+                            Log-Info "Installing stable CUDA PyTorch..."
+                        }
 
                         # 卸载 CPU 版本
                         Log-Info "Uninstalling CPU torch..."
                         $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
-                        # 清除所有镜像配置，使用官方源
-                        Log-Info "Clearing pip config and using official PyTorch source..."
+                        # 清除所有镜像配置
+                        Log-Info "Clearing pip config..."
                         & $venvPython -m pip config unset global.index-url 2>&1 | Out-Null
                         & $venvPython -m pip config unset global.extra-index-url 2>&1 | Out-Null
                         & $venvPython -m pip config unset global.find-links 2>&1 | Out-Null
@@ -1082,12 +1130,24 @@ function Invoke-Main {
                         if ($pipInstall.ExitCode -eq 0) {
                             Log-Success "CUDA PyTorch installed successfully"
                         } else {
-                            Log-Warn "CUDA PyTorch install failed (Python version may not have prebuilt binaries), using CPU version"
-                            # 重新安装 CPU 版本
-                            Log-Info "Reinstalling CPU PyTorch..."
-                            $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
-                            if ($pipInstallCpu.ExitCode -eq 0) {
-                                Log-Success "CPU PyTorch installed"
+                            Log-Warn "CUDA PyTorch install failed, trying nightly if not already..."
+                            # 如果不是 nightly 且失败了，尝试 nightly
+                            if (-not $needsNightly) {
+                                Log-Info "Trying nightly version..."
+                                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+                                $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru
+                                if ($pipInstall.ExitCode -eq 0) {
+                                    Log-Success "Nightly CUDA PyTorch installed"
+                                }
+                            }
+
+                            if ($pipInstall.ExitCode -ne 0) {
+                                Log-Warn "CUDA PyTorch install failed, using CPU version"
+                                Log-Info "Reinstalling CPU PyTorch..."
+                                $pipInstallCpu = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                                if ($pipInstallCpu.ExitCode -eq 0) {
+                                    Log-Success "CPU PyTorch installed"
+                                }
                             }
                         }
                     } else {

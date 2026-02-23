@@ -155,3 +155,21 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 - [X] 前端添加WebSocket连接状态日志和错误处理
 - [X] 后端添加TaskManager详细日志记录
 - [X] 提交: `482b466`
+
+---
+
+### 11. 首页翻页按钮消失问题 [已完成]
+**状态**: ✅ 完成
+
+**问题**:
+- 在没有筛选任何物种的首页，翻页按钮消失了
+
+**原因分析**:
+- 首页 `status-bar` div 中只渲染了文本信息，没有静态渲染分页按钮
+- 后端已传递 `has_next`, `has_prev`, `next_offset`, `prev_offset` 变量，但模板未使用
+- JavaScript 的 `updatePhotoGrid` 只在点击分类树筛选时才调用，首页加载时不触发
+
+**修复方案**:
+- [X] 在 index.html 模板中添加静态分页按钮
+- [X] 使用 Jinja2 变量渲染 Previous/Next 链接
+- [X] 仅在有筛选条件时显示"清除筛选"按钮

@@ -274,7 +274,14 @@
                         {% if current_date %} | Date: {{ current_date }} {% endif %}
                         {% if query %} | Query: "{{ query }}" {% endif %}
                     </span>
-                    <!-- 动态分页按钮由JavaScript渲染 -->
+                    <!-- 静态分页按钮 -->
+                    <div class="btn-group btn-group-sm">
+                        <a href="/?limit={{ limit }}&offset={{ prev_offset }}" class="btn btn-outline-secondary {% if not has_prev %}disabled{% endif %}">Previous</a>
+                        <a href="/?limit={{ limit }}&offset={{ next_offset }}" class="btn btn-outline-secondary {% if not has_next %}disabled{% endif %}">Next</a>
+                        {% if current_filter or query or current_date %}
+                        <a href="/" class="btn btn-outline-secondary">清除筛选</a>
+                        {% endif %}
+                    </div>
                 </div>
 
                 {% if not photos %}

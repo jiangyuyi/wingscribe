@@ -48,10 +48,12 @@
 
 ---
 
-### 3. 修复 deploy.ps1 路径问题 [待开始]
-**问题**: deploy.ps1 放在 scripts\ 目录下，但 $PROJECT_ROOT = $PSScriptRoot 会指向 scripts\ 而不是项目根目录，导致 git pull 时拉取远程代码覆盖本地修改
+### 3. 修复 deploy.ps1 路径问题 [已完成]
+**状态**: ✅ 完成
 
-**修复方案**: 将 deploy.ps1 移到项目根目录
+- [X] 将 deploy.ps1 从 scripts/ 移到项目根目录
+- [X] 将 deploy.sh 从 scripts/ 移到项目根目录
+- [X] 提交: `48e9ff5`
 
 ---
 

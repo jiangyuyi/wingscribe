@@ -95,7 +95,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 3. 升级 YOLO 到 v11 [待开始]
+### 6. 升级 YOLO 到 v11 [待开始]
 **目标**: 将 YOLOv8 升级到 YOLOv11
 
 **修改文件**:
@@ -103,7 +103,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 4. 切换数据库到 MySQL [待开始]
+### 7. 切换数据库到 MySQL [待开始]
 **目标**: 从 SQLite 迁移到 MySQL，支持远程访问
 
 **推荐**: MySQL 或 PostgreSQL
@@ -114,7 +114,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 5. 创建精简版 Docker (仅浏览) [待开始]
+### 8. 创建精简版 Docker (仅浏览) [待开始]
 **目标**: 创建仅包含 Web 浏览功能的轻量级 Docker
 
 **功能范围**:

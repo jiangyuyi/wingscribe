@@ -959,9 +959,10 @@ function Show-Menu {
     Write-Host "  [2] Configuration" -ForegroundColor White
     Write-Host "  [3] Update Project" -ForegroundColor White
     Write-Host "  [4] Install CUDA (GPU Support)" -ForegroundColor White
-    Write-Host "  [5] Start Service" -ForegroundColor White
-    Write-Host "  [6] Help" -ForegroundColor White
-    Write-Host "  [7] Exit" -ForegroundColor White
+    Write-Host "  [5] Reinstall PyTorch (Fix GPU)" -ForegroundColor White
+    Write-Host "  [6] Start Service" -ForegroundColor White
+    Write-Host "  [7] Help" -ForegroundColor White
+    Write-Host "  [8] Exit" -ForegroundColor White
     Write-Host ""
     Write-Host "  ========================================  " -ForegroundColor Cyan
 }
@@ -971,7 +972,7 @@ function Invoke-Main {
     $script:HAS_GPU = $false
     while ($true) {
         Show-Menu
-        $choice = Read-Host "Enter option (1-7)"
+        $choice = Read-Host "Enter option (1-8)"
         Write-Host ""
         switch ($choice) {
             "1" {
@@ -1006,8 +1007,80 @@ function Invoke-Main {
                 Write-Host ""
                 Pause-Host
             }
-            "5" { Start-WebServer }
-            "6" {
+            "5" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Reinstall PyTorch" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+
+                Test-GPU
+                $venvPython = "$PROJECT_ROOT\venv\Scripts\python.exe"
+
+                if (-not (Test-Path $venvPython)) {
+                    Log-Error "Virtual environment not found!"
+                    Log-Info "Please run [1] Start Deployment first"
+                } else {
+                    # 显示当前 PyTorch 版本
+                    Log-Info "Checking current PyTorch installation..."
+                    & $venvPython -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')" 2>&1
+
+                    Write-Host ""
+                    Log-Step "Reinstalling PyTorch..."
+
+                    # 复用 Install-PythonDependencies 中的逻辑
+                    $cudaStatus = Test-CUDA
+
+                    if ($cudaStatus.is_available -and $cudaStatus.cuda_version) {
+                        $cudaVersion = $cudaStatus.cuda_version
+                        $torchIndexUrl = ""
+
+                        if ($cudaVersion -match "^12\.") {
+                            $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+                            Log-Info "Installing PyTorch with CUDA 12.1 support..."
+                        }
+                        elseif ($cudaVersion -match "^11\.") {
+                            $torchIndexUrl = "https://download.pytorch.org/whl/cu118"
+                            Log-Info "Installing PyTorch with CUDA 11.8 support..."
+                        }
+
+                        if ($torchIndexUrl) {
+                            # 卸载并重新安装 CUDA 版本
+                            Log-Info "Uninstalling old PyTorch..."
+                            $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+
+                            Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
+                            $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
+
+                            if ($pipInstall.ExitCode -eq 0) {
+                                Log-Success "CUDA PyTorch installed successfully"
+                            } else {
+                                Log-Error "Failed to install CUDA PyTorch"
+                            }
+                        }
+                    } else {
+                        # CPU 模式
+                        Log-Info "Installing CPU PyTorch..."
+                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+
+                        if ($pipInstall.ExitCode -eq 0) {
+                            Log-Success "CPU PyTorch installed successfully"
+                        } else {
+                            Log-Error "Failed to install CPU PyTorch"
+                        }
+                    }
+
+                    # 验证安装
+                    Write-Host ""
+                    Log-Info "Verifying installation..."
+                    & $venvPython -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')" 2>&1
+                }
+
+                Write-Host ""
+                Pause-Host
+            }
+            "6" { Start-WebServer }
+            "7" {
                 Clear-Host
                 Write-Host ""
                 Write-Host "  Help" -ForegroundColor Cyan
@@ -1024,6 +1097,7 @@ function Invoke-Main {
                 Write-Host ""
                 Write-Host "  GPU Acceleration:" -ForegroundColor White
                 Write-Host "    - Select [4] Install CUDA for GPU support" -ForegroundColor Gray
+                Write-Host "    - Select [5] Reinstall PyTorch if GPU not working" -ForegroundColor Gray
                 Write-Host "    - Requires NVIDIA GPU + CUDA Toolkit + cuDNN" -ForegroundColor Gray
                 Write-Host "    - GPU mode is ~10x faster than CPU" -ForegroundColor Gray
                 Write-Host ""
@@ -1031,7 +1105,8 @@ function Invoke-Main {
                 Write-Host "    1. Select [1] Start Deployment" -ForegroundColor Gray
                 Write-Host "    2. Configure photo directory" -ForegroundColor Gray
                 Write-Host "    3. (Optional) Select [4] Install CUDA" -ForegroundColor Gray
-                Write-Host "    4. Select [5] Start Service" -ForegroundColor Gray
+                Write-Host "    4. (Optional) Select [5] Reinstall PyTorch for GPU" -ForegroundColor Gray
+                Write-Host "    5. Select [6] Start Service" -ForegroundColor Gray
                 Write-Host ""
                 Write-Host "  Format: Year/yyyymmdd_Location/*.jpg" -ForegroundColor Gray
                 Write-Host ""
@@ -1039,7 +1114,7 @@ function Invoke-Main {
                 Write-Host ""
                 Pause-Host
             }
-            "7" { Write-Host ""; Write-Host "  Goodbye!"; Write-Host ""; exit 0 }
+            "8" { Write-Host ""; Write-Host "  Goodbye!"; Write-Host ""; exit 0 }
             default { Log-Error "Invalid option"; Start-Sleep -Seconds 1 }
         }
     }

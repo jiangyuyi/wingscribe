@@ -26,31 +26,20 @@
 
 ## 🛠 正在进行中 (Active Tasks)
 
-### 1. 移除 Docker 相关功能 [待开始]
-**目标**: 彻底删除所有 Docker 部署代码，回归纯本地运行模式
+### 1. 移除 Docker 相关功能 [已完成]
+**状态**: ✅ 完成
 
-**待删除文件**:
-- `Dockerfile.cpu`
-- `Dockerfile.gpu`
-- `Dockerfile.webui`
-- `docker-compose.yml`
-- `docker-compose.split.yml`
-- `docker-compose.remote.yml`
-- `docker-compose.dev.yml`
-- `docker-compose.split.dev.yml`
-- `scripts/docker-entrypoint.sh`
-
-**待修改文件**:
-- `README.md` - 移除所有 Docker 相关章节
+- [X] 删除 Dockerfile.cpu
+- [X] 删除 Dockerfile.gpu
+- [X] 删除 docker-compose.yml
+- [X] 删除 docker-compose.remote.yml
+- [X] 更新 scripts/deploy.sh 移除Docker命令
+- [X] 清理 nul 文件
 
 ---
 
 ### 2. 修复物种列表分类显示问题 [待开始]
 **问题**: 物种列表只显示拉丁名，不显示中文名
-
-**可能原因**:
-- 数据库中 `chinese_name` 字段为空
-- 前端渲染逻辑问题
 
 **排查步骤**:
 1. 检查数据库中 taxonomy 表是否有中文名数据
@@ -85,9 +74,3 @@
 - 照片浏览
 - 分类筛选
 - 物种搜索
-
-**不包含**:
-- YOLO 检测
-- BioCLIP 识别
-- Pipeline 执行
-

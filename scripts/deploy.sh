@@ -990,42 +990,6 @@ start_web_server() {
 }
 
 #===============================================================================
-# Docker Deployment
-#===============================================================================
-
-test_docker() {
-    if command_exists docker; then
-        local version=$(docker --version 2>/dev/null)
-        log_info "Docker installed: $version"
-        return 0
-    fi
-    log_warn "Docker not found"
-    return 1
-}
-
-start_docker_local() {
-    log_step "Starting Docker (local mode)..."
-
-    if ! test_docker; then
-        if ask_yes_no "Install Docker?"; then install_docker; fi
-        return 1
-    fi
-
-    cd "$PROJECT_ROOT"
-
-    # 检查是否有 GPU
-    if test_gpu && command_exists nvidia-docker; then
-        echo -e "${CYAN}  Using GPU profile${NC}"
-        docker compose up -d wingscribe-gpu
-    else
-        echo -e "${CYAN}  Using CPU mode${NC}"
-        docker compose up -d wingscribe
-    fi
-
-    echo ""
-    echo -e "${GREEN}Web UI: http://localhost:8000${NC}"
-    echo -e "${GREEN}Recognition API: http://localhost:8000/api/recognition${NC}"
-}
 
 #===============================================================================
 # 使用说明
@@ -1049,7 +1013,6 @@ Commands:
   update           Update project
   cuda             Install CUDA (GPU support)
   web              Start Web server
-  docker:local     Start with Docker (local)
   help             Show this help
 
 Examples:
@@ -1178,9 +1141,6 @@ main() {
             ;;
         web|w)
             start_web_server
-            ;;
-        docker:local|dl)
-            start_docker_local
             ;;
         help|-h|--help|"")
             show_help

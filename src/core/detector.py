@@ -34,6 +34,37 @@ def _check_cuda_stable(max_retries: int = 3) -> bool:
 
     return False
 
+def _check_gpu_compatibility() -> bool:
+    """
+    Check if the current GPU's compute capability is supported by PyTorch.
+    Returns True if compatible, False otherwise.
+    """
+    if not torch.cuda.is_available():
+        return False
+
+    try:
+        # Get GPU name and compute capability
+        gpu_name = torch.cuda.get_device_name(0)
+        major, minor = torch.cuda.get_device_capability(0)
+        compute_capability = f"sm_{major}{minor}"
+
+        # Get supported compute capabilities from PyTorch
+        supported = torch.cuda.get_arch_list()
+
+        logging.info(f"GPU: {gpu_name}, Compute capability: {compute_capability}")
+        logging.info(f"PyTorch supported architectures: {supported}")
+
+        # Check if current compute capability is supported
+        if compute_capability not in supported:
+            logging.warning(f"GPU compute capability {compute_capability} is not supported by this PyTorch version.")
+            logging.warning(f"Supported: {supported}")
+            return False
+
+        return True
+    except Exception as e:
+        logging.warning(f"GPU compatibility check failed: {e}")
+        return False
+
 class BirdDetector:
     def __init__(self, model_path: str, confidence: float = 0.5, device: str = "auto"):
         """
@@ -51,8 +82,13 @@ class BirdDetector:
             if torch.cuda.is_available():
                 logging.info("CUDA available, performing stability check...")
                 if _check_cuda_stable():
-                    self.device = "cuda"
-                    logging.info("CUDA confirmed stable, using CUDA")
+                    # Check GPU compatibility
+                    if _check_gpu_compatibility():
+                        self.device = "cuda"
+                        logging.info("CUDA confirmed stable and compatible, using CUDA")
+                    else:
+                        logging.warning("GPU compute capability not supported by PyTorch, falling back to CPU")
+                        self.device = "cpu"
                 else:
                     logging.warning("CUDA stability check failed after retries, using CPU")
                     self.device = "cpu"

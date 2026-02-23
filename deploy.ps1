@@ -738,7 +738,7 @@ function Install-PythonDependencies {
 
         # 卸载 CPU 版本
         Log-Info "Uninstalling CPU torch..."
-        $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+        $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision" -NoNewWindow -Wait -PassThru
 
         # 清除所有镜像配置，使用官方源
         Log-Info "Clearing pip config and using official PyTorch source..."
@@ -748,7 +748,7 @@ function Install-PythonDependencies {
 
         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
         Log-Info "Using index: $torchIndexUrl"
-        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err.log"
+        $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err.log"
         $pipStdErr = Get-Content "$env:TEMP\pip_err.log" -ErrorAction SilentlyContinue
 
         if ($pipInstallTorch.ExitCode -eq 0) {
@@ -763,7 +763,7 @@ function Install-PythonDependencies {
                 Log-Info "Trying nightly version..."
                 $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
                 Log-Info "Using nightly index: $torchIndexUrl"
-                $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
+                $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                 if ($pipInstallTorch.ExitCode -eq 0) {
                     Log-Success "Nightly CUDA PyTorch installed"
                 } else {
@@ -1124,7 +1124,7 @@ function Invoke-Main {
 
                         # 卸载 CPU 版本
                         Log-Info "Uninstalling CPU torch..."
-                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision" -NoNewWindow -Wait -PassThru
 
                         # 清除所有镜像配置
                         Log-Info "Clearing pip config..."
@@ -1134,7 +1134,7 @@ function Invoke-Main {
 
                         Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
                         Log-Info "Using index: $torchIndexUrl"
-                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err.log"
+                        $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err.log"
                         $pipStdErr = Get-Content "$env:TEMP\pip_err.log" -ErrorAction SilentlyContinue
 
                         if ($pipInstall.ExitCode -eq 0) {
@@ -1149,7 +1149,7 @@ function Invoke-Main {
                                 Log-Info "Trying nightly version..."
                                 $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
                                 Log-Info "Using nightly index: $torchIndexUrl"
-                                $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
+                                $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                                 if ($pipInstall.ExitCode -eq 0) {
                                     Log-Success "Nightly CUDA PyTorch installed"
                                 } else {
@@ -1169,7 +1169,7 @@ function Invoke-Main {
                     } else {
                         # CPU 模式
                         Log-Info "Installing CPU PyTorch..."
-                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+                        $pipUninstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip uninstall -y torch torchvision" -NoNewWindow -Wait -PassThru
                         $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
 
                         if ($pipInstall.ExitCode -eq 0) {

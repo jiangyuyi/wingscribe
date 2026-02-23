@@ -21,8 +21,10 @@ $GITEE_MIRROR = "https://gitee.com/jiangyuyi/wingscribe.git"
 $GITHUB_ORIGIN = "https://github.com/jiangyuyi/wingscribe.git"
 $PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
-# PyTorch CUDA 镜像（清华没有 CUDA 版本，使用阿里云）
-$PYTORCH_CUDA_MIRROR = "https://mirrors.aliyun.com/pytorch-wheels"
+# PyTorch CUDA 镜像
+# 注意：国内镜像版本较旧，建议使用官方源
+# 官方源: https://download.pytorch.org/whl/cu121
+$PYTORCH_CUDA_MIRROR = "https://download.pytorch.org/whl"
 
 $COLORS = @{
     RED     = "Red"

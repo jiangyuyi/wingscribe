@@ -414,11 +414,15 @@ def reset_system():
                 except: pass
 
         init_app_db()
-        
-        # Re-import taxonomy
+
+        # Re-import taxonomy with references for Chinese name mappings
         mgr = IOCManager(str(db_path))
         if mgr.conn.execute("SELECT count(*) FROM taxonomy").fetchone()[0] == 0:
-             mgr.import_from_excel(str(BASE_DIR / config['paths']['ioc_list_path']))
+            refs_dir = str(BASE_DIR / config['paths']['references_path'])
+            mgr.import_from_excel(
+                str(BASE_DIR / config['paths']['ioc_list_path']),
+                refs_dir=refs_dir
+            )
         mgr.close()
         
         return {"status": "success"}

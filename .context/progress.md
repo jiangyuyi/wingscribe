@@ -44,6 +44,7 @@
 - [X] CUDA 稳定性检查（重试 + synchronize）
 - [X] 模型延迟加载机制
 - [X] Excel 中文编码修复（XML 解析）
+- [X] 修复重置后中文名丢失问题（传递 refs_dir 参数）
 - [X] 提交: `59a2213`
 
 ---
@@ -140,4 +141,17 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 - [X] 修改 `path_generator.py`：添加 `_normalize_source_structure()` 方法，自动去除与 output_root 重复的前缀
 - [X] 修复 `app.py` 中绝对路径处理逻辑
 - [X] 更新 deploy.ps1 配置提示，说明 output 路径设置规则
-- [X] 提交: 准备中
+- [X] 提交: `cb3aab0`
+
+---
+
+### 10. Batch Processing 日志显示问题 [已完成]
+**状态**: ✅ 完成
+
+**问题**:
+- Web UI的Batch Processing界面不显示后台日志
+
+**修复方案**:
+- [X] 前端添加WebSocket连接状态日志和错误处理
+- [X] 后端添加TaskManager详细日志记录
+- [X] 提交: `482b466`

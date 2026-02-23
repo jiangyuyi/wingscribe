@@ -130,17 +130,29 @@
         const consoleBox = document.getElementById('console');
         const startBtn = document.getElementById('start-btn');
         let ws = null;
+        let wsConnected = false;
 
         function connectWS() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws/progress`);
-            
+            const wsUrl = `${protocol}//${window.location.host}/ws/progress`;
+            console.log('[WS] Connecting to:', wsUrl);
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('[WS] Connected');
+                wsConnected = true;
+                const line = document.createElement('div');
+                line.textContent = '[WS] Connected to log server';
+                line.style.color = '#666';
+                consoleBox.appendChild(line);
+            };
+
             ws.onmessage = (event) => {
                 const line = document.createElement('div');
                 line.textContent = event.data;
                 consoleBox.appendChild(line);
                 consoleBox.scrollTop = consoleBox.scrollHeight;
-                
+
                 // Simple state check based on log content
                 if (event.data.includes("Pipeline execution completed")) {
                     startBtn.disabled = false;
@@ -148,13 +160,23 @@
                     loadHistory(); // Refresh history
                 }
             };
-            
+
+            ws.onerror = (error) => {
+                console.error('[WS] Error:', error);
+                const line = document.createElement('div');
+                line.textContent = '[WS] Error occurred';
+                line.style.color = 'red';
+                consoleBox.appendChild(line);
+            };
+
             ws.onclose = () => {
+                console.log('[WS] Disconnected');
+                wsConnected = false;
                 // Reconnect logic if needed
                 setTimeout(connectWS, 2000);
             };
         }
-        
+
         connectWS();
         loadHistory();
 
@@ -212,11 +234,25 @@
             })
             .then(r => r.json())
             .then(data => {
+                console.log('[API] Response:', data);
                 if(data.status === 'error') {
                     alert(data.message);
                     startBtn.disabled = false;
                     startBtn.textContent = "▶ Start Pipeline";
+                    const line = document.createElement('div');
+                    line.textContent = 'Error: ' + data.message;
+                    line.style.color = 'red';
+                    consoleBox.appendChild(line);
                 }
+            })
+            .catch(err => {
+                console.error('[API] Error:', err);
+                const line = document.createElement('div');
+                line.textContent = 'Request failed: ' + err;
+                line.style.color = 'red';
+                consoleBox.appendChild(line);
+                startBtn.disabled = false;
+                startBtn.textContent = "▶ Start Pipeline";
             });
         });
 

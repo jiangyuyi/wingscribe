@@ -60,15 +60,19 @@ class TaskManager:
         if len(self.logs) > 1000: self.logs.pop(0)
         
     def start_pipeline(self, start_date=None, end_date=None):
+        logger.info(f"[TaskManager] start_pipeline called with start_date={start_date}, end_date={end_date}")
         if self.is_running:
+            logger.warning("[TaskManager] Pipeline already running, rejecting request")
             return False
-        
+
         self.is_running = True
         self.logs = ["Starting pipeline..."]
-        
+        logger.info("[TaskManager] Pipeline flag set, starting thread...")
+
         # Run in thread
         thread = threading.Thread(target=self._run_pipeline_thread, args=(start_date, end_date), daemon=True)
         thread.start()
+        logger.info("[TaskManager] Thread started, returning success")
         return True
 
     def _run_pipeline_thread(self, start_date, end_date):

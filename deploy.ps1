@@ -729,7 +729,7 @@ function Install-PythonDependencies {
         # 根据 GPU 类型选择 PyTorch 版本
         $torchIndexUrl = ""
         if ($needsNightly) {
-            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
             Log-Info "Installing nightly PyTorch for newer GPU support..."
         } else {
             $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
@@ -761,7 +761,7 @@ function Install-PythonDependencies {
             # 如果不是 nightly 且失败了，尝试 nightly
             if (-not $needsNightly) {
                 Log-Info "Trying nightly version..."
-                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
                 Log-Info "Using nightly index: $torchIndexUrl"
                 $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                 if ($pipInstallTorch.ExitCode -eq 0) {
@@ -1115,7 +1115,7 @@ function Invoke-Main {
 
                         # 根据 GPU 类型选择 PyTorch 版本
                         if ($needsNightly) {
-                            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+                            $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
                             Log-Info "Installing nightly PyTorch for newer GPU support..."
                         } else {
                             $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
@@ -1147,7 +1147,7 @@ function Invoke-Main {
                             # 如果不是 nightly 且失败了，尝试 nightly
                             if (-not $needsNightly) {
                                 Log-Info "Trying nightly version..."
-                                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu121"
+                                $torchIndexUrl = "https://download.pytorch.org/whl/nightly/cu124"
                                 Log-Info "Using nightly index: $torchIndexUrl"
                                 $pipInstall = Start-Process -FilePath $venvPython -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl --no-cache-dir" -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\pip_err2.log"
                                 if ($pipInstall.ExitCode -eq 0) {

@@ -121,3 +121,22 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 - 照片浏览
 - 分类筛选
 - 物种搜索
+
+---
+
+### 9. 修复裁切图片路径重复和前端显示问题 [已完成]
+**状态**: ✅ 完成
+
+**问题**:
+- 输出路径出现 `clip/clip` 重复
+- 前端无法正常显示裁切后的图片
+
+**原因分析**:
+- 配置文件 `output.root_dir` 设置为 `Y:/1按年份/2026/clip`
+- 源文件路径结构包含 `clip` 文件夹（如 `Y:/1按年份/2026/clip/20260110...`）
+- `source_structure` 保留了完整路径结构，导致路径重复
+
+**修复方案**:
+- [X] 修改配置：`output.root_dir` 从 `clip` 改为 `processed`
+- [X] 修复 `app.py` 中绝对路径处理逻辑
+- [X] 提交: 准备中

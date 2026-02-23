@@ -127,7 +127,12 @@ app = FastAPI(lifespan=lifespan)
 config = load_config(str(BASE_DIR / "config" / "settings.yaml"), str(BASE_DIR / "config" / "secrets.yaml"))
 
 db_path = BASE_DIR / config['paths']['db_path']
-processed_dir = BASE_DIR / config['paths']['output']['root_dir'] 
+# Handle absolute paths in config - use Path() directly to avoid BASE_DIR prefix issues
+output_root = config['paths']['output']['root_dir']
+if Path(output_root).is_absolute():
+    processed_dir = Path(output_root)
+else:
+    processed_dir = BASE_DIR / output_root 
 
 # Initialize FileSystemManager for security checks
 fs_manager = FileSystemManager.get_instance(config['paths'])

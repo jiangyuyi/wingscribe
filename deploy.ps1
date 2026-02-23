@@ -844,6 +844,7 @@ function Invoke-ConfigWizard {
 
     Write-Host ""
     Write-Host "  2/3 Output directory" -ForegroundColor Cyan
+    Write-Host "    (Tip: 设置为与 Photo directory 相同的路径，代码会自动添加子文件夹)" -ForegroundColor Gray
     $outputDir = Read-Input "Output directory" "$PROJECT_ROOT\data\processed"
     Ensure-Directory -Path $outputDir
 

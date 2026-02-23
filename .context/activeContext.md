@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-### 修复: PyTorch 不支持 RTX 50 系列 (sm_120)
+### 修复: 裁切图片路径重复导致前端无法显示
 
 **任务类型**: Bug修复
 **开始日期**: 2026-02-23
@@ -13,14 +13,14 @@
 ## 任务详情
 
 ### 问题分析
-RTX 5060 Laptop GPU (sm_120) 不被当前 PyTorch 支持：
-- PyTorch 稳定版最高支持 sm_90
-- nightly cu124 不支持 sm_120
+- 输出路径出现 `clip/clip` 重复
+- 前端无法正常显示裁切后的图片
 
 ### 修复方案
-- 使用 **CUDA 12.8 (cu128)** 版本的 nightly
-- 完全卸载旧版本后再安装
-- 添加 pip cache purge
+- 在 `path_generator.py` 添加 `_normalize_source_structure()` 方法
+- 当 `source_structure` 前缀与 `output_root` 最后一级目录相同时，自动去除重复
+- 修复 `app.py` 中绝对路径的处理逻辑
+- 更新 `deploy.ps1` 配置提示
 
 ---
 
@@ -33,7 +33,8 @@ RTX 5060 Laptop GPU (sm_120) 不被当前 PyTorch 支持：
 ## 历史记录
 
 ### 2026-02-23
-- **PyTorch RTX 50 (cu128)**: 已修复 - 准备提交
+- **路径重复修复**: 已修复 - 准备提交
+- **PyTorch RTX 50 (cu128)**: 已提交
 - **PyTorch安装**: 多次修复中 - 提交: `8cb47af`
 - **GPU venv修复**: 已完成
 - **CUDA修复**: 已完成

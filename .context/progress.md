@@ -70,6 +70,28 @@
 
 ---
 
+### 5. PyTorch 不支持 RTX 50 系列 (sm_120) [待开始]
+**状态**: 🔄 新问题
+
+**错误**:
+```
+NVIDIA GeForce RTX 5060 Laptop GPU with CUDA capability sm_120 is not compatible
+with the current PyTorch installation.
+The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 sm_90.
+```
+
+**分析**:
+- RTX 50 系列是 2025 年发布的新显卡 (sm_120)
+- PyTorch 2.10.0 不支持 sm_120
+- 需要更新到支持 sm_120 的 PyTorch 版本
+
+**可能的解决方案**:
+1. 等待 PyTorch 更新支持 sm_120
+2. 安装最新的 PyTorch nightly 版本
+3. 使用 CPU 模式
+
+---
+
 ### 3. 升级 YOLO 到 v11 [待开始]
 **目标**: 将 YOLOv8 升级到 YOLOv11
 

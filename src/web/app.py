@@ -80,13 +80,20 @@ class TaskManager:
             log_capture = logging.getLogger()
             handler = ListLogHandler(self.logs)
             log_capture.addHandler(handler)
-            
-            runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"))
+
+            self.logs.append("Initializing pipeline (this may take a while on first run)...")
+
+            # Create pipeline with timeout protection (120 seconds default)
+            runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
+
+            self.logs.append("Pipeline initialized, starting processing...")
+
             runner.run(start_date=start_date, end_date=end_date)
-            
+
             logging.info("Pipeline execution completed.")
         except Exception as e:
             logging.error(f"Pipeline failed: {e}")
+            self.logs.append(f"Error: {str(e)}")
         finally:
             self.is_running = False
             log_capture.removeHandler(handler)

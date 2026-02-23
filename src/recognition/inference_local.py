@@ -7,24 +7,60 @@ from .bioclip_base import BirdRecognizer
 from typing import List, Dict, Any
 import logging
 
+def _check_cuda_stable(max_retries: int = 3) -> bool:
+    """
+    Check if CUDA is actually stable and usable.
+    Returns True if CUDA works, False otherwise.
+    Uses retries to handle transient CUDA initialization issues.
+    """
+    if not torch.cuda.is_available():
+        return False
+
+    for attempt in range(max_retries):
+        try:
+            # Try a simple CUDA operation to verify it works
+            test_tensor = torch.zeros(1, device='cuda')
+            _ = test_tensor + 1
+            # Also try a synchronization to ensure CUDA is fully initialized
+            torch.cuda.synchronize()
+            del test_tensor
+            torch.cuda.empty_cache()
+            return True
+        except Exception as e:
+            logging.warning(f"CUDA stability check failed (attempt {attempt + 1}/{max_retries}): {e}")
+            # Small delay before retry
+            import time
+            time.sleep(0.1)
+
+    return False
+
 class LocalBirdRecognizer(BirdRecognizer):
     def __init__(self, model_name: str = "bioclip", device: str = None):
         if device is None or device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            # First check basic availability
+            if torch.cuda.is_available():
+                # Then verify CUDA is actually stable
+                if _check_cuda_stable():
+                    self.device = "cuda"
+                else:
+                    logging.warning("CUDA available but not stable, falling back to CPU")
+                    self.device = "cpu"
+            else:
+                self.device = "cpu"
         else:
             self.device = device
-            
+
         # Map friendly names to HF model IDs
         model_map = {
             "bioclip": "hf-hub:imageomics/bioclip",
             "bioclip-2": "hf-hub:imageomics/bioclip-2"
         }
-        
+
         self.model_id = model_map.get(model_name.lower(), model_map["bioclip"])
         self.model_type_slug = model_name.lower()
 
         logging.info(f"Loading {model_name} ({self.model_id}) on {self.device}...")
-        
+
         self.cached_labels = None
         self.cached_text_features = None
 

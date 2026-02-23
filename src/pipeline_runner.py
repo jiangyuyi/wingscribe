@@ -73,20 +73,28 @@ class SmartScanner:
             pass
 
 class FeatherTracePipeline:
-    def __init__(self, config_path: str = "config/settings.yaml"):
+    def __init__(self, config_path: str = "config/settings.yaml", init_timeout: int = 120):
+        """
+        Initialize the pipeline.
+
+        Args:
+            config_path: Path to config file
+            init_timeout: Maximum seconds to wait for model loading (default 120s)
+        """
         # Use centralized config loader
         self.config = load_config(config_path)
-        
+
         # Initialize FS Manager
         self.fs_manager = FileSystemManager.get_instance(self.config.get('paths', {}))
-        
+
         self.db = IOCManager(self.config['paths']['db_path'])
         self.device = self.config['processing'].get('device', 'cpu')
-        self.detector = BirdDetector(
-            self.config['processing']['yolo_model'], 
-            self.config['processing']['confidence_threshold'],
-            device=self.device
-        )
+
+        # Lazy load detector with timeout protection
+        self._detector = None
+        self._detector_loaded = False
+        self._init_timeout = init_timeout
+
         self.recognizer = None # Lazy load later
         self.exif_writer = ExifWriter()
         
@@ -109,6 +117,45 @@ class FeatherTracePipeline:
         self.foreign_countries = self._load_list(paths_config.get('foreign_list', 'config/dictionaries/foreign_countries.txt'))
         self.china_allowlist = self._load_list(paths_config.get('china_list', 'config/dictionaries/china_bird_list.txt'))
         self.all_labels = self._get_taxonomy_labels()
+
+    @property
+    def detector(self):
+        """Lazy load detector with timeout protection."""
+        if self._detector is None and not self._detector_loaded:
+            import signal
+            import functools
+
+            class TimeoutError(Exception):
+                pass
+
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Model loading timed out")
+
+            # Set alarm for timeout (only works on Unix-like systems)
+            # On Windows, we'll use a simpler approach with threading
+            use_signal = hasattr(signal, 'SIGALRM')
+
+            if use_signal:
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(self._init_timeout)
+
+            try:
+                self._detector = BirdDetector(
+                    self.config['processing']['yolo_model'],
+                    self.config['processing']['confidence_threshold'],
+                    device=self.device
+                )
+                self._detector_loaded = True
+            except TimeoutError:
+                logging.error(f"Detector loading timed out after {self._init_timeout} seconds")
+                self._detector_loaded = True
+                raise
+            finally:
+                if use_signal:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+
+        return self._detector
 
     def _load_list(self, path_str):
         path = Path(path_str)

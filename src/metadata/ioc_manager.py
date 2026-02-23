@@ -1,6 +1,8 @@
 import sqlite3
 import logging
 import pandas as pd
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -168,6 +170,99 @@ class IOCManager:
             logging.error(f"Error loading CSV mapping {csv_path}: {e}")
             return {}
 
+    def _read_excel_as_dataframe(self, excel_path: str) -> pd.DataFrame:
+        """
+        Read Excel file by parsing XML directly to avoid openpyxl encoding issues.
+        This method correctly handles Chinese characters in IOC Excel files.
+        """
+        import tempfile
+        import os
+
+        # Create temp directory for extraction
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            # Extract Excel (which is a ZIP file)
+            with zipfile.ZipFile(excel_path, 'r') as z:
+                z.extractall(temp_dir)
+
+            # Parse shared strings
+            shared_strings_path = os.path.join(temp_dir, 'xl', 'sharedStrings.xml')
+            if not os.path.exists(shared_strings_path):
+                # Fallback to pandas if extraction fails
+                return pd.read_excel(excel_path)
+
+            tree = ET.parse(shared_strings_path)
+            root = tree.getroot()
+
+            # Use correct namespace prefix
+            ns = {'sst': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+
+            # Build string list
+            strings = []
+            for item in root.findall('.//sst:si', ns):
+                texts = []
+                for t in item.findall('.//sst:t', ns):
+                    if t.text:
+                        texts.append(t.text)
+                strings.append(''.join(texts))
+
+            # Parse sheet1
+            sheet_path = os.path.join(temp_dir, 'xl', 'worksheets', 'sheet1.xml')
+            if not os.path.exists(sheet_path):
+                return pd.read_excel(excel_path)
+
+            tree = ET.parse(sheet_path)
+            root = tree.getroot()
+
+            rows = root.findall('.//sst:row', ns)
+            if not rows:
+                return pd.read_excel(excel_path)
+
+            # Parse header row
+            header_row = rows[0]
+            header_cells = header_row.findall('sst:c', ns)
+            header = []
+            for cell in header_cells:
+                v = cell.find('sst:v', ns)
+                if v is not None and v.text:
+                    try:
+                        idx = int(v.text)
+                        header.append(strings[idx] if idx < len(strings) else '')
+                    except:
+                        header.append('')
+                else:
+                    is_ = cell.find('sst:is/sst:t', ns)
+                    header.append(is_.text if is_ is not None else '')
+
+            # Parse data rows
+            data = []
+            for row in rows[1:]:  # Skip header
+                cells = row.findall('sst:c', ns)
+                row_data = {}
+                for i, cell in enumerate(cells):
+                    if i >= len(header):
+                        break
+                    v = cell.find('sst:v', ns)
+                    if v is not None and v.text:
+                        try:
+                            idx = int(v.text)
+                            row_data[header[i]] = strings[idx] if idx < len(strings) else ''
+                        except:
+                            row_data[header[i]] = ''
+                    else:
+                        is_ = cell.find('sst:is/sst:t', ns)
+                        row_data[header[i]] = is_.text if is_ is not None else ''
+                if row_data:
+                    data.append(row_data)
+
+            return pd.DataFrame(data)
+
+        finally:
+            # Cleanup temp directory
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def import_from_excel(self, excel_path: str, genus_mapping: Dict[str, str] = None,
                         order_mapping: Dict[str, str] = None, family_mapping: Dict[str, str] = None,
                         refs_dir: str = None):
@@ -219,8 +314,14 @@ class IOCManager:
             logging.info(f"Using family mapping with {len(family_mapping)} entries")
 
         try:
-            df = pd.read_excel(excel_path)
-            df.columns = [str(c).strip() if hasattr(c, 'strip') else str(c) for c in df.columns]
+            # Use XML parsing method to correctly read Chinese characters
+            df = self._read_excel_as_dataframe(excel_path)
+            if df is not None and not df.empty:
+                df.columns = [str(c).strip() if hasattr(c, 'strip') else str(c) for c in df.columns]
+            else:
+                logging.warning("Failed to read Excel file, using pandas fallback")
+                df = pd.read_excel(excel_path)
+                df.columns = [str(c).strip() if hasattr(c, 'strip') else str(c) for c in df.columns]
 
             records = []
             for _, row in df.iterrows():

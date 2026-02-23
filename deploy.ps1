@@ -688,11 +688,56 @@ function Install-PythonDependencies {
         Log-Warn "pip upgrade failed, continuing..."
     }
 
-    # 安装依赖（显示进度和下载速度）
-    Log-Info "Installing requirements.txt..."
+    # 检查是否安装了 CUDA，并安装对应版本的 PyTorch
+    $cudaStatus = Test-CUDA
+    if ($cudaStatus.is_available -and $cudaStatus.cuda_version) {
+        # 根据 CUDA 版本选择对应的 PyTorch
+        $cudaVersion = $cudaStatus.cuda_version
+        $torchIndexUrl = ""
+
+        # CUDA 12.x
+        if ($cudaVersion -match "^12\.") {
+            $torchIndexUrl = "https://download.pytorch.org/whl/cu121"
+            Log-Info "Installing PyTorch with CUDA 12.1 support..."
+        }
+        # CUDA 11.x
+        elseif ($cudaVersion -match "^11\.") {
+            $torchIndexUrl = "https://download.pytorch.org/whl/cu118"
+            Log-Info "Installing PyTorch with CUDA 11.8 support..."
+        }
+
+        if ($torchIndexUrl) {
+            # 先卸载 CPU 版本的 torch（如果存在）
+            Log-Info "Uninstalling any existing CPU torch..."
+            $pipUninstallCpu = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip uninstall -y torch torchvision torchaudio" -NoNewWindow -Wait -PassThru
+
+            # 安装 CUDA 版本的 torch
+            Log-Info "Installing CUDA PyTorch (this may take a few minutes)..."
+            $pipInstallTorch = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install torch torchvision torchaudio --index-url $torchIndexUrl" -NoNewWindow -Wait -PassThru
+
+            if ($pipInstallTorch.ExitCode -eq 0) {
+                Log-Success "CUDA PyTorch installed"
+            } else {
+                Log-Warn "CUDA PyTorch install failed, falling back to CPU version"
+            }
+        }
+    } else {
+        Log-Info "No CUDA detected, installing CPU PyTorch..."
+    }
+
+    # 安装其他依赖（排除 torch，因为我们单独安装了）
+    Log-Info "Installing other dependencies..."
     Log-Info "Downloading and installing packages... (this may take several minutes)"
 
-    $pipInstall = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install -r ""$PROJECT_ROOT\requirements.txt"" --progress-bar on" -NoNewWindow -Wait -PassThru
+    # 临时修改 requirements.txt 排除 torch（因为已经单独安装了）
+    $tempReqFile = "$env:TEMP\wingscribe_requirements.txt"
+    Get-Content "$PROJECT_ROOT\requirements.txt" | Where-Object { $_ -notmatch "^torch$" -and $_ -notmatch "^torch " -and $_ -notmatch "^torch$" } | Out-File -FilePath $tempReqFile -Encoding UTF8
+
+    $pipInstall = Start-Process -FilePath $pythonVenv -ArgumentList "-m pip install -r ""$tempReqFile"" --progress-bar on" -NoNewWindow -Wait -PassThru
+
+    # 清理临时文件
+    Remove-Item $tempReqFile -ErrorAction SilentlyContinue
+
     if ($pipInstall.ExitCode -eq 0) {
         Log-Success "Python dependencies installed"
         return $true

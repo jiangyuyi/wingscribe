@@ -182,7 +182,7 @@ def main():
                 print("[ERROR] TUI 启动失败")
 
     print("\n[INFO] 设置完成!")
-    print("后续可以运行 scripts/deploy.sh (Linux/Mac) 或 scripts/deploy.ps1 (Windows PowerShell)")
+    print("后续可以运行 ./deploy.sh (Linux/Mac) 或 ./deploy.ps1 (Windows PowerShell)")
 
 
 if __name__ == "__main__":

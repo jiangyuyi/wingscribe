@@ -54,6 +54,7 @@
 
 - [X] 将 deploy.ps1 从 scripts/ 移到项目根目录
 - [X] 将 deploy.sh 从 scripts/ 移到项目根目录
+- [X] 修复 setup_tui.py 中的旧指引（scripts/deploy.ps1 → ./deploy.ps1）
 - [X] 提交: `48e9ff5`
 
 ---

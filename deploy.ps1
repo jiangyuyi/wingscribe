@@ -1044,7 +1044,7 @@ function Invoke-Main {
                 Write-Host ""
                 Log-Success "Deployment complete!"
                 Write-Host ""
-                Write-Host "  Next: Select [5] to start service, open http://localhost:8000" -ForegroundColor Gray
+                Write-Host "  Next: Select [6] to start service, open http://localhost:8000" -ForegroundColor Gray
                 Write-Host ""
                 Pause-Host
             }

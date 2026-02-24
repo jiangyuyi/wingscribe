@@ -521,6 +521,18 @@ class FeatherTracePipeline:
             )
             
             if success:
+                # 5. Blur detection (quality check)
+                blur_threshold = self.config.get('processing', {}).get('blur_threshold', 40.0)
+                if blur_threshold > 0:
+                    blur_score = QualityChecker.calculate_blur_score(str(temp_crop_path))
+                    if blur_score < blur_threshold:
+                        logging.debug(f"Skipping blurry crop: {temp_crop_path} (blur_score={blur_score:.1f} < {blur_threshold})")
+                        try:
+                            os.remove(str(temp_crop_path))
+                        except:
+                            pass
+                        continue
+
                 should_flush = False
                 with self.batch_lock:
                     self.batch_buffer.append({

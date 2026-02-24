@@ -97,15 +97,39 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 6. 升级 YOLO 到 v11 [待开始]
-**目标**: 将 YOLOv8 升级到 YOLOv11
+### 6. 启用模糊检测逻辑 [已完成]
+**状态**: ✅ 完成
+
+**问题**: 配置文件中 `blur_threshold` 和 `confidence_threshold` 未被实际使用
+
+**调研结果**:
+- `src/core/quality.py` 中存在 Laplacian 方差法模糊检测逻辑，但未被 pipeline 调用
+- 该方法适合检测鸟类照片的对焦模糊（阈值建议80-100）
 
 **修改文件**:
-- `src/core/detector.py` - 更新模型名称和导入
+- [X] `src/pipeline_runner.py` - 在裁剪成功后添加 QualityChecker 调用
+- [X] 低于模糊度阈值的图片会被自动跳过并删除临时文件
+- [X] `blur_threshold` 配置现在生效（默认40.0，可在settings.yaml中调整）
 
 ---
 
-### 7. 切换数据库到 MySQL [待开始]
+### 7. 升级 YOLO 检测模型 [待开始]
+**状态**: 待研究
+
+**调研结果**:
+- YOLO26 (2026.1发布) vs YOLOv11 vs YOLOv8 对比
+- YOLO26n: mAP 40.9, 2.4M参数, 5.4B FLOPs (最优轻量化)
+- YOLOv11n: mAP 39.5, 2.6M参数, 6.5B FLOPs
+- YOLOv8n: mAP 37.3, 3.2M参数, 8.7B FLOPs (最成熟稳定)
+
+**推荐**: 升级到 YOLO26（精度最高、参数量最小、推理最快）
+
+**修改文件**:
+- `src/core/detector.py` - 更新模型名称
+
+---
+
+### 8. 切换数据库到 MySQL [待开始]
 **目标**: 从 SQLite 迁移到 MySQL，支持远程访问
 
 **推荐**: MySQL 或 PostgreSQL
@@ -116,7 +140,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 8. 创建精简版 Docker (仅浏览) [待开始]
+### 9. 创建精简版 Docker (仅浏览) [待开始]
 **目标**: 创建仅包含 Web 浏览功能的轻量级 Docker
 
 **功能范围**:
@@ -126,7 +150,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 9. 修复裁切图片路径重复和前端显示问题 [已完成]
+### 10. 修复裁切图片路径重复和前端显示问题 [已完成]
 **状态**: ✅ 完成
 
 **问题**:
@@ -146,7 +170,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 10. Batch Processing 日志显示问题 [已完成]
+### 11. Batch Processing 日志显示问题 [已完成]
 **状态**: ✅ 完成
 
 **问题**:
@@ -159,7 +183,7 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 11. 首页翻页按钮消失问题 [已完成]
+### 12. 首页翻页按钮消失问题 [已完成]
 **状态**: ✅ 完成
 
 **问题**:

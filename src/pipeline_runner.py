@@ -532,6 +532,8 @@ class FeatherTracePipeline:
                         except:
                             pass
                         continue
+                    # TEST: Log blur score for passing images
+                    logging.info(f"[Quality] blur_score={blur_score:.1f} >= {blur_threshold} OK - {temp_crop_path.name}")
 
                 should_flush = False
                 with self.batch_lock:

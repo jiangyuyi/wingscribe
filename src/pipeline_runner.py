@@ -525,7 +525,6 @@ class FeatherTracePipeline:
                 blur_threshold = self.config.get('processing', {}).get('blur_threshold', 40.0)
                 if blur_threshold > 0:
                     blur_score = QualityChecker.calculate_blur_score(str(temp_crop_path))
-                    # 输出所有检测结果（测试用）
                     if blur_score < blur_threshold:
                         logging.info(f"[Quality] blur_score={blur_score:.1f} < {blur_threshold} SKIP - {temp_crop_path.name}")
                         try:
@@ -533,7 +532,6 @@ class FeatherTracePipeline:
                         except:
                             pass
                         continue
-                    logging.info(f"[Quality] blur_score={blur_score:.1f} >= {blur_threshold} OK - {temp_crop_path.name}")
 
                 should_flush = False
                 with self.batch_lock:

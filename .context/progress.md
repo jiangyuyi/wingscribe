@@ -198,3 +198,20 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 - [X] 在 index.html 模板中添加静态分页按钮
 - [X] 使用 Jinja2 变量渲染 Previous/Next 链接
 - [X] 仅在有筛选条件时显示"清除筛选"按钮
+
+---
+
+### 13. 排除裁切输出目录 [已完成]
+**状态**: ✅ 完成
+
+**问题**:
+- 扫描源目录时，会把裁切输出目录（如 `clip/`）也包含进来
+- 导致已裁切的照片会被再次处理，浪费资源
+
+**修复方案**:
+- [X] 在 SmartScanner 中添加排除规则
+- [X] 过滤掉与 output.root_dir 相同的路径
+- [X] 两种扫描模式（SmartScanner 和 list_dir）都已处理
+
+**修改文件**:
+- `src/pipeline_runner.py`: SmartScanner 添加 exclude_dirs 参数，遍历时检查路径

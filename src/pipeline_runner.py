@@ -33,10 +33,18 @@ from src.core.io.path_parser import PathParser
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class SmartScanner:
-    def __init__(self, root_path: Path, start_date: str = None, end_date: str = None):
+    def __init__(self, root_path: Path, start_date: str = None, end_date: str = None, exclude_dirs: list = None):
         self.root_path = root_path
         self.start_date = int(start_date) if start_date else 0
         self.end_date = int(end_date) if end_date else 99999999
+        # Normalize exclude dirs to absolute paths
+        self.exclude_dirs = []
+        if exclude_dirs:
+            for d in exclude_dirs:
+                try:
+                    self.exclude_dirs.append(Path(d).resolve())
+                except:
+                    pass
 
     def _is_in_range(self, d_start, d_end):
         if not d_start: return True # No date info, assume safe to explore
@@ -61,6 +69,13 @@ class SmartScanner:
                 if entry.is_file():
                     yield entry
                 elif entry.is_dir():
+                    # Check if this directory should be excluded (output dir)
+                    entry_path = Path(entry.path).resolve()
+                    if self.exclude_dirs:
+                        if any(str(entry_path).startswith(str(ex)) for ex in self.exclude_dirs):
+                            logging.debug(f"Excluding output dir: {entry.name}")
+                            continue
+
                     # Check pruning
                     d_start, d_end, _ = PathParser.parse_folder_name(entry.name)
                     
@@ -586,10 +601,14 @@ class FeatherTracePipeline:
                 
                 source_root_abs = Path(provider.get_local_path(rel_path))
                 parser = PathParser(source_root_abs, structure_pattern)
-                
+
+                # Get output directory to exclude from scanning
+                output_root = self.config.get('paths', {}).get('output', {}).get('root_dir')
+                exclude_dirs = [output_root] if output_root else []
+
                 iterator = []
                 if recursive and (start_date or end_date):
-                    scanner = SmartScanner(source_root_abs, start_date, end_date)
+                    scanner = SmartScanner(source_root_abs, start_date, end_date, exclude_dirs)
                     iterator = scanner.scan(source_root_abs)
                 else:
                     iterator = provider.list_dir(rel_path, recursive=recursive)
@@ -597,10 +616,21 @@ class FeatherTracePipeline:
                 for entry in iterator:
                     is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
                     if is_dir: continue
-                    
+
                     entry_name = entry.name
-                    entry_path = entry.path 
-                    
+                    entry_path = entry.path
+
+                    # Skip files in output directory
+                    if output_root:
+                        try:
+                            entry_abs = Path(entry_path).resolve()
+                            output_abs = Path(output_root).resolve()
+                            if str(entry_abs).startswith(str(output_abs)):
+                                logging.debug(f"Skipping output file: {entry_name}")
+                                continue
+                        except:
+                            pass
+
                     if not entry_name.lower().endswith(('.jpg', '.jpeg')):
                         continue
                     

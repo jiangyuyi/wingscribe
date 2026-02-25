@@ -446,10 +446,61 @@ class FeatherTracePipeline:
                 'UserComment': user_comment
             })
             
+            # Convert absolute paths to relative paths for database storage
+            # The entry.path may be UNC path (\\server\share\...) or drive letter path (Y:\...)
+            # We need to handle both formats relative to base_dir
+            rel_original_path = entry.path
+            rel_file_path = str(final_path)
+
+            if self.base_dir:
+                norm_base_dir = os.path.normpath(self.base_dir)
+                base_dir_parts = Path(norm_base_dir).parts  # e.g., ('Y:', '1按年份', '2026')
+
+                # Try method 1: direct relative path (works for Y:\path format)
+                try:
+                    norm_entry_path = os.path.normpath(entry.path)
+                    rel_original_path = str(Path(norm_entry_path).relative_to(Path(norm_base_dir)))
+                    logging.debug(f"Converted original_path: {entry.path} -> {rel_original_path}")
+                except ValueError:
+                    # Try method 2: extract relative path from UNC path
+                    # UNC path: \\192.168.31.205\picturessd\1按年份\2026\20260102北京八渡桥附近\file.jpg
+                    # base_dir: Y:\1按年份\2026 -> parts: ('Y:', '1按年份', '2026')
+                    # We need to find where base_dir ends and extract the rest
+                    try:
+                        entry_parts = Path(os.path.normpath(entry.path)).parts
+                        # Find the position after base_dir's last component in entry_parts
+                        if len(base_dir_parts) >= 2:
+                            # Look for base_dir's last component (e.g., "2026")
+                            base_last = base_dir_parts[-1]  # "2026"
+                            if base_last in entry_parts:
+                                idx = entry_parts.index(base_last) + 1  # Skip "2026"
+                                if idx < len(entry_parts):
+                                    rel_original_path = str(Path(*entry_parts[idx:]))
+                                    logging.debug(f"Converted original_path (UNC): {entry.path} -> {rel_original_path}")
+                    except Exception:
+                        logging.warning(f"Failed to convert original_path, keeping original: {entry.path}")
+
+                # Same for final_path (processed file)
+                try:
+                    norm_final_path = os.path.normpath(str(final_path))
+                    rel_file_path = str(Path(norm_final_path).relative_to(Path(norm_base_dir)))
+                    logging.debug(f"Converted file_path: {final_path} -> {rel_file_path}")
+                except ValueError:
+                    try:
+                        final_parts = Path(os.path.normpath(str(final_path))).parts
+                        base_last = base_dir_parts[-1]
+                        if base_last in final_parts:
+                            idx = final_parts.index(base_last) + 1
+                            if idx < len(final_parts):
+                                rel_file_path = str(Path(*final_parts[idx:]))
+                                logging.debug(f"Converted file_path (UNC): {final_path} -> {rel_file_path}")
+                    except Exception:
+                        logging.warning(f"Failed to convert file_path, keeping original: {final_path}")
+
             self.db.add_photo_record({
-                'file_path': str(final_path),
+                'file_path': rel_file_path,
                 'filename': Path(final_path).name,
-                'original_path': entry.path,
+                'original_path': rel_original_path,
                 'file_hash': file_hash,
                 'captured_date': meta.get('captured_date'),
                 'location_tag': meta.get('location_tag'),

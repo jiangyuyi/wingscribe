@@ -591,8 +591,10 @@ class FeatherTracePipeline:
         except: pass
 
         for i, (box, score) in enumerate(detections):
-            temp_crop_path = Path("data/processed/temp") / f"temp_{entry.name}_{i}.jpg"
-            Path("data/processed/temp").mkdir(parents=True, exist_ok=True) 
+            # Use output_root for temp directory (which is now resolved to absolute path)
+            temp_dir = Path(self.output_root) / "temp"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_crop_path = temp_dir / f"temp_{entry.name}_{i}.jpg" 
             
             success = ImageProcessor.crop_and_resize(
                 local_source_path, box, str(temp_crop_path), 

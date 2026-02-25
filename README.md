@@ -329,7 +329,32 @@ WingScribe 使用 YAML 进行配置。
 
 ---
 
-### 3. NAS / 远程存储
+### 3. 相对路径配置
+
+WingScribe 支持使用相对路径存储照片路径，便于分离部署和文件迁移。
+
+**配置示例:**
+
+```yaml
+paths:
+  # 相对路径的根目录（所有路径以此为基准）
+  base_dir: "Y:/我的照片/2026"
+  allowed_roots:
+    - "Y:/我的照片/2026"
+
+  sources:
+    - path: "."        # 相对于 base_dir，等同于 Y:/我的照片/2026
+      recursive: true
+
+  output:
+    root_dir: "clip"  # 相对于 base_dir，等同于 Y:/我的照片/2026/clip
+```
+
+> **注意**: 启用相对路径后，需要**重置数据库**才能生效，因为现有数据存储的是绝对路径。
+
+---
+
+### 5. NAS / 远程存储
 
 要处理存储在 NAS (群晖, 威联通等) 上的照片，您必须先将网络共享挂载为本地驱动器。
 
@@ -337,7 +362,7 @@ WingScribe 使用 YAML 进行配置。
 
 ---
 
-### 4. 启动系统
+### 6. 启动系统
 
 #### A. 启动 Web 界面 (推荐)
 
@@ -380,7 +405,7 @@ python src/recognition_service.py
 
 ---
 
-### 5. 常见问题
+### 7. 常见问题
 
 **Q: 启动报错 "exiftool not found"**
 A: 确保 ExifTool 已安装并添加到系统 PATH。重启终端后再试。

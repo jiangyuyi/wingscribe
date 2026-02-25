@@ -131,8 +131,9 @@ class FeatherTracePipeline:
         )
         self.write_back_raw = out_conf.get('write_back_to_source', False)
 
-        # Store base_dir for relative path conversion
+        # Store base_dir and output_root for relative path conversion and exclusion
         self.base_dir = base_dir
+        self.output_root = output_root  # Absolute path for exclusion
         
         # Batch Buffer
         self.batch_buffer = []
@@ -674,9 +675,8 @@ class FeatherTracePipeline:
                 source_root_abs = Path(provider.get_local_path(rel_path))
                 parser = PathParser(source_root_abs, structure_pattern)
 
-                # Get output directory to exclude from scanning
-                output_root = self.config.get('paths', {}).get('output', {}).get('root_dir')
-                exclude_dirs = [output_root] if output_root else []
+                # Get output directory to exclude from scanning (use pre-resolved absolute path)
+                exclude_dirs = [self.output_root] if self.output_root else []
 
                 iterator = []
                 if recursive and (start_date or end_date):

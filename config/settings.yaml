@@ -23,7 +23,7 @@ processing:
   yolo_model: "yolov8n.pt"
   confidence_threshold: 0.5
   # 模糊检测阈值 (Laplacian方差法，分数范围0~∞，典型: <30模糊, 30-100一般, >100清晰, 鸟类照片通常200+)
-  blur_threshold: 600
+  blur_threshold: 90
   target_size: 640
   crop_padding: 200
 recognition:

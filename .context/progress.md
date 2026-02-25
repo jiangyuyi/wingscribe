@@ -207,14 +207,17 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 **问题**:
 - 扫描源目录时，会把裁切输出目录（如 `clip/`）也包含进来
 - 导致已裁切的照片会被再次处理，浪费资源
+- 临时文件目录硬编码为 data/processed/temp，导致产生不必要的目录
 
 **修复方案**:
-- [X] 在 SmartScanner 中添加排除规则
-- [X] 过滤掉与 output.root_dir 相同的路径
+- [X] 在 SmartScanner 中添加 exclude_dirs 参数
+- [X] 使用预解析的绝对路径 self.output_root 进行排除
+- [X] 修复临时文件目录，使用配置的 output.root_dir
 - [X] 两种扫描模式（SmartScanner 和 list_dir）都已处理
+- [X] 支持 UNC 网络路径格式的路径转换
 
 **修改文件**:
-- `src/pipeline_runner.py`: SmartScanner 添加 exclude_dirs 参数，遍历时检查路径
+- `src/pipeline_runner.py`: SmartScanner 添加 exclude_dirs 参数，使用 self.output_root
 
 ---
 

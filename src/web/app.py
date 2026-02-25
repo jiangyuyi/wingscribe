@@ -131,10 +131,18 @@ app = FastAPI(lifespan=lifespan)
 config = load_config(str(BASE_DIR / "config" / "settings.yaml"), str(BASE_DIR / "config" / "secrets.yaml"))
 
 db_path = BASE_DIR / config['paths']['db_path']
+
+# Get base_dir for relative path resolution
+base_dir = config['paths'].get('base_dir', '')
+if base_dir:
+    base_dir = Path(base_dir)
+
 # Handle absolute paths in config - use Path() directly to avoid BASE_DIR prefix issues
 output_root = config['paths']['output']['root_dir']
 if Path(output_root).is_absolute():
     processed_dir = Path(output_root)
+elif base_dir:
+    processed_dir = base_dir / output_root
 else:
     processed_dir = BASE_DIR / output_root 
 
@@ -186,7 +194,13 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
     try:
         # Normalize path separators to avoid escape sequence issues
         normalized = original_path_str.replace('\\', '/')
-        abs_path = Path(normalized).resolve()
+
+        # Handle relative paths - convert to absolute using base_dir
+        if base_dir and not Path(normalized).is_absolute():
+            abs_path = (base_dir / normalized).resolve()
+        else:
+            abs_path = Path(normalized).resolve()
+
         for idx, root in enumerate(allowed_roots):
             try:
                 rel_path = abs_path.relative_to(root)
@@ -211,8 +225,10 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
         # Normalize path separators
         normalized = file_path_str.replace('\\', '/')
 
-        # Handle relative paths - prepend BASE_DIR if not absolute
-        if not Path(normalized).is_absolute():
+        # Handle relative paths - convert to absolute using base_dir
+        if base_dir and not Path(normalized).is_absolute():
+            abs_path = (base_dir / normalized).absolute()
+        elif not Path(normalized).is_absolute():
             abs_path = (BASE_DIR / normalized).absolute()
         else:
             abs_path = Path(normalized).absolute()
@@ -566,17 +582,24 @@ def search_taxonomy(q: str, limit: int = 20):
 @app.post("/api/update_label")
 def update_label(req: UpdateLabelRequest):
     manager = IOCManager(str(db_path))
-    
+
     # 1. Fetch photo details BEFORE update to get file paths
     # Use conn.execute directly as manager.cursor is removed
     cursor = manager.conn.execute("SELECT * FROM photos WHERE id = ?", (req.photo_id,))
     photo = cursor.fetchone()
-    
+
     if not photo:
         manager.close()
         raise HTTPException(status_code=404, detail="Photo not found")
-    
+
     photo = dict(photo)
+
+    # Convert relative paths to absolute using base_dir
+    if base_dir:
+        if photo.get('file_path'):
+            photo['file_path'] = str(base_dir / photo['file_path'])
+        if photo.get('original_path'):
+            photo['original_path'] = str(base_dir / photo['original_path'])
     
     # 2. Get extra bird info (Family) for tags
     bird_info = manager.get_bird_info(req.scientific_name)
@@ -724,10 +747,16 @@ def update_label(req: UpdateLabelRequest):
                     
                     shutil.move(processed_path, final_path)
                     
-                    # Update DB
+                    # Update DB (convert absolute path to relative)
                     conn = get_db_conn()
-                    conn.execute("UPDATE photos SET file_path = ?, filename = ? WHERE id = ?", 
-                                 (str(final_path), final_path.name, req.photo_id))
+                    rel_path = str(final_path)
+                    if base_dir:
+                        try:
+                            rel_path = str(Path(final_path).relative_to(base_dir))
+                        except ValueError:
+                            pass  # Keep absolute path if not under base_dir
+                    conn.execute("UPDATE photos SET file_path = ?, filename = ? WHERE id = ?",
+                                 (rel_path, final_path.name, req.photo_id))
                     conn.commit()
                     conn.close()
                     

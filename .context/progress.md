@@ -215,3 +215,24 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 **修改文件**:
 - `src/pipeline_runner.py`: SmartScanner 添加 exclude_dirs 参数，遍历时检查路径
+
+---
+
+### 14. 数据库存储相对路径 [已完成]
+**状态**: ✅ 完成
+
+**目标**: 数据库只存储相对路径，绝对路径从配置文件的 base_dir 为起点计算
+
+**修改计划**:
+1. `config/settings.yaml` - 新增 base_dir 配置
+2. `src/metadata/ioc_manager.py` - 添加相对路径转换逻辑
+   - 写入时: 绝对路径 → 相对路径
+   - 读取时: 相对路径 → 绝对路径
+3. `src/web/app.py` - 使用新的转换函数
+
+**简化点**:
+- 无需迁移现有数据（可重置数据库）
+- 只在入库/出库两处转换
+
+**注意**:
+- 重置数据库后生效

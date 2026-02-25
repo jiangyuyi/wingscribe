@@ -102,7 +102,9 @@ class FeatherTracePipeline:
         # Initialize FS Manager
         self.fs_manager = FileSystemManager.get_instance(self.config.get('paths', {}))
 
-        self.db = IOCManager(self.config['paths']['db_path'])
+        # Get base_dir for relative path storage
+        base_dir = self.config.get('paths', {}).get('base_dir', '')
+        self.db = IOCManager(self.config['paths']['db_path'], base_dir)
         self.device = self.config['processing'].get('device', 'cpu')
 
         # Lazy load detector with timeout protection
@@ -113,13 +115,24 @@ class FeatherTracePipeline:
         self.recognizer = None # Lazy load later
         self.exif_writer = ExifWriter()
         
-        # Path Generator
-        out_conf = self.config['paths'].get('output', {})
+        # Path Generator - resolve relative paths using base_dir
+        paths_conf = self.config['paths']
+        base_dir = paths_conf.get('base_dir', '')
+
+        out_conf = paths_conf.get('output', {})
+        output_root = out_conf.get('root_dir', 'data/processed')
+        # Resolve relative path to absolute
+        if base_dir and not Path(output_root).is_absolute():
+            output_root = str(Path(base_dir) / output_root)
+
         self.path_generator = PathGenerator(
             template=out_conf.get('structure_template', "{year}/{location}/{species_cn}/{filename}"),
-            output_root=out_conf.get('root_dir', 'data/processed')
+            output_root=output_root
         )
         self.write_back_raw = out_conf.get('write_back_to_source', False)
+
+        # Store base_dir for relative path conversion
+        self.base_dir = base_dir
         
         # Batch Buffer
         self.batch_buffer = []
@@ -579,15 +592,23 @@ class FeatherTracePipeline:
         if not sources and 'raw_dir' in self.config['paths']:
              sources = [{'path': self.config['paths']['raw_dir'], 'recursive': False}]
 
+        # Resolve source paths (relative to base_dir)
+        base_dir = self.base_dir
+        for source in sources:
+            path_str = source['path']
+            # Resolve relative path to absolute
+            if base_dir and path_str and not Path(path_str).is_absolute():
+                source['path'] = str(Path(base_dir) / path_str)
+
         # Use ThreadPool for detection/cropping
         # 4 workers is a good start for IO/CPU bound mix
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = []
-            
+
             for source in sources:
                 if not source.get('enabled', True):
                     continue
-                    
+
                 path_str = source['path']
                 recursive = source.get('recursive', True)
                 structure_pattern = source.get('structure_pattern', None)

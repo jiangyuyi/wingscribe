@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 class IOCManager:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, base_dir: str = ""):
         self.db_path = db_path
+        self.base_dir = Path(base_dir) if base_dir else None
         # Ensure parent directory exists
         db_file = Path(db_path)
         db_file.parent.mkdir(parents=True, exist_ok=True)
@@ -16,6 +17,24 @@ class IOCManager:
         self.conn.row_factory = sqlite3.Row
         # Removed persistent self.cursor for thread safety
         self._init_db()
+
+    def _abs_to_rel(self, abs_path: str) -> str:
+        """Convert absolute path to relative path based on base_dir"""
+        if not self.base_dir or not abs_path:
+            return abs_path
+        try:
+            return str(Path(abs_path).relative_to(self.base_dir))
+        except ValueError:
+            return abs_path  # Not under base_dir, keep as is
+
+    def _rel_to_abs(self, rel_path: str) -> str:
+        """Convert relative path to absolute path based on base_dir"""
+        if not self.base_dir or not rel_path:
+            return rel_path
+        p = Path(rel_path)
+        if p.is_absolute():
+            return rel_path
+        return str(self.base_dir / p)
 
     def _init_db(self):
         # Taxonomy Table
@@ -674,10 +693,17 @@ class IOCManager:
         return cursor.fetchone() is not None
 
     def add_photo_record(self, record: Dict):
+        # Convert absolute paths to relative paths for storage
+        record = dict(record)
+        if 'file_path' in record and record['file_path']:
+            record['file_path'] = self._abs_to_rel(record['file_path'])
+        if 'original_path' in record and record['original_path']:
+            record['original_path'] = self._abs_to_rel(record['original_path'])
+
         keys = ', '.join(record.keys())
         placeholders = ', '.join(['?'] * len(record))
         values = tuple(record.values())
-        
+
         sql = f"INSERT INTO photos ({keys}) VALUES ({placeholders})"
         cursor = self.conn.execute(sql, values)
         self.conn.commit()

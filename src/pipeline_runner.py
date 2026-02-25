@@ -695,10 +695,10 @@ class FeatherTracePipeline:
                     entry_path = entry.path
 
                     # Skip files in output directory
-                    if output_root:
+                    if self.output_root:
                         try:
                             entry_abs = Path(entry_path).resolve()
-                            output_abs = Path(output_root).resolve()
+                            output_abs = Path(self.output_root).resolve()
                             if str(entry_abs).startswith(str(output_abs)):
                                 logging.debug(f"Skipping output file: {entry_name}")
                                 continue

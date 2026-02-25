@@ -37,7 +37,8 @@ def _check_cuda_stable(max_retries: int = 3) -> bool:
 class BirdDetector:
     def __init__(self, model_path: str, confidence: float = 0.5, device: str = "auto"):
         """
-        Initialize the YOLOv8 bird detector.
+        Initialize the YOLO26 bird detector.
+        Supports YOLOv8, YOLOv11, YOLO26 models via Ultralytics API.
         """
         self.confidence = confidence
         self.bird_class_id = 14  # COCO class for 'bird'
@@ -82,8 +83,8 @@ class BirdDetector:
     def _load_model(self):
         """Load or reload the YOLO model."""
         if not os.path.exists(self.model_path):
-            logging.warning(f"YOLO model not found at {self.model_path}, downloading yolov8n.pt...")
-            self._model = YOLO("yolov8n.pt")
+            logging.warning(f"YOLO model not found at {self.model_path}, downloading yolo26n.pt...")
+            self._model = YOLO("yolo26n.pt")
         else:
             self._model = YOLO(self.model_path)
         logging.info(f"YOLO detector initialized on {self.device}")
@@ -141,5 +142,5 @@ class BirdDetector:
 
 if __name__ == "__main__":
     # Quick test if run directly
-    detector = BirdDetector("yolov8n.pt")
+    detector = BirdDetector("yolo26n.pt")
     print("Detector initialized.")

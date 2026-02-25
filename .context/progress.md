@@ -113,19 +113,32 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
-### 7. 升级 YOLO 检测模型 [待开始]
-**状态**: 待研究
+### 7. 升级 YOLO 检测模型 [已完成]
+**状态**: ✅ 完成
 
 **调研结果**:
-- YOLO26 (2026.1发布) vs YOLOv11 vs YOLOv8 对比
+- YOLO26 (2025.9发布) vs YOLOv11 vs YOLOv8 对比
 - YOLO26n: mAP 40.9, 2.4M参数, 5.4B FLOPs (最优轻量化)
 - YOLOv11n: mAP 39.5, 2.6M参数, 6.5B FLOPs
 - YOLOv8n: mAP 37.3, 3.2M参数, 8.7B FLOPs (最成熟稳定)
 
 **推荐**: 升级到 YOLO26（精度最高、参数量最小、推理最快）
 
+**AMD CPU 支持分析**:
+- PyTorch 在 Windows 上对 AMD GPU 支持有限（需要 ROCm，仅支持 Linux）
+- AMD 锐龙 CPU 可以运行 PyTorch CPU 版本（无 GPU 加速）
+- 当前代码已支持 CUDA→CPU 自动降级，AMD CPU 用户会使用 CPU 推理
+- **无需额外修改**，现有设备选择逻辑已兼容
+
 **修改文件**:
-- `src/core/detector.py` - 更新模型名称
+1. `config/settings.yaml` - 更新 yolo_model 从 `yolov8n.pt` 改为 `yolo26n.pt`
+2. `src/core/detector.py` - 更新注释和文档字符串
+3. `tests/test_core.py` - 更新测试中的模型名称
+4. `tests/test_detector.py` - 新增单元测试（13个测试用例，全部通过）
+
+**单元测试结果**:
+- 13个测试用例全部通过
+- 覆盖: CUDA稳定性检查、设备选择、模型加载、检测功能、错误处理
 
 ---
 

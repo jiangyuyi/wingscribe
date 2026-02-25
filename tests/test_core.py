@@ -26,7 +26,7 @@ def test_core_processing():
     
     print("Testing BirdDetector (Initialization only)...")
     # We won't run full detection because it downloads weights
-    detector = BirdDetector("yolov8n.pt")
+    detector = BirdDetector("yolo26n.pt")
     assert detector is not None
     
     print("Testing ImageProcessor...")

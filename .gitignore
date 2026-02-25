@@ -14,3 +14,5 @@ data/models/
 config/secrets.yaml
 .claude/
 nul
+# YOLO model files (auto-downloaded by Ultralytics)
+*.pt

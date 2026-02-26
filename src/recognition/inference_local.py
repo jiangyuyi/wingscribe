@@ -126,48 +126,67 @@ class LocalBirdRecognizer(BirdRecognizer):
         # Check for local model in specific subfolder
         local_model_root = Path("data/models")
         local_model_path = local_model_root / self.model_type_slug
-        
+
         # RTX 4060/Laptop Fix: Use fp16 for CUDA to reduce bandwidth spike/power surge
         precision = 'fp16' if self.device == 'cuda' else 'fp32'
 
-        # Build hub_kwargs for mirror support
-        hub_kwargs = {}
-        if hasattr(self, 'hf_mirror') and self.hf_mirror:
-            hub_kwargs['cache_dir'] = None  # Use default cache
-            # The mirror is set via environment variable
+        # Try multiple parameter combinations for open_clip compatibility
+        oc = _get_open_clip()
 
-        kwargs = {
+        # Strategy 1: Full parameters (newer open_clip versions)
+        model_kwargs = {
             "precision": precision,
             "device": self.device
         }
-        if hub_kwargs:
-            kwargs['hub_kwargs'] = hub_kwargs
+
+        # Try local path first
+        ckpt_path = local_model_path / "open_clip_pytorch_model.bin"
+        use_local = ckpt_path.exists()
 
         try:
-            # Try local path first
-            ckpt_path = local_model_path / "open_clip_pytorch_model.bin"
-            if ckpt_path.exists():
+            if use_local:
                 logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
-                self.model, _, self.preprocess = _get_open_clip().create_model_and_transforms(
+                self.model, _, self.preprocess = oc.create_model_and_transforms(
                     'ViT-B-16',
                     pretrained=str(ckpt_path),
-                    **kwargs
+                    **model_kwargs
                 )
             else:
                 logging.info(f"Local checkpoint not found at {ckpt_path}, loading from Hub: {self.model_id}")
-                self.model, _, self.preprocess = _get_open_clip().create_model_and_transforms(
+                self.model, _, self.preprocess = oc.create_model_and_transforms(
                     self.model_id,
-                    **kwargs
+                    **model_kwargs
                 )
-        except TypeError:
-            # Fallback for older open_clip versions
-            logging.warning("Installed open_clip might not support 'device' arg, falling back to manual transfer.")
-            kwargs.pop("device")
-            self.model, _, self.preprocess = _get_open_clip().create_model_and_transforms(
-                self.model_id,
-                **kwargs
-            )
-            self.model.to(self.device)
+        except TypeError as e:
+            error_msg = str(e)
+            # Strategy 2: Remove device parameter (older versions)
+            if 'device' in error_msg or 'unexpected keyword argument' in error_msg:
+                logging.warning(f"open_clip doesn't support 'device' param: {e}. Trying without device...")
+                model_kwargs.pop("device", None)
+                try:
+                    if use_local:
+                        self.model, _, self.preprocess = oc.create_model_and_transforms(
+                            'ViT-B-16',
+                            pretrained=str(ckpt_path),
+                            **model_kwargs
+                        )
+                    else:
+                        self.model, _, self.preprocess = oc.create_model_and_transforms(
+                            self.model_id,
+                            **model_kwargs
+                        )
+                    self.model.to(self.device)
+                except TypeError as e2:
+                    # Strategy 3: Remove precision parameter as well
+                    logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
+                    model_kwargs.pop("precision", None)
+                    self.model, _, self.preprocess = oc.create_model_and_transforms(
+                        self.model_id if not use_local else 'ViT-B-16',
+                        pretrained=str(ckpt_path) if use_local else self.model_id
+                    )
+                    self.model.to(self.device)
+            else:
+                raise e
         
         # Ensure tokenizer is ready
         self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')

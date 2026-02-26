@@ -1,11 +1,21 @@
 import os
 import torch
-import open_clip
 from pathlib import Path
 from PIL import Image
 from .bioclip_base import BirdRecognizer
 from typing import List, Dict, Any
 import logging
+
+# Lazy import open_clip - will be imported after environment variables are set
+_open_clip = None
+
+def _get_open_clip():
+    """Lazy load open_clip to ensure HF mirror env vars are set first."""
+    global _open_clip
+    if _open_clip is None:
+        import open_clip as _oc
+        _open_clip = _oc
+    return _open_clip
 
 def _check_cuda_stable(max_retries: int = 3) -> bool:
     """
@@ -35,7 +45,19 @@ def _check_cuda_stable(max_retries: int = 3) -> bool:
     return False
 
 class LocalBirdRecognizer(BirdRecognizer):
-    def __init__(self, model_name: str = "bioclip", device: str = None):
+    def __init__(self, model_name: str = "bioclip", device: str = None, hf_mirror: str = None):
+        # Set HuggingFace mirror if provided
+        if hf_mirror:
+            import os
+            os.environ['HF_ENDPOINT'] = hf_mirror
+            os.environ['HF_HUB_URL'] = hf_mirror
+            # Also try the newer HFTransfer method
+            try:
+                os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
+            except:
+                pass
+            logging.info(f"Using HuggingFace mirror: {hf_mirror}")
+
         if device is None or device == "auto":
             # First check basic availability
             if torch.cuda.is_available():
@@ -58,6 +80,7 @@ class LocalBirdRecognizer(BirdRecognizer):
 
         self.model_id = model_map.get(model_name.lower(), model_map["bioclip"])
         self.model_type_slug = model_name.lower()
+        self.hf_mirror = hf_mirror  # Save for _load_model
 
         logging.info(f"Loading {model_name} ({self.model_id}) on {self.device}...")
 
@@ -106,25 +129,33 @@ class LocalBirdRecognizer(BirdRecognizer):
         
         # RTX 4060/Laptop Fix: Use fp16 for CUDA to reduce bandwidth spike/power surge
         precision = 'fp16' if self.device == 'cuda' else 'fp32'
-        
+
+        # Build hub_kwargs for mirror support
+        hub_kwargs = {}
+        if hasattr(self, 'hf_mirror') and self.hf_mirror:
+            hub_kwargs['cache_dir'] = None  # Use default cache
+            # The mirror is set via environment variable
+
         kwargs = {
             "precision": precision,
             "device": self.device
         }
+        if hub_kwargs:
+            kwargs['hub_kwargs'] = hub_kwargs
 
         try:
             # Try local path first
             ckpt_path = local_model_path / "open_clip_pytorch_model.bin"
             if ckpt_path.exists():
                 logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
-                self.model, _, self.preprocess = open_clip.create_model_and_transforms(
-                    'ViT-B-16', 
+                self.model, _, self.preprocess = _get_open_clip().create_model_and_transforms(
+                    'ViT-B-16',
                     pretrained=str(ckpt_path),
                     **kwargs
                 )
             else:
                 logging.info(f"Local checkpoint not found at {ckpt_path}, loading from Hub: {self.model_id}")
-                self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                self.model, _, self.preprocess = _get_open_clip().create_model_and_transforms(
                     self.model_id,
                     **kwargs
                 )
@@ -132,14 +163,14 @@ class LocalBirdRecognizer(BirdRecognizer):
             # Fallback for older open_clip versions
             logging.warning("Installed open_clip might not support 'device' arg, falling back to manual transfer.")
             kwargs.pop("device")
-            self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+            self.model, _, self.preprocess = _get_open_clip().create_model_and_transforms(
                 self.model_id,
                 **kwargs
             )
             self.model.to(self.device)
         
         # Ensure tokenizer is ready
-        self.tokenizer = open_clip.get_tokenizer('ViT-B-16')
+        self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
 
         # Restore logging levels
         for logger, level in _verbose_loggers:

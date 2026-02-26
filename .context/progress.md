@@ -234,6 +234,33 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 ---
 
+### 15. 完善 Linux 部署脚本 deploy.sh [已完成]
+**目标**: 将 deploy.sh 完善为与 deploy.ps1 功能一致
+
+**差异分析**:
+- `deploy.sh` 已具备完整功能，但缺少 `deploy.ps1` 中的 PyTorch GPU 检测逻辑
+- 需要添加：RTX 50 系列 GPU 检测和 nightly PyTorch 安装支持
+
+**修改计划**:
+1. 分析 deploy.ps1 中的 PyTorch 安装逻辑
+2. 在 deploy.sh 中添加相同的功能:
+   - GPU 型号检测（RTX 50 系列识别）
+   - CUDA 12.8 (cu128) nightly 版本安装
+   - 完全卸载旧版本后再安装
+   - pip cache purge
+3. 在 Linux/WSL 环境测试
+
+**已完成修改**:
+- [X] 在 `install_python_deps()` 中添加 GPU 检测逻辑
+- [X] 添加 RTX 50 系列检测（使用正则匹配）
+- [X] 添加 CUDA 12.8 nightly 版本安装支持
+- [X] 添加完全卸载旧版本 PyTorch
+- [X] 添加 pip cache purge
+- [X] 添加单独的 `pytorch` 命令（重新安装 PyTorch）
+- [X] 更新配置生成中的 yolo_model 从 yolov8n.pt 改为 yolo26n.pt
+
+---
+
 ### 14. 数据库存储相对路径 [已完成]
 **状态**: ✅ 完成
 
@@ -252,3 +279,84 @@ The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 s
 
 **注意**:
 - 重置数据库后生效
+
+---
+
+### 16. 完善 Linux 部署脚本 deploy.sh (续) [已完成]
+**状态**: ✅ 完成
+
+**新增功能**:
+- [X] 修复 ExifTool 包名（perl-image-exiftool → libimage-exiftool-perl）
+- [X] 修复 pip 路径检测（添加 pip3 检测）
+- [X] 添加自动 sudo 功能（install_git, install_python, install_exiftool, install_venv_if_needed）
+- [X] 自动检测系统 Python 版本（优先使用 python3）
+
+---
+
+### 17. 修复 signal only works in main thread 问题 [已完成]
+**状态**: ✅ 完成
+
+**问题**: Linux 服务器上运行 pipeline 时报错:
+```
+signal only works in main thread of the main interpreter
+```
+
+**原因**:
+- `signal.SIGALRM` 只能在主线程中使用
+- 检测器在 ThreadPoolExecutor 工作线程中首次被加载
+
+**修复方案**:
+- [X] 添加线程检测: `threading.current_thread() == threading.main_thread()`
+
+---
+
+### 18. 修复多线程同时下载 YOLO 模型问题 [已完成]
+**状态**: ✅ 完成
+
+**问题**: 4 个线程同时启动，同时下载 YOLO 模型
+
+**修复方案**:
+- [X] 添加 `_detector_lock` 线程锁
+- [X] 使用 double-check locking 模式
+
+---
+
+### 19. 添加 HuggingFace 镜像配置 [已解决]
+**状态**: ✅ 已解决
+
+**问题**: 国内服务器下载 BioCLIP 模型超时
+
+**根本原因**:
+- `open_clip` 库在模块加载时就执行了 `import open_clip`
+- 此时 `HF_ENDPOINT`/`HF_HUB_URL` 环境变量尚未设置
+- huggingface_hub 内部已缓存了默认 URL，导致后续设置的环境变量无效
+
+**解决方案**:
+1. **修改 `src/recognition/inference_local.py`**:
+   - 将 `import open_clip` 改为 lazy import（延迟导入）
+   - 添加 `_get_open_clip()` 函数，在设置环境变量后才导入 open_clip
+   - 这样确保 huggingface_hub 使用镜像 URL
+
+2. **修改 `src/recognition/cloud/factory.py`**:
+   - Web API 调用 `LocalBirdRecognizer` 时没有传递 `hf_mirror` 参数
+   - 添加从配置中读取 `hf_mirror` 并传递给识别器的代码
+
+**关键代码**:
+```python
+# inference_local.py - lazy import
+_open_clip = None
+def _get_open_clip():
+    global _open_clip
+    if _open_clip is None:
+        import open_clip as _oc
+        _open_clip = _oc
+    return _open_clip
+
+# 在 __init__ 中先设置环境变量，然后才调用 _get_open_clip()
+if hf_mirror:
+    os.environ['HF_ENDPOINT'] = hf_mirror
+    os.environ['HF_HUB_URL'] = hf_mirror
+# 然后 lazy load open_clip
+```
+
+**验证**: 手动测试确认镜像生效

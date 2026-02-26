@@ -53,7 +53,13 @@ class RecognizerFactory:
             # 如果是本地识别，尝试加载本地识别器
             if platform == RecognitionPlatform.local.value:
                 from ..inference_local import LocalBirdRecognizer
-                return LocalBirdRecognizer(**kwargs)
+                # 从配置中获取 hf_mirror 参数
+                config = get_config()
+                rec_config = config.get('recognition', {})
+                hf_mirror = rec_config.get('hf_mirror')
+                # 合并 kwargs 和 hf_mirror
+                create_kwargs = {**kwargs, 'hf_mirror': hf_mirror}
+                return LocalBirdRecognizer(**create_kwargs)
             raise ValueError(f"Unknown platform: {platform}")
 
         recognizer_class = cls._recognizers[platform]

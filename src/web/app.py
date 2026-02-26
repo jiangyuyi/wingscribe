@@ -410,6 +410,25 @@ def download_raw(path: str):
 @app.post("/api/admin/reset")
 def reset_system():
     try:
+        # 安全检查：获取所有配置的源目录，禁止删除这些目录
+        source_paths = []
+        sources_config = config.get('paths', {}).get('sources', [])
+        for src in sources_config:
+            src_path = src.get('path', '')
+            if src_path:
+                if Path(src_path).is_absolute():
+                    source_paths.append(Path(src_path).absolute())
+                elif base_dir:
+                    source_paths.append((base_dir / src_path).absolute())
+                else:
+                    source_paths.append((BASE_DIR / src_path).absolute())
+
+        # 如果 output 目录也是源目录，禁止删除（防止配置错误导致的灾难）
+        protected_paths = set(source_paths)
+        protected_paths.add(BASE_DIR.absolute())  # 保护项目根目录
+
+        logger.warning(f"Factory reset: Protected paths: {protected_paths}")
+
         # 1. Clear DB
         if db_path.exists():
             gc.collect()
@@ -419,15 +438,18 @@ def reset_system():
                 os.rename(db_path, temp_path)
                 os.remove(temp_path)
             except: pass
-            
-        # 2. Clear Processed
-        # WARNING: This deletes the entire root output dir!
-        if processed_dir.exists():
+
+        # 2. Clear Processed - 带安全检查
+        # 只清空与源目录不同的输出目录
+        processed_abs = processed_dir.absolute()
+        if processed_dir.exists() and processed_abs not in protected_paths:
             for item in processed_dir.iterdir():
                 try:
                     if item.is_file(): item.unlink()
                     elif item.is_dir(): shutil.rmtree(item)
                 except: pass
+        else:
+            logger.warning(f"Skipped clearing processed_dir (protected or not exists): {processed_dir}")
 
         init_app_db()
 

@@ -258,8 +258,8 @@
 
         // 3. Reset System
         function resetSystem() {
-            if(!confirm("ARE YOU SURE? This cannot be undone!")) return;
-            if(!confirm("Really? All processed data will be lost.")) return;
+            if(!confirm("ARE YOU SURE? This will reset the database.")) return;
+            if(!confirm("Database will be cleared. Photos will remain.")) return;
             
             fetch('/api/admin/reset', {method: 'POST'})
                 .then(r => r.json())

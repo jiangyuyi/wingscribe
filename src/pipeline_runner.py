@@ -110,6 +110,7 @@ class FeatherTracePipeline:
         # Lazy load detector with timeout protection
         self._detector = None
         self._detector_loaded = False
+        self._detector_lock = threading.Lock()
         self._init_timeout = init_timeout
 
         self.recognizer = None # Lazy load later
@@ -149,40 +150,48 @@ class FeatherTracePipeline:
 
     @property
     def detector(self):
-        """Lazy load detector with timeout protection."""
-        if self._detector is None and not self._detector_loaded:
-            import signal
-            import functools
+        """Lazy load detector with thread-safe initialization."""
+        # Double-check locking pattern for thread safety
+        if self._detector is None:
+            with self._detector_lock:
+                if self._detector is None and not self._detector_loaded:
+                    import signal
+                    import functools
 
-            class TimeoutError(Exception):
-                pass
+                    class TimeoutError(Exception):
+                        pass
 
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Model loading timed out")
+                    def timeout_handler(signum, frame):
+                        raise TimeoutError("Model loading timed out")
 
-            # Set alarm for timeout (only works on Unix-like systems)
-            # On Windows, we'll use a simpler approach with threading
-            use_signal = hasattr(signal, 'SIGALRM')
+                    # Set alarm for timeout (only works on Unix-like systems and main thread)
+                    # On Windows or non-main threads, we'll skip the timeout protection
+                    use_signal = hasattr(signal, 'SIGALRM') and threading.current_thread() == threading.main_thread()
 
-            if use_signal:
-                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(self._init_timeout)
+                    if use_signal:
+                        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                        signal.alarm(self._init_timeout)
 
-            try:
-                self._detector = BirdDetector(
-                    self.config['processing']['yolo_model'],
-                    self.config['processing']['confidence_threshold'],
-                    device=self.device
-                )
-                self._detector_loaded = True
-            except TimeoutError:
-                logging.error(f"Detector loading timed out after {self._init_timeout} seconds")
-                self._detector_loaded = True
-                raise
-            finally:
-                if use_signal:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
+                    try:
+                        logging.info(f"Loading YOLO model: {self.config['processing']['yolo_model']}")
+                        self._detector = BirdDetector(
+                            self.config['processing']['yolo_model'],
+                            self.config['processing']['confidence_threshold'],
+                            device=self.device
+                        )
+                        self._detector_loaded = True
+                        logging.info("YOLO model loaded successfully")
+                    except TimeoutError:
+                        logging.error(f"Detector loading timed out after {self._init_timeout} seconds")
+                        self._detector_loaded = True
+                        raise
+                    except Exception as e:
+                        logging.error(f"Failed to load detector: {e}")
+                        raise
+                    finally:
+                        if use_signal:
+                            signal.alarm(0)
+                            signal.signal(signal.SIGALRM, old_handler)
 
         return self._detector
 
@@ -289,12 +298,14 @@ class FeatherTracePipeline:
         """
         rec_config = self.config['recognition']
         mode = rec_config.get('mode', 'local')
-        
+        hf_mirror = rec_config.get('hf_mirror')
+
         if mode == 'local':
             conf = rec_config.get('local', {})
             self.recognizer = LocalBirdRecognizer(
                 model_name=conf.get('model_type', 'bioclip'),
-                device=self.device
+                device=self.device,
+                hf_mirror=hf_mirror
             )
         elif mode == 'dongniao':
             conf = rec_config.get('dongniao', {})

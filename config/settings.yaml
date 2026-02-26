@@ -32,6 +32,9 @@ recognition:
   top_k: 5
   alternatives_threshold: 70
   low_confidence_threshold: 60
+  # HuggingFace 镜像配置（国内加速下载）
+  # 可选值: "https://hf-mirror.com" (推荐), "https:// mirrors.huggingface.co"
+  hf_mirror: "https://hf-mirror.com"
   local:
     model_type: "bioclip-2"
     batch_size: 512

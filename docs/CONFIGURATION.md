@@ -15,16 +15,16 @@
 
 | 参数 | 描述 | 默认值 / 示例 |
 | :--- | :--- | :--- |
-| `base_dir` | **基准目录**。所有源文件、输出文件和数据库的根目录，用于相对路径存储。数据库中只保存相对于此目录的路径。 | `Y:/1按年份/2026` |
+| `base_dir` | **基准目录**。驱动器根目录，所有源文件、输出文件和数据库都以此为基准进行相对路径存储。例如 `Y:/`，源文件在 `Y:/1按年份/2026`，输出在 `Y:/输出/2026`。 | `Y:/` |
 | `references_path` | 参考数据目录，用于存放 IOC 鸟类分类数据等（相对于 base_dir）。 | `data/references` |
-| `sources` | 定义需要扫描图片的源目录列表。 | 见下文 |
+| `sources` | 定义需要扫描图片的源目录列表（相对于 base_dir）。 | 见下文 |
 | `db_path` | SQLite 数据库文件路径（相对于 base_dir）。 | `data/db/wingscribe.db` |
 | `ioc_list_path` | IOC 世界鸟类名录 Excel 文件路径（相对于 base_dir）。 | `data/references/Multiling IOC 15.1_d.xlsx` |
 | `model_cache_dir` | 模型缓存目录，存放下载的 YOLO、BioCLIP 等模型文件（相对于 base_dir）。 | `data/models` |
 
 #### 源目录定义 (`sources`)
 `sources` 列表中的每一项可以包含以下属性：
-*   `path`: 文件夹路径，可以是绝对路径，也可以是相对于 `base_dir` 的路径（如 `.` 表示 base_dir 本身）。
+*   `path`: 文件夹路径，相对于 `base_dir` 的路径（如 `1按年份/2026`）。
 *   `recursive`: `true` 表示递归扫描子文件夹。
 *   `enabled`: `true` 表示启用此源。
 *   `structure_pattern` (可选): 用于从文件夹结构中提取元数据（日期、地点）的正则表达式。
@@ -33,11 +33,7 @@
 
 ```yaml
 sources:
-  - path: "."
-    recursive: true
-    enabled: true
-  # 示例：使用绝对路径
-  - path: "Z:/Photos/2024"
+  - path: "1按年份/2026"
     recursive: true
     enabled: true
     # 示例：匹配 "2024-01-27 [奥森公园]" 这样的文件夹
@@ -48,7 +44,7 @@ sources:
 
 | 参数 | 描述 |
 | :--- | :--- |
-| `root_dir` | 处理后图片的保存根目录，可以是绝对路径或相对于 `base_dir` 的路径。 |
+| `root_dir` | 处理后图片的保存目录，相对于 `base_dir`（如 `输出/2026`）。 |
 | `write_back_to_source` | `true`: 将 EXIF 数据直接写回**源文件**。`false` (默认): 仅修改复制到 `root_dir` 的文件。 |
 | `structure_template` | 定义处理后图片的文件夹结构和文件名格式。 |
 
@@ -142,9 +138,9 @@ dongniao_api_key: "your_key..."
 ### Windows 示例
 ```yaml
 paths:
-  base_dir: "Y:/1按年份/2026"
+  base_dir: "Y:/"
   sources:
-    - path: "."
+    - path: "1按年份/2026"
       recursive: true
       enabled: true
   output:
@@ -183,9 +179,9 @@ web:
 ### Linux 示例
 ```yaml
 paths:
-  base_dir: "/mnt/picturessd/1按年份/2026"
+  base_dir: "/mnt/picturessd"
   sources:
-    - path: "."
+    - path: "1按年份/2026"
       recursive: true
       enabled: true
   output:

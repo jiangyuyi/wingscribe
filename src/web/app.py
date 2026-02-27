@@ -142,16 +142,32 @@ base_dir = config['paths'].get('base_dir', '')
 if base_dir:
     base_dir = Path(base_dir)
 
+# Helper function to check if path is absolute (handles both Windows and Unix formats)
+def is_absolute_path(p: str) -> bool:
+    """Check if path is absolute, including Windows drive letter format like 'Y:/path'"""
+    if not p:
+        return False
+    # Check for Unix absolute path
+    if p.startswith('/'):
+        return True
+    # Check for Windows drive letter format (Y:/ or Y:\ or //server/path)
+    if len(p) >= 2 and p[1] == ':':
+        return True
+    # Check for UNC path
+    if p.startswith('//') or p.startswith('\\\\'):
+        return True
+    return False
+
 # Resolve db_path - based on base_dir
 db_path_config = config['paths'].get('db_path', 'data/db/wingscribe.db')
-if Path(db_path_config).is_absolute():
+if is_absolute_path(db_path_config):
     db_path = Path(db_path_config)
 else:
     db_path = base_dir / db_path_config if base_dir else BASE_DIR / db_path_config
 
 # Handle output.root_dir - based on base_dir
 output_root = config['paths']['output']['root_dir']
-if Path(output_root).is_absolute():
+if is_absolute_path(output_root):
     processed_dir = Path(output_root)
 elif base_dir:
     processed_dir = base_dir / output_root
@@ -167,10 +183,7 @@ if not processed_dir.exists():
     logger.error(f"Processed directory does not exist: {processed_dir}")
     processed_dir.mkdir(parents=True, exist_ok=True)
 
-# Note: Using custom route for /static/processed (see serve_processed_file above)
-# because StaticFiles has issues with Unicode paths on Windows
-
-# Include recognition API routes
+# Note: Using custom route for /processed (see serve_processed_file above)
 app.include_router(recognition_router)
 
 # Mount base_dir for "Original View" - use follow_symlink=True for Unicode path support
@@ -231,23 +244,25 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
         logger.warning(f"resolve_web_path failed for '{original_path_str}': {e}")
     return None
 
-@app.get("/static/processed/{path:path}")
+@app.get("/processed/{path:path}")
 def serve_processed_file(path: str):
     """Custom static file handler for processed images (Unicode-safe on Windows)"""
-    # Reconstruct the full path - use os.sep for cross-platform path construction
-    full_path = processed_dir / path.replace('/', os.sep)
-    if full_path.exists() and full_path.is_file():
+    # 直接用 base_dir 解析，因为 file_path 是相对于 base_dir 存储的
+    full_path = base_dir / path.replace('/', os.sep) if base_dir else None
+
+    if full_path and full_path.exists() and full_path.is_file():
         return FileResponse(full_path)
-    raise HTTPException(status_code=404, detail="File not found")
+
+    raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
 def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
-    """Resolves processed file path to /static/processed/... URL"""
+    """Resolves processed file path to /processed/... URL"""
     if not file_path_str: return None
     try:
         # Normalize path separators
         normalized = file_path_str.replace('\\', '/')
 
-        # Handle relative paths - convert to absolute using base_dir
+        # file_path is stored relative to base_dir, so use base_dir to resolve
         if base_dir and not Path(normalized).is_absolute():
             abs_path = (base_dir / normalized).resolve()
         elif not Path(normalized).is_absolute():
@@ -255,20 +270,19 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
         else:
             abs_path = Path(normalized).resolve()
 
-        # Normalize processed_dir for comparison (use resolve for UNC path handling)
-        processed_abs = processed_dir.resolve()
+        # Normalize base_dir for comparison
+        base_abs = base_dir.resolve() if base_dir else None
 
-        # Check if it's inside processed_dir
-        try:
-            rel = abs_path.relative_to(processed_abs)
-            return f"/static/processed/{str(rel).replace(os.sep, '/')}"
-        except ValueError:
-            # Try matching via parents
-            for parent in abs_path.parents:
-                if parent == processed_abs:
-                    rel = abs_path.relative_to(processed_abs)
-                    return f"/static/processed/{str(rel).replace(os.sep, '/')}"
-            return None
+        # Check if it's under base_dir, then generate the URL
+        if base_abs:
+            try:
+                rel = abs_path.relative_to(base_abs)
+                return f"/processed/{str(rel).replace(os.sep, '/')}"
+            except ValueError:
+                pass
+
+        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under base_dir {base_abs}")
+        return None
     except Exception as e:
         logger.warning(f"Failed to resolve processed path '{file_path_str}': {e}")
         return None

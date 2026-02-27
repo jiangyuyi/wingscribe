@@ -127,7 +127,19 @@ class FeatherTracePipeline:
 
         self.recognizer = None # Lazy load later
         self.exif_writer = ExifWriter()
-        
+
+        # Helper function to check if path is absolute (handles both Windows and Unix formats)
+        def is_absolute_path(p: str) -> bool:
+            if not p:
+                return False
+            if p.startswith('/'):
+                return True
+            if len(p) >= 2 and p[1] == ':':
+                return True
+            if p.startswith('//') or p.startswith('\\\\'):
+                return True
+            return False
+
         # Path Generator - resolve relative paths using base_dir
         paths_conf = self.config['paths']
         base_dir = paths_conf.get('base_dir', '')
@@ -135,7 +147,7 @@ class FeatherTracePipeline:
         out_conf = paths_conf.get('output', {})
         output_root = out_conf.get('root_dir', 'data/processed')
         # Resolve relative path to absolute
-        if base_dir and not Path(output_root).is_absolute():
+        if base_dir and not is_absolute_path(output_root):
             output_root = str(Path(base_dir) / output_root)
 
         self.path_generator = PathGenerator(

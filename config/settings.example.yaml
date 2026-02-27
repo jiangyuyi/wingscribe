@@ -1,79 +1,105 @@
-# FeatherTrace 主配置文件样例 (settings.yaml)
+# WingScribe 主配置文件样例 (settings.yaml)
 # 请根据您的实际环境修改后保存为 settings.yaml
 
 paths:
+  # 基础目录：所有源文件和输出文件的根目录
+  # 用于相对路径存储，数据库中只保存相对于此目录的路径
+  # 例如: base_dir = "Y:/1按年份/2026"，则数据库存储 "20260101/IMG_001.jpg"
+  base_dir: "Y:/1按年份/2026"
+
   # 安全设置：Web 界面和程序允许访问的根目录列表。
   # 必须包含所有在 sources 中定义的路径及其所在的盘符。
   allowed_roots:
-    - "D:/Photos"
-    - "Y:/Photos_Backup"
-    - "data/processed"
-    
+    - "Y:/"
+
+  # 参考数据目录：用于存储 IOC 鸟类分类数据等参考文件
+  references_path: "data/references"
+
   # 扫描源：程序会从这些位置寻找新照片
+  # path 可以是绝对路径，也可以是相对于 base_dir 的路径
   sources:
-    - path: "D:/Photos/2024_Raw"
-      recursive: true      # 是否递归扫描子目录
-      enabled: true        # 是否启用此源
+    - path: "."                  # 相对于 base_dir，也可以是 "D:/Photos/2024"
+      recursive: true            # 是否递归扫描子目录
+      enabled: true              # 是否启用此源
       # 文件夹解析模式 (可选)：用于从文件夹名提取日期和地点
       # 默认逻辑匹配 "YYYYMMDD_地点"
-      structure_pattern: "(?P<date>\\d{8})_(?P<location>.*)" 
+      # structure_pattern: "(?P<date>\\d{8})_(?P<location>.*)"
 
   # 输出设置
   output:
     # 处理后的照片（裁切、重命名、注入元数据后）存放的根目录
-    root_dir: "data/processed"
-    
+    # 可以是绝对路径，也可以是相对于 base_dir 的路径
+    root_dir: "Y:/1输出/2026"
+
     # 目录结构模板
-    # 可选变量: {year}, {month}, {day}, {location}, {species_cn}, {species_sci}, {confidence}, {filename}
+    # 可选变量: {year}, {month}, {day}, {date}, {location}, {species_cn}, {species_sci}, {confidence}, {filename}, {source_structure}
     # {source_structure} 表示保留原始文件夹的层级
-    structure_template: "{year}/{location}/{species_cn}/{filename}_{confidence}"
-    
+    structure_template: "{source_structure}/{filename}_{species_cn}_{confidence}"
+
     # 是否将元数据写回原始照片 (慎用！这会修改您的原始素材)
     write_back_to_source: false
 
-  # 数据库和字典路径 (通常保持默认即可)
+  # 数据库路径 (相对于项目根目录)
   db_path: "data/db/wingscribe.db"
+
+  # IOC 鸟类分类数据 Excel 文件路径
   ioc_list_path: "data/references/Multiling IOC 15.1_d.xlsx"
-  foreign_list: "config/dictionaries/foreign_bird_list.txt"  # 国外地名列表
-  china_list: "config/dictionaries/china_bird_list.txt"     # 中国地名列表
+
+  # 模型缓存目录：存放下载的 YOLO、BioCLIP 等模型文件
+  model_cache_dir: "data/models"
 
 processing:
-  # 硬件设备: cuda (NVIDIA 显卡), cpu, 或 auto
-  device: "cuda" 
-  
+  # 硬件设备: cuda (NVIDIA 显卡), cpu, 或 auto (自动检测)
+  device: "auto"
+
   # YOLO 检测模型 (用于找鸟)
-  yolo_model: "yolov8n.pt"
-  
+  # 推荐: yolo26n.pt (精度最高、推理最快)
+  # 可选: yolo11n.pt, yolov8n.pt
+  yolo_model: "yolo26n.pt"
+
   # 检测置信度阈值 (0-1): 只有高于此值的鸟类目标才会被处理
   confidence_threshold: 0.5
-  
-  # 模糊检测阈值: 分数越高要求越清晰，低于此值会标记为模糊
+
+  # 模糊检测阈值: 拉普拉斯方差法，低于此值会标记为模糊并跳过
+  # 建议值: 40-100，值越高要求越清晰
   blur_threshold: 40.0
-  
+
   # 裁切图尺寸: 建议保持 640
   target_size: 640
-  
+
   # 裁切边距: 在鸟类方框周围预留的像素宽度
   crop_padding: 200
 
 recognition:
   # 识别模式: local (本地 BioCLIP), api (HuggingFace API), dongniao (懂鸟 API)
-  mode: "local" 
-  
+  mode: "local"
+
   # 地域过滤: auto (根据文件夹名自动判断), china (仅限中国鸟种), null (全球)
-  region_filter: "auto"  
-  
+  region_filter: "auto"
+
   # 保存备选物种的数量
   top_k: 5
-  
+
   # 自动通过阈值: 如果首选识别结果高于此置信度，则不显示备选建议
-  alternatives_threshold: 70 
-  
-  # 标记为“不确定”的阈值: 低于此分数的识别结果会被标记
-  low_confidence_threshold: 60 
-  
+  alternatives_threshold: 70
+
+  # 标记为"不确定"的阈值: 低于此分数的识别结果会被标记
+  low_confidence_threshold: 60
+
+  # HuggingFace 镜像加速地址 (国内服务器使用)
+  # 常用镜像: https://hf-mirror.com
+  # 如果为空则不使用镜像 (需要能够正常访问 huggingface.co)
+  hf_mirror: "https://hf-mirror.com"
+
   # 本地模型配置
   local:
-    model_type: "bioclip-2"   # 选项: bioclip, bioclip-2
-    inference_batch_size: 16  # 显存不足(低于 8G)时请调小此值 (如 4 或 8)
+    model_type: "bioclip-2"   # 选项: bioclip, bioclip-2 (推荐)
+    batch_size: 512            # 文本编码批次大小 (通常不需要修改)
+    inference_batch_size: 16   # 图片推理批次大小，显存不足(低于 8G)时请调小
 
+web:
+  # Web 服务器监听地址
+  host: "0.0.0.0"
+
+  # Web 服务器端口
+  port: 8000

@@ -190,7 +190,9 @@ def get_db_conn():
 
 def resolve_web_path(original_path_str: str) -> Optional[str]:
     """Resolves raw file path to /static/roots/... URL"""
-    if not original_path_str: return None
+    if not original_path_str:
+        logger.warning(f"resolve_web_path: empty path")
+        return None
     try:
         # Normalize path separators to avoid escape sequence issues
         normalized = original_path_str.replace('\\', '/')
@@ -201,12 +203,20 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
         else:
             abs_path = Path(normalized).resolve()
 
+        logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', allowed_roots={allowed_roots}")
+
         for idx, root in enumerate(allowed_roots):
             try:
                 rel_path = abs_path.relative_to(root)
-                return f"/static/roots/{idx}/{str(rel_path).replace(os.sep, '/')}"
-            except ValueError: continue
-    except Exception: pass
+                result = f"/static/roots/{idx}/{str(rel_path).replace(os.sep, '/')}"
+                logger.debug(f"resolve_web_path: matched root={root}, rel_path={rel_path}, result={result}")
+                return result
+            except ValueError:
+                continue
+
+        logger.warning(f"resolve_web_path: no matching root for path '{abs_path}'. allowed_roots={allowed_roots}")
+    except Exception as e:
+        logger.warning(f"resolve_web_path failed for '{original_path_str}': {e}")
     return None
 
 @app.get("/static/processed/{path:path}")

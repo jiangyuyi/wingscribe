@@ -64,12 +64,13 @@ class SmartScanner:
                 # Ignore system/recycle directories
                 if entry.name in LocalProvider.IGNORED_DIRS:
                     continue
-                    
+
                 if entry.is_file():
                     yield entry
                 elif entry.is_dir():
                     # Check if this directory should be excluded (output dir)
-                    entry_path = Path(entry.path).resolve()
+                    # 不使用 resolve()，避免 UNC 路径问题
+                    entry_path = Path(entry.path)
                     if self.exclude_dirs:
                         if any(str(entry_path).startswith(str(ex)) for ex in self.exclude_dirs):
                             logging.debug(f"Excluding output dir: {entry.name}")
@@ -77,7 +78,7 @@ class SmartScanner:
 
                     # Check pruning
                     d_start, d_end, _ = PathParser.parse_folder_name(entry.name)
-                    
+
                     if self._is_in_range(d_start, d_end):
                          # Recurse
                          yield from self.scan(Path(entry.path))
@@ -483,55 +484,27 @@ class FeatherTracePipeline:
             })
             
             # Convert absolute paths to relative paths for database storage
-            # The entry.path may be UNC path (\\server\share\...) or drive letter path (Y:\...)
-            # We need to handle both formats relative to base_dir
+            # base_dir 已经是规范化路径 (如 Y:/)，不再有 UNC 问题
             rel_original_path = entry.path
             rel_file_path = str(final_path)
 
             if self.base_dir:
                 norm_base_dir = os.path.normpath(self.base_dir)
-                base_dir_parts = Path(norm_base_dir).parts  # e.g., ('Y:', '1按年份', '2026')
+                base_dir_obj = Path(norm_base_dir)
 
-                # Try method 1: direct relative path (works for Y:\path format)
+                # 直接使用 relative_to 转换
                 try:
                     norm_entry_path = os.path.normpath(entry.path)
-                    rel_original_path = str(Path(norm_entry_path).relative_to(Path(norm_base_dir)))
-                    logging.debug(f"Converted original_path: {entry.path} -> {rel_original_path}")
+                    rel_original_path = str(Path(norm_entry_path).relative_to(base_dir_obj))
                 except ValueError:
-                    # Try method 2: extract relative path from UNC path
-                    # UNC path: \\192.168.31.205\picturessd\1按年份\2026\20260102北京八渡桥附近\file.jpg
-                    # base_dir: Y:\1按年份\2026 -> parts: ('Y:', '1按年份', '2026')
-                    # We need to find where base_dir ends and extract the rest
-                    try:
-                        entry_parts = Path(os.path.normpath(entry.path)).parts
-                        # Find the position after base_dir's last component in entry_parts
-                        if len(base_dir_parts) >= 2:
-                            # Look for base_dir's last component (e.g., "2026")
-                            base_last = base_dir_parts[-1]  # "2026"
-                            if base_last in entry_parts:
-                                idx = entry_parts.index(base_last) + 1  # Skip "2026"
-                                if idx < len(entry_parts):
-                                    rel_original_path = str(Path(*entry_parts[idx:]))
-                                    logging.debug(f"Converted original_path (UNC): {entry.path} -> {rel_original_path}")
-                    except Exception:
-                        logging.warning(f"Failed to convert original_path, keeping original: {entry.path}")
+                    logging.warning(f"Failed to convert original_path: {entry.path}, keeping original")
 
                 # Same for final_path (processed file)
                 try:
                     norm_final_path = os.path.normpath(str(final_path))
-                    rel_file_path = str(Path(norm_final_path).relative_to(Path(norm_base_dir)))
-                    logging.debug(f"Converted file_path: {final_path} -> {rel_file_path}")
+                    rel_file_path = str(Path(norm_final_path).relative_to(base_dir_obj))
                 except ValueError:
-                    try:
-                        final_parts = Path(os.path.normpath(str(final_path))).parts
-                        base_last = base_dir_parts[-1]
-                        if base_last in final_parts:
-                            idx = final_parts.index(base_last) + 1
-                            if idx < len(final_parts):
-                                rel_file_path = str(Path(*final_parts[idx:]))
-                                logging.debug(f"Converted file_path (UNC): {final_path} -> {rel_file_path}")
-                    except Exception:
-                        logging.warning(f"Failed to convert file_path, keeping original: {final_path}")
+                    logging.warning(f"Failed to convert file_path: {final_path}, keeping original")
 
             self.db.add_photo_record({
                 'file_path': rel_file_path,
@@ -731,11 +704,15 @@ class FeatherTracePipeline:
                     entry_path = entry.path
 
                     # Skip files in output directory
+                    # 不使用 resolve()，避免 UNC 路径问题
                     if self.output_root:
                         try:
-                            entry_abs = Path(entry_path).resolve()
-                            output_abs = Path(self.output_root).resolve()
-                            if str(entry_abs).startswith(str(output_abs)):
+                            entry_path_obj = Path(entry_path)
+                            output_path_obj = Path(self.output_root)
+                            # 使用规范化路径比较
+                            entry_norm = os.path.normpath(str(entry_path_obj))
+                            output_norm = os.path.normpath(str(output_path_obj))
+                            if entry_norm.startswith(output_norm):
                                 logging.debug(f"Skipping output file: {entry_name}")
                                 continue
                         except:

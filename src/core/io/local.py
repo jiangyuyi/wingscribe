@@ -23,16 +23,37 @@ class LocalProvider(StorageProvider):
         base_dir: The base directory that all paths must be under.
                   If None, no restriction (use with caution).
         """
-        self.base_dir = Path(base_dir).resolve() if base_dir else None
+        # 不使用 resolve()，保持原始路径格式 (如 Y:/)
+        # 否则 Windows 映射驱动器会被解析为 UNC 路径 \\192.168.31.205\share
+        self.base_dir = Path(base_dir) if base_dir else None
 
     def _validate_path(self, path_str: str) -> Path:
-        path = Path(path_str).resolve()
+        # 不使用 resolve()，避免将 Y:/ 转换为 UNC 路径
+        path = Path(path_str)
         if self.base_dir:
             # 检查路径是否在 base_dir 内
+            # 尝试多种比较方式：原始路径、规范化路径、解析后的路径
+            path_str_normalized = os.path.normpath(str(path))
+            base_str_normalized = os.path.normpath(str(self.base_dir))
             try:
+                # 方法1: 原始路径相对比较
                 path.relative_to(self.base_dir)
             except ValueError:
-                raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
+                try:
+                    # 方法2: 规范化路径比较 (处理 Y:/ vs Y:\ 的情况)
+                    if path_str_normalized.startswith(base_str_normalized):
+                        pass  # 允许
+                    else:
+                        # 方法3: 解析后的路径比较 (处理符号链接等情况)
+                        try:
+                            resolved = Path(path_str).resolve()
+                            resolved.relative_to(Path(self.base_dir).resolve())
+                        except:
+                            raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
+                except SecurityViolationError:
+                    raise
+                except:
+                    raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
         return path
 
     def list_dir(self, path: str, recursive: bool = False) -> Generator[FileEntry, None, None]:

@@ -219,27 +219,27 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
         normalized = original_path_str.replace('\\', '/')
 
         # Handle relative paths - convert to absolute using base_dir
-        if base_dir and not Path(normalized).is_absolute():
-            abs_path = (base_dir / normalized).resolve()
+        # 不使用 resolve()，避免UNC路径问题（与pipeline_runner.py一致）
+        if base_dir and not is_absolute_path(normalized):
+            abs_path = base_dir / normalized
         else:
-            abs_path = Path(normalized).resolve()
+            abs_path = Path(normalized)
 
-        # Resolve base_dir for comparison (handles Windows drive letter to UNC conversion)
-        resolved_base = base_dir.resolve() if base_dir else None
+        # 使用规范化路径比较，不使用resolve()
+        norm_abs = os.path.normpath(str(abs_path))
+        norm_base = os.path.normpath(str(base_dir)) if base_dir else None
 
-        logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', resolved_base={resolved_base}")
+        logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', norm_base={norm_base}")
 
         # 基于 base_dir 计算相对路径
-        if resolved_base:
-            try:
-                rel_path = abs_path.relative_to(resolved_base)
-                result = f"/static/{str(rel_path).replace(os.sep, '/')}"
-                logger.debug(f"resolve_web_path: matched resolved_base={resolved_base}, rel_path={rel_path}, result={result}")
-                return result
-            except ValueError:
-                pass
+        if norm_base and norm_abs.startswith(norm_base):
+            # 提取相对路径部分
+            rel_part = norm_abs[len(norm_base):].lstrip('/')
+            result = f"/static/{rel_part.replace(os.sep, '/')}"
+            logger.debug(f"resolve_web_path: rel_part={rel_part}, result={result}")
+            return result
 
-        logger.warning(f"resolve_web_path: path '{abs_path}' is not under base_dir {resolved_base}")
+        logger.warning(f"resolve_web_path: path '{abs_path}' is not under base_dir {base_dir}")
     except Exception as e:
         logger.warning(f"resolve_web_path failed for '{original_path_str}': {e}")
     return None
@@ -263,25 +263,24 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
         normalized = file_path_str.replace('\\', '/')
 
         # file_path is stored relative to base_dir, so use base_dir to resolve
-        if base_dir and not Path(normalized).is_absolute():
-            abs_path = (base_dir / normalized).resolve()
-        elif not Path(normalized).is_absolute():
-            abs_path = (BASE_DIR / normalized).resolve()
+        # 不使用 resolve()，避免UNC路径问题
+        if base_dir and not is_absolute_path(normalized):
+            abs_path = base_dir / normalized
+        elif not is_absolute_path(normalized):
+            abs_path = BASE_DIR / normalized
         else:
-            abs_path = Path(normalized).resolve()
+            abs_path = Path(normalized)
 
-        # Normalize base_dir for comparison
-        base_abs = base_dir.resolve() if base_dir else None
+        # 使用规范化路径比较
+        norm_abs = os.path.normpath(str(abs_path))
+        norm_base = os.path.normpath(str(base_dir)) if base_dir else None
 
         # Check if it's under base_dir, then generate the URL
-        if base_abs:
-            try:
-                rel = abs_path.relative_to(base_abs)
-                return f"/processed/{str(rel).replace(os.sep, '/')}"
-            except ValueError:
-                pass
+        if norm_base and norm_abs.startswith(norm_base):
+            rel_part = norm_abs[len(norm_base):].lstrip('/')
+            return f"/processed/{rel_part.replace(os.sep, '/')}"
 
-        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under base_dir {base_abs}")
+        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under base_dir {base_dir}")
         return None
     except Exception as e:
         logger.warning(f"Failed to resolve processed path '{file_path_str}': {e}")

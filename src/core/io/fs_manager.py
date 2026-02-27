@@ -5,22 +5,25 @@ from .local import LocalProvider
 
 class FileSystemManager:
     _instance = None
-    
-    def __init__(self, config: dict):
-        self.config = config
+
+    def __init__(self, base_dir: str):
         self.providers: Dict[str, StorageProvider] = {}
-        
-        # Initialize Local Provider with security limits
-        allowed = config.get('allowed_roots', [])
-        self.local_provider = LocalProvider(allowed_roots=allowed)
+
+        # Initialize Local Provider with base_dir as the only allowed root
+        self.local_provider = LocalProvider(base_dir=base_dir)
 
     @classmethod
-    def get_instance(cls, config: dict = None):
+    def get_instance(cls, base_dir: str = None):
         if cls._instance is None:
-            if config is None:
+            if base_dir is None:
                 raise ValueError("FileSystemManager not initialized")
-            cls._instance = cls(config)
+            cls._instance = cls(base_dir)
         return cls._instance
+
+    @classmethod
+    def reset_instance(cls):
+        """重置单例实例（用于测试或配置重新加载）"""
+        cls._instance = None
 
     def get_provider(self, path_or_uri: str) -> StorageProvider:
         """

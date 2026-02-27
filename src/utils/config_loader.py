@@ -5,6 +5,79 @@ from pathlib import Path
 # 全局配置缓存
 _config_cache = None
 
+def validate_paths_config(config: dict) -> tuple[bool, list]:
+    """
+    验证路径配置：
+    1. 检查 base_dir 是否存在
+    2. 检查 sources 和 output 是否在 base_dir 内
+    3. 不允许绝对路径在 sources 和 output 中（除非在 base_dir 内）
+
+    返回: (is_valid, error_messages)
+    """
+    errors = []
+    paths_conf = config.get('paths', {})
+
+    # 1. 检查 base_dir
+    base_dir = paths_conf.get('base_dir', '')
+    if not base_dir:
+        errors.append("base_dir 未配置")
+        return False, errors
+
+    base_path = Path(base_dir)
+    if not base_path.exists():
+        errors.append(f"base_dir 不存在: {base_dir}")
+        return False, errors
+
+    if not base_path.is_dir():
+        errors.append(f"base_dir 不是有效目录: {base_dir}")
+
+    # 2. 检查 sources
+    sources = paths_conf.get('sources', [])
+    if not sources:
+        errors.append("sources 未配置")
+
+    for src in sources:
+        src_path = src.get('path', '')
+        if not src_path:
+            continue
+
+        # 解析为绝对路径
+        if Path(src_path).is_absolute():
+            # 绝对路径必须在 base_dir 内
+            abs_src = Path(src_path)
+            try:
+                abs_src.relative_to(base_path)
+            except ValueError:
+                errors.append(f"source 路径 {src_path} 不在 base_dir {base_dir} 内")
+        # 相对路径将以 base_dir 为基准，已自动满足条件
+
+    # 3. 检查 output
+    output = paths_conf.get('output', {})
+    output_root = output.get('root_dir', '')
+    if output_root:
+        if Path(output_root).is_absolute():
+            # 绝对路径必须在 base_dir 内
+            abs_output = Path(output_root)
+            try:
+                abs_output.relative_to(base_path)
+            except ValueError:
+                errors.append(f"output.root_dir {output_root} 不在 base_dir {base_dir} 内")
+        # 相对路径将以 base_dir 为基准，已自动满足条件
+
+    # 4. 检查 db_path (允许相对于 base_dir)
+    db_path = paths_conf.get('db_path', '')
+    if db_path:
+        # db_path 可以是绝对路径（在 base_dir 内）或相对路径
+        if Path(db_path).is_absolute():
+            abs_db = Path(db_path)
+            try:
+                abs_db.relative_to(base_path)
+            except ValueError:
+                errors.append(f"db_path {db_path} 不在 base_dir {base_dir} 内")
+
+    is_valid = len(errors) == 0
+    return is_valid, errors
+
 def get_config() -> dict:
     """
     Get the application configuration (cached).

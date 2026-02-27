@@ -189,19 +189,23 @@ def run_deploy():
     console.print(f"  照片源: {source_dir}")
     console.print(f"  输出目录: {output_dir}")
 
+    # 计算相对于 base_dir 的输出目录
+    relative_output_dir = output_dir
+    if source_dir and output_dir.startswith(source_dir):
+        relative_output_dir = output_dir[len(source_dir):].lstrip('/').lstrip('\\')
+
     # 生成配置
     config_content = f'''
 paths:
-  allowed_roots:
-    - "{source_dir.replace('\\', '/')}"
+  base_dir: "{source_dir.replace('\\', '/')}"
 
   sources:
-    - path: "{source_dir.replace('\\', '/')}"
+    - path: "."
       recursive: true
       enabled: true
 
   output:
-    root_dir: "{output_dir.replace('\\', '/')}"
+    root_dir: "{relative_output_dir.replace('\\', '/')}"
     structure_template: "{{source_structure}}/{{filename}}_{{species_cn}}_{{confidence}}"
     write_back_to_source: false
 

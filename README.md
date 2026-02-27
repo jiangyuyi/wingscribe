@@ -339,8 +339,6 @@ WingScribe 支持使用相对路径存储照片路径，便于分离部署和文
 paths:
   # 相对路径的根目录（所有路径以此为基准）
   base_dir: "Y:/我的照片/2026"
-  allowed_roots:
-    - "Y:/我的照片/2026"
 
   sources:
     - path: "."        # 相对于 base_dir，等同于 Y:/我的照片/2026
@@ -375,12 +373,12 @@ python src/web/app.py
 * 访问地址: `http://localhost:8000`
 * **提示**: 进入 "Admin (管理)" 页面来触发您的第一次扫描。
 
-**首次启动检查清单:**
+**首次启动`)检查清单:**
 
 - [ ] `exiftool` 命令可正常执行
 - [ ] `config/settings.yaml` 中的路径已正确配置
-- [ ] `allowed_roots` 包含所有需要访问的盘符
-- [ ] 照片源目录中有符合命名格式的文件夹 (`YYYYMMDD_地点`)
+- [ ] `base_dir` 指向包含源照片的目录
+- [ ] 照片源目录中有符合命名格式的文件夹 (`YYYYMMDD_地点`)`)
 
 #### B. 命令行接口 (高级)
 

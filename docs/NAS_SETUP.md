@@ -31,32 +31,27 @@ sudo mount -t cifs -o username=user,password=pass //192.168.1.100/Photos /mnt/na
 
 ## 2. Configure FeatherTrace
 
-Edit `config/settings.yaml`. You must add the mounted path to both `allowed_roots` (for security) and `sources` (for scanning).
+Edit `config/settings.yaml`. Set `base_dir` to the mounted path, and add sources for scanning.
 
 ### Example: Windows (Drive Z:)
 ```yaml
 paths:
-  # 1. Allow access to the drive
-  allowed_roots:
-    - "D:/Photos"
-    - "Z:/") 
+  # Base directory (mounted path)
+  base_dir: "Z:/"
 
-  # 2. Add as a source
+  # Add as a source
   sources:
-    - path: "Z:/Raw_Birds"
+    - path: "Raw_Birds"
       recursive: true
 ```
 
 ### Example: macOS/Linux
 ```yaml
 paths:
-  allowed_roots:
-    - "/Users/me/Pictures"
-    - "/Volumes/Photos"  # macOS
-    - "/mnt/nas_photos"  # Linux
+  base_dir: "/Volumes/Photos"
 
   sources:
-    - path: "/Volumes/Photos/2024_Birds"
+    - path: "2024_Birds"
       recursive: true
 ```
 

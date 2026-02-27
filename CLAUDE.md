@@ -103,7 +103,7 @@ The `WingScribePipeline` class orchestrates the entire ETL process:
 
 ### File System Abstraction (`src/core/io/`)
 
-**FileSystemManager**: Singleton managing file access with security via `allowed_roots`. Returns `LocalProvider` instances for path operations.
+**FileSystemManager**: Singleton managing file access with security via `base_dir`. Returns `LocalProvider` instances for path operations.
 
 **PathParser**: Extracts metadata (date, location) from folder structures:
 - Supports range patterns: `yyyyMMdd-yyyyMMdd_Location` or `yyyyMMdd-dd_Location`
@@ -133,7 +133,7 @@ FastAPI application with:
 ### Configuration
 
 **`config/settings.yaml`**: Main configuration
-- `paths`: Sources, output, allowed_roots (security), reference data paths
+- `paths`: Sources, output, base_dir, reference data paths
 - `processing`: Device, YOLO model, thresholds, crop settings
 - `recognition`: Mode (local/api/dongniao), region_filter, thresholds
 
@@ -148,7 +148,7 @@ The pipeline uses `ThreadPoolExecutor` for parallel detection/cropping. The `bat
 Both `BirdDetector` and `LocalBirdRecognizer` implement automatic fallback from CUDA to CPU on errors. This is essential for laptops with unstable GPU drivers or insufficient VRAM.
 
 ### Path Security
-Web UI only serves files from `allowed_roots` defined in config. When adding new sources, update `allowed_roots` to include the drive letter or mount point.
+Web UI only serves files from `base_dir` defined in config. All paths are validated to be under `base_dir`.
 
 ### Database Migration
 `IOCManager._init_db()` handles schema migrations by checking for new columns and adding them with ALTER TABLE statements wrapped in try/except.

@@ -23,8 +23,7 @@ sys.path.append(str(BASE_DIR))
 
 from src.metadata.ioc_manager import IOCManager
 from src.metadata.exif_writer import ExifWriter # Added import
-from src.utils.config_loader import load_config
-from src.core.io.fs_manager import FileSystemManager
+from src.utils.config_loader import load_config, validate_paths_config
 from src.pipeline_runner import FeatherTracePipeline # Import Pipeline
 from src.core.io.path_generator import PathGenerator # Added import
 from src.web.routes.recognition import router as recognition_router
@@ -130,29 +129,39 @@ app = FastAPI(lifespan=lifespan)
 # Load config
 config = load_config(str(BASE_DIR / "config" / "settings.yaml"), str(BASE_DIR / "config" / "secrets.yaml"))
 
-db_path = BASE_DIR / config['paths']['db_path']
+# Validate paths configuration
+is_valid, errors = validate_paths_config(config)
+if not is_valid:
+    logger.error(f"Configuration validation failed: {errors}")
+    for err in errors:
+        logger.error(f"  - {err}")
+    raise ValueError(f"Invalid paths configuration: {errors}")
 
 # Get base_dir for relative path resolution
 base_dir = config['paths'].get('base_dir', '')
 if base_dir:
     base_dir = Path(base_dir)
 
-# Handle absolute paths in config - use Path() directly to avoid BASE_DIR prefix issues
+# Resolve db_path - based on base_dir
+db_path_config = config['paths'].get('db_path', 'data/db/wingscribe.db')
+if Path(db_path_config).is_absolute():
+    db_path = Path(db_path_config)
+else:
+    db_path = base_dir / db_path_config if base_dir else BASE_DIR / db_path_config
+
+# Handle output.root_dir - based on base_dir
 output_root = config['paths']['output']['root_dir']
 if Path(output_root).is_absolute():
     processed_dir = Path(output_root)
 elif base_dir:
     processed_dir = base_dir / output_root
 else:
-    processed_dir = BASE_DIR / output_root 
-
-# Initialize FileSystemManager for security checks
-fs_manager = FileSystemManager.get_instance(config['paths'])
-allowed_roots = fs_manager.local_provider.allowed_roots if fs_manager.local_provider.allowed_roots else []
+    processed_dir = BASE_DIR / output_root
 
 logger.info(f"Project Base Directory: {BASE_DIR}")
+logger.info(f"Data Base Directory (base_dir): {base_dir}")
+logger.info(f"Database Path: {db_path}")
 logger.info(f"Processed Images Directory: {processed_dir}")
-logger.info(f"Allowed Roots: {allowed_roots}")
 
 if not processed_dir.exists():
     logger.error(f"Processed directory does not exist: {processed_dir}")
@@ -164,10 +173,9 @@ if not processed_dir.exists():
 # Include recognition API routes
 app.include_router(recognition_router)
 
-# Mount allowed roots for "Original View" - use follow_symlink=True for Unicode path support
-for idx, root in enumerate(allowed_roots):
-    if root.exists():
-        app.mount(f"/static/roots/{idx}", StaticFiles(directory=str(root), follow_symlink=True), name=f"root_{idx}")
+# Mount base_dir for "Original View" - use follow_symlink=True for Unicode path support
+if base_dir and base_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(base_dir), follow_symlink=True), name="static")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "src" / "web" / "templates"))
 
@@ -189,7 +197,7 @@ def get_db_conn():
     return conn
 
 def resolve_web_path(original_path_str: str) -> Optional[str]:
-    """Resolves raw file path to /static/roots/... URL"""
+    """Resolves raw file path to /static/... URL"""
     if not original_path_str:
         logger.warning(f"resolve_web_path: empty path")
         return None
@@ -203,18 +211,22 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
         else:
             abs_path = Path(normalized).resolve()
 
-        logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', allowed_roots={allowed_roots}")
+        # Resolve base_dir for comparison (handles Windows drive letter to UNC conversion)
+        resolved_base = base_dir.resolve() if base_dir else None
 
-        for idx, root in enumerate(allowed_roots):
+        logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', resolved_base={resolved_base}")
+
+        # 基于 base_dir 计算相对路径
+        if resolved_base:
             try:
-                rel_path = abs_path.relative_to(root)
-                result = f"/static/roots/{idx}/{str(rel_path).replace(os.sep, '/')}"
-                logger.debug(f"resolve_web_path: matched root={root}, rel_path={rel_path}, result={result}")
+                rel_path = abs_path.relative_to(resolved_base)
+                result = f"/static/{str(rel_path).replace(os.sep, '/')}"
+                logger.debug(f"resolve_web_path: matched resolved_base={resolved_base}, rel_path={rel_path}, result={result}")
                 return result
             except ValueError:
-                continue
+                pass
 
-        logger.warning(f"resolve_web_path: no matching root for path '{abs_path}'. allowed_roots={allowed_roots}")
+        logger.warning(f"resolve_web_path: path '{abs_path}' is not under base_dir {resolved_base}")
     except Exception as e:
         logger.warning(f"resolve_web_path failed for '{original_path_str}': {e}")
     return None
@@ -237,14 +249,14 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
 
         # Handle relative paths - convert to absolute using base_dir
         if base_dir and not Path(normalized).is_absolute():
-            abs_path = (base_dir / normalized).absolute()
+            abs_path = (base_dir / normalized).resolve()
         elif not Path(normalized).is_absolute():
-            abs_path = (BASE_DIR / normalized).absolute()
+            abs_path = (BASE_DIR / normalized).resolve()
         else:
-            abs_path = Path(normalized).absolute()
+            abs_path = Path(normalized).resolve()
 
-        # Normalize processed_dir for comparison
-        processed_abs = processed_dir.absolute()
+        # Normalize processed_dir for comparison (use resolve for UNC path handling)
+        processed_abs = processed_dir.resolve()
 
         # Check if it's inside processed_dir
         try:

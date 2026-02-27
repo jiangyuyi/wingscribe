@@ -21,10 +21,9 @@ from src.recognition.inference_local import LocalBirdRecognizer
 from src.recognition.inference_dongniao import DongniaoRecognizer
 from src.recognition.inference_api import APIBirdRecognizer
 from src.metadata.exif_writer import ExifWriter
-from src.utils.config_loader import load_config
+from src.utils.config_loader import load_config, validate_paths_config
 from src.utils.env_check import check_system_dependencies
 
-from src.core.io.fs_manager import FileSystemManager
 from src.core.io.local import LocalProvider # Import to access IGNORED_DIRS
 from src.core.io.temp_manager import TempFileManager
 from src.core.io.path_generator import PathGenerator
@@ -99,12 +98,25 @@ class FeatherTracePipeline:
         # Use centralized config loader
         self.config = load_config(config_path)
 
-        # Initialize FS Manager
-        self.fs_manager = FileSystemManager.get_instance(self.config.get('paths', {}))
+        # Validate paths configuration
+        is_valid, errors = validate_paths_config(self.config)
+        if not is_valid:
+            logging.error(f"Configuration validation failed: {errors}")
+            for err in errors:
+                logging.error(f"  - {err}")
+            raise ValueError(f"Invalid paths configuration: {errors}")
 
         # Get base_dir for relative path storage
         base_dir = self.config.get('paths', {}).get('base_dir', '')
-        self.db = IOCManager(self.config['paths']['db_path'], base_dir)
+
+        # Resolve db_path - based on base_dir
+        db_path_config = self.config['paths'].get('db_path', 'data/db/wingscribe.db')
+        if Path(db_path_config).is_absolute():
+            db_path = Path(db_path_config)
+        else:
+            db_path = Path(base_dir) / db_path_config if base_dir else Path(db_path_config)
+
+        self.db = IOCManager(str(db_path), base_dir)
         self.device = self.config['processing'].get('device', 'cpu')
 
         # Lazy load detector with timeout protection
@@ -679,13 +691,14 @@ class FeatherTracePipeline:
                 structure_pattern = source.get('structure_pattern', None)
                 
                 logging.info(f"Scanning source: {path_str} (Recursive: {recursive})")
-                
-                provider, rel_path = self.fs_manager.resolve_path(path_str)
-                if not provider.exists(rel_path):
+
+                # 使用 LocalProvider 替代 fs_manager
+                provider = LocalProvider(base_dir=self.base_dir)
+                if not provider.exists(path_str):
                     logging.warning(f"Source path not found: {path_str}")
                     continue
-                
-                source_root_abs = Path(provider.get_local_path(rel_path))
+
+                source_root_abs = Path(provider.get_local_path(path_str))
                 parser = PathParser(source_root_abs, structure_pattern)
 
                 # Get output directory to exclude from scanning (use pre-resolved absolute path)
@@ -696,7 +709,7 @@ class FeatherTracePipeline:
                     scanner = SmartScanner(source_root_abs, start_date, end_date, exclude_dirs)
                     iterator = scanner.scan(source_root_abs)
                 else:
-                    iterator = provider.list_dir(rel_path, recursive=recursive)
+                    iterator = provider.list_dir(path_str, recursive=recursive)
 
                 for entry in iterator:
                     is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir

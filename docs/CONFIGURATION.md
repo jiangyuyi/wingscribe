@@ -11,17 +11,16 @@
 
 ### A. 路径配置 (`paths`)
 
-控制 WingScribe 从哪里读取图片以及将结果保存到何处。
+控制 WingScribe 从哪里读取图片以及将结果保存到何处。所有路径都以 `base_dir` 为基准。
 
 | 参数 | 描述 | 默认值 / 示例 |
 | :--- | :--- | :--- |
-| `base_dir` | **基准目录**。所有源文件和输出文件的根目录，用于相对路径存储。数据库中只保存相对于此目录的路径。 | `Y:/1按年份/2026` |
-| `allowed_roots` | **安全设置**。Web 界面和文件系统提供程序允许访问的根目录列表。**如果您添加了新的盘符或 NAS 挂载点，必须在此处添加。** | `["Y:/", "Z:/NAS"]` |
-| `references_path` | 参考数据目录，用于存放 IOC 鸟类分类数据等。 | `data/references` |
+| `base_dir` | **基准目录**。所有源文件、输出文件和数据库的根目录，用于相对路径存储。数据库中只保存相对于此目录的路径。 | `Y:/1按年份/2026` |
+| `references_path` | 参考数据目录，用于存放 IOC 鸟类分类数据等（相对于 base_dir）。 | `data/references` |
 | `sources` | 定义需要扫描图片的源目录列表。 | 见下文 |
-| `db_path` | SQLite 数据库文件路径（相对于项目根目录）。 | `data/db/wingscribe.db` |
-| `ioc_list_path` | IOC 世界鸟类名录 Excel 文件路径。 | `data/references/Multiling IOC 15.1_d.xlsx` |
-| `model_cache_dir` | 模型缓存目录，存放下载的 YOLO、BioCLIP 等模型文件。 | `data/models` |
+| `db_path` | SQLite 数据库文件路径（相对于 base_dir）。 | `data/db/wingscribe.db` |
+| `ioc_list_path` | IOC 世界鸟类名录 Excel 文件路径（相对于 base_dir）。 | `data/references/Multiling IOC 15.1_d.xlsx` |
+| `model_cache_dir` | 模型缓存目录，存放下载的 YOLO、BioCLIP 等模型文件（相对于 base_dir）。 | `data/models` |
 
 #### 源目录定义 (`sources`)
 `sources` 列表中的每一项可以包含以下属性：
@@ -144,14 +143,12 @@ dongniao_api_key: "your_key..."
 ```yaml
 paths:
   base_dir: "Y:/1按年份/2026"
-  allowed_roots:
-    - "Y:/"
   sources:
     - path: "."
       recursive: true
       enabled: true
   output:
-    root_dir: "Y:/1输出/2026"
+    root_dir: "输出/2026"
     structure_template: "{source_structure}/{filename}_{species_cn}_{confidence}"
     write_back_to_source: false
   db_path: "data/db/wingscribe.db"
@@ -187,14 +184,12 @@ web:
 ```yaml
 paths:
   base_dir: "/mnt/picturessd/1按年份/2026"
-  allowed_roots:
-    - "/mnt/picturessd/1按年份/2026"
   sources:
     - path: "."
       recursive: true
       enabled: true
   output:
-    root_dir: "/mnt/picturessd/1输出/2026"
+    root_dir: "输出/2026"
     structure_template: "{source_structure}/{filename}_{species_cn}_{confidence}"
     write_back_to_source: false
   db_path: "data/db/wingscribe.db"

@@ -31,32 +31,27 @@ sudo mount -t cifs -o username=user,password=pass //192.168.1.100/Photos /mnt/na
 
 ## 2. 配置飞羽志 (WingScribe)
 
-编辑 `config/settings.yaml`。您必须将挂载后的路径同时添加到 `allowed_roots`（出于安全考虑的白名单）和 `sources`（扫描源）。
+编辑 `config/settings.yaml`。设置 `base_dir` 为挂载路径，并添加扫描源。
 
 ### 示例：Windows (映射为 Z 盘)
 ```yaml
 paths:
-  # 1. 允许系统访问该盘符
-  allowed_roots:
-    - "D:/Photos"
-    - "Z:/" 
+  # 基础目录（挂载路径）
+  base_dir: "Z:/"
 
-  # 2. 添加为扫描源
+  # 添加为扫描源
   sources:
-    - path: "Z:/Raw_Birds"
+    - path: "Raw_Birds"
       recursive: true
 ```
 
 ### 示例：macOS/Linux
 ```yaml
 paths:
-  allowed_roots:
-    - "/Users/me/Pictures"
-    - "/Volumes/Photos"  # macOS 示例
-    - "/mnt/nas_photos"  # Linux 示例
+  base_dir: "/Volumes/Photos"
 
   sources:
-    - path: "/Volumes/Photos/2024_Birds"
+    - path: "2024_Birds"
       recursive: true
 ```
 

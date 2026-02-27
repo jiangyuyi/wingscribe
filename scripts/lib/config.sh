@@ -319,24 +319,26 @@ generate_settings_yaml() {
     fi
 
     # 生成新配置
+    # 计算相对于 base_dir 的输出目录
+    local relative_output_dir="${OUTPUT_DIR#${SOURCE_DIR}/}"
+
     cat > "$settings_file" << EOF
 # FeatherTrace 配置文件
 # 由一键部署脚本自动生成
 # 时间: $(date '+%Y-%m-%d %H:%M:%S')
 
 paths:
-  allowed_roots:
-    - "${SOURCE_DIR}"
+  base_dir: "${SOURCE_DIR}"
 
   references_path: "data/references"
 
   sources:
-    - path: "${SOURCE_DIR}"
+    - path: "."
       recursive: true
       enabled: true
 
   output:
-    root_dir: "${OUTPUT_DIR}"
+    root_dir: "${relative_output_dir}"
     structure_template: "{source_structure}/{filename}_{species_cn}_{confidence}"
     write_back_to_source: false
 

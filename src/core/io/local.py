@@ -18,23 +18,21 @@ class LocalProvider(StorageProvider):
         '#snapshot' # Snapshots
     }
 
-    def __init__(self, allowed_roots: List[str] = None):
+    def __init__(self, base_dir: str = None):
         """
-        allowed_roots: List of absolute paths that are allowed to be accessed.
-                       If None, no restriction (use with caution).
+        base_dir: The base directory that all paths must be under.
+                  If None, no restriction (use with caution).
         """
-        self.allowed_roots = [Path(r).resolve() for r in allowed_roots] if allowed_roots else None
+        self.base_dir = Path(base_dir).resolve() if base_dir else None
 
     def _validate_path(self, path_str: str) -> Path:
         path = Path(path_str).resolve()
-        if self.allowed_roots:
-            is_allowed = False
-            for root in self.allowed_roots:
-                if str(path).startswith(str(root)):
-                    is_allowed = True
-                    break
-            if not is_allowed:
-                raise SecurityViolationError(f"Access denied: {path} is not in allowed roots.")
+        if self.base_dir:
+            # 检查路径是否在 base_dir 内
+            try:
+                path.relative_to(self.base_dir)
+            except ValueError:
+                raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
         return path
 
     def list_dir(self, path: str, recursive: bool = False) -> Generator[FileEntry, None, None]:

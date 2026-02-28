@@ -167,6 +167,9 @@ class FeatherTracePipeline:
         self.current_candidate_labels = None
         self.inference_batch_size = self.config.get('recognition', {}).get('local', {}).get('inference_batch_size', 16)
 
+        # Existing hashes for fast deduplication (loaded on demand)
+        self.existing_hashes = None
+
         # Load taxonomy and config lists (with defaults for backward compatibility)
         paths_config = self.config.get('paths', {})
         self.foreign_countries = self._load_list(paths_config.get('foreign_list', 'config/dictionaries/foreign_countries.txt'))
@@ -533,9 +536,14 @@ class FeatherTracePipeline:
     def process_image(self, provider, entry, meta):
         # 1. Deduplication
         file_hash = self._calculate_file_hash(provider, entry.path, entry.size)
-        if self.db.check_hash_exists(file_hash):
-             logging.debug(f"Skipping duplicate: {entry.name}")
-             return
+        # Use in-memory set if available (much faster), otherwise fallback to database
+        if self.existing_hashes is not None:
+            if file_hash in self.existing_hashes:
+                logging.debug(f"Skipping duplicate (in-memory): {entry.name}")
+                return
+        elif self.db.check_hash_exists(file_hash):
+            logging.debug(f"Skipping duplicate: {entry.name}")
+            return
 
         local_source_path = provider.get_local_path(entry.path)
         if not local_source_path: return
@@ -641,11 +649,21 @@ class FeatherTracePipeline:
                 if should_flush:
                     self._flush_batch()
 
-    def run(self, start_date: str = None, end_date: str = None):
+    def run(self, start_date: str = None, end_date: str = None, existing_hashes: set = None):
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
-        
+
+        # Use provided hashes or load from database
+        if existing_hashes is not None:
+            self.existing_hashes = existing_hashes
+            logging.info(f"Using provided existing_hashes set with {len(existing_hashes)} entries")
+        elif self.existing_hashes is None:
+            # Lazy load from database on first run
+            logging.info("Loading existing hashes from database...")
+            self.existing_hashes = self.db.get_all_hashes()
+            logging.info(f"Loaded {len(self.existing_hashes)} existing hashes from database")
+
         if start_date:
             logging.info(f"Pipeline Filter: Range [{start_date} - {end_date or 'Max'}]")
         
@@ -768,6 +786,190 @@ class FeatherTracePipeline:
             'status': 'Completed'
         })
         logging.info(f"Pipeline completed. Processed: {processed_count}. Duration: {duration:.2f}s")
+
+    def run_by_folders(self, folder_paths: list, recursive: bool = True):
+        """
+        Run pipeline for specific folders only, ignoring date range filters.
+
+        Args:
+            folder_paths: List of folder paths (relative to base_dir or absolute)
+            recursive: If True, scan subdirectories recursively
+        """
+        t_start = time.time()
+        start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        processed_count = 0
+
+        # Ensure existing_hashes is loaded
+        if self.existing_hashes is None:
+            logging.info("Loading existing hashes from database...")
+            self.existing_hashes = self.db.get_all_hashes()
+            logging.info(f"Loaded {len(self.existing_hashes)} existing hashes from database")
+
+        logging.info(f"Running pipeline for folders: {folder_paths} (recursive={recursive})")
+
+        # Get configured sources to find the correct source_root for PathParser
+        sources = self.config.get('paths', {}).get('sources', [])
+        source_roots = {}  # Map: resolved source path -> PathParser source_root
+
+        for source in sources:
+            if not source.get('enabled', True):
+                continue
+            path_str = source.get('path', '.')
+            # Resolve relative path to absolute
+            if self.base_dir and path_str and not Path(path_str).is_absolute():
+                resolved = str(Path(self.base_dir) / path_str)
+            else:
+                resolved = path_str
+            source_roots[resolved] = resolved  # Use source root itself as source_root for PathParser
+
+        # If no sources configured, fall back to base_dir
+        if not source_roots:
+            source_roots = {self.base_dir: self.base_dir}
+
+        # Resolve folder paths to absolute
+        base_dir = self.base_dir
+        resolved_paths = []
+        for path_str in folder_paths:
+            if Path(path_str).is_absolute():
+                resolved_paths.append(path_str)
+            elif base_dir:
+                resolved_paths.append(str(Path(base_dir) / path_str))
+            else:
+                resolved_paths.append(path_str)
+
+        # Use ThreadPool for detection/cropping
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = []
+
+            provider = LocalProvider(base_dir=self.base_dir)
+
+            for path_str in resolved_paths:
+                if not provider.exists(path_str):
+                    logging.warning(f"Folder path not found: {path_str}")
+                    continue
+
+                # Find the correct source_root for PathParser
+                # Use the longest matching source root
+                source_root_abs = None
+                for src_root in source_roots:
+                    if path_str.startswith(src_root) or (src_root and Path(path_str).parent.startswith(src_root)):
+                        source_root_abs = Path(src_root)
+                        break
+
+                if source_root_abs is None:
+                    # Fallback: use base_dir or path_str itself
+                    source_root_abs = Path(self.base_dir) if self.base_dir else Path(path_str)
+
+                parser = PathParser(source_root_abs, None)
+
+                # Get output directory to exclude
+                exclude_dirs = [self.output_root] if self.output_root else []
+
+                logging.info(f"Scanning folder: {path_str} (Recursive: {recursive}, source_root: {source_root_abs})")
+
+                # List files in folder (recursive or not)
+                if recursive:
+                    iterator = self._scan_folder_recursive(provider, path_str)
+                else:
+                    iterator = provider.list_dir(path_str, recursive=False)
+
+                for entry in iterator:
+                    is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
+                    if is_dir:
+                        continue
+
+                    entry_name = entry.name
+                    entry_path = entry.path
+
+                    # Skip files in output directory
+                    if self.output_root:
+                        try:
+                            entry_path_obj = Path(entry_path)
+                            output_path_obj = Path(self.output_root)
+                            entry_norm = os.path.normpath(str(entry_path_obj))
+                            output_norm = os.path.normpath(str(output_path_obj))
+                            if entry_norm.startswith(output_norm):
+                                logging.debug(f"Skipping output file: {entry_name}")
+                                continue
+                        except:
+                            pass
+
+                    if not entry_name.lower().endswith(('.jpg', '.jpeg')):
+                        continue
+
+                    # Parse path metadata (without date filtering)
+                    meta = parser.parse(entry_path)
+
+                    if not hasattr(entry, 'size'):
+                        class Adapter:
+                            def __init__(self, e):
+                                self.path = e.path
+                                self.name = e.name
+                                self.size = e.stat().st_size
+                        entry_obj = Adapter(entry)
+                    else:
+                        entry_obj = entry
+
+                    processed_count += 1
+                    # Submit task to pool
+                    futures.append(executor.submit(self.process_image, provider, entry_obj, meta))
+
+                    # Prevent memory explosion
+                    if len(futures) > 500:
+                        done, not_done = wait(futures, timeout=0.1)
+                        futures = list(not_done)
+
+            # Wait for all tasks to complete
+            if futures:
+                wait(futures)
+
+        # Process any remaining items in the buffer
+        self._flush_batch()
+        t_end = time.time()
+        duration = t_end - t_start
+        end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        self.db.add_scan_history({
+            'start_time': start_time_str,
+            'end_time': end_time_str,
+            'range_start': "Folders: " + ",".join(folder_paths[:3]),
+            'range_end': "Folders: " + ",".join(folder_paths[-3:]) if len(folder_paths) > 3 else "",
+            'processed_count': processed_count,
+            'duration_seconds': round(duration, 2),
+            'status': 'Completed'
+        })
+        logging.info(f"Pipeline (by folders) completed. Processed: {processed_count}. Duration: {duration:.2f}s")
+
+    def _scan_folder_recursive(self, provider, folder_path: str):
+        """
+        Recursively scan a folder, excluding output directories.
+        Yields file entries.
+        """
+        exclude_dirs = [self.output_root] if self.output_root else []
+
+        try:
+            for entry in provider.list_dir(folder_path, recursive=False):
+                is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
+
+                if is_dir:
+                    # Check if should exclude
+                    entry_path = str(Path(entry.path))
+                    should_exclude = False
+                    if exclude_dirs:
+                        for excl in exclude_dirs:
+                            if entry_path.startswith(os.path.normpath(excl)):
+                                should_exclude = True
+                                break
+
+                    if should_exclude:
+                        continue
+
+                    # Recursively scan subfolder
+                    yield from self._scan_folder_recursive(provider, entry.path)
+                else:
+                    yield entry
+        except Exception as e:
+            logging.warning(f"Error scanning folder {folder_path}: {e}")
 
 if __name__ == "__main__":
     config_path = "config/settings.yaml"

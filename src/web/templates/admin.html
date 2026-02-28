@@ -16,6 +16,15 @@
             border-radius: 5px;
             font-size: 0.9rem;
         }
+        /* Tab 按钮样式修复 */
+        .nav-tabs .nav-link {
+            color: #adb5bd;
+        }
+        .nav-tabs .nav-link.active {
+            background-color: #212529;
+            color: #fff;
+            border-bottom-color: #212529;
+        }
     </style>
 </head>
 <body>
@@ -33,27 +42,19 @@
         
         <!-- Stats Cards -->
         <div class="row g-4 mb-4">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card text-center h-100">
                     <div class="card-body">
-                        <h3 class="display-4">{{ stats.total_photos }}</h3>
+                        <h3 class="display-4" id="total-photos">{{ stats.total_photos }}</h3>
                         <p class="text-muted">Total Photos</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card text-center h-100">
                     <div class="card-body">
-                        <h3 class="display-4">{{ stats.total_species }}</h3>
+                        <h3 class="display-4" id="total-species">{{ stats.total_species }}</h3>
                         <p class="text-muted">Unique Species</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card text-center h-100">
-                    <div class="card-body">
-                        <h3 class="display-4">{{ stats.storage_usage }} MB</h3>
-                        <p class="text-muted">Storage Usage</p>
                     </div>
                 </div>
             </div>
@@ -68,18 +69,60 @@
                         <button id="start-btn" class="btn btn-light btn-sm">▶ Start Pipeline</button>
                     </div>
                     <div class="card-body bg-dark text-white">
-                        <!-- Date Range Filters -->
-                        <div class="row g-2 mb-3 align-items-end">
-                            <div class="col-md-4">
-                                <label class="form-label small">Start Date</label>
-                                <input type="date" id="start-date" class="form-control form-control-sm bg-secondary text-white border-0">
+                        <!-- Tab Navigation -->
+                        <ul class="nav nav-tabs mb-3" id="pipelineTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active text-white" id="date-tab" data-bs-toggle="tab" data-bs-target="#date-range-panel" type="button" role="tab">
+                                    By Date Range
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link text-white" id="folder-tab" data-bs-toggle="tab" data-bs-target="#folder-panel" type="button" role="tab">
+                                    By Folders
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="pipelineTabContent">
+                            <!-- Date Range Panel -->
+                            <div class="tab-pane fade show active" id="date-range-panel" role="tabpanel">
+                                <div class="row g-2 mb-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label small">Start Date</label>
+                                        <input type="date" id="start-date" class="form-control form-control-sm bg-secondary text-white border-0">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">End Date</label>
+                                        <input type="date" id="end-date" class="form-control form-control-sm bg-secondary text-white border-0">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <span class="small text-muted d-block mb-1">Filter by folder dates</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label small">End Date</label>
-                                <input type="date" id="end-date" class="form-control form-control-sm bg-secondary text-white border-0">
-                            </div>
-                            <div class="col-md-4">
-                                <span class="small text-muted d-block mb-1">Filter by folder dates</span>
+
+                            <!-- Folder Panel -->
+                            <div class="tab-pane fade" id="folder-panel" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-5">
+                                        <div class="small text-muted mb-2">Select folders to process:</div>
+                                        <div id="folder-tree" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                            <div class="text-center text-muted">Loading...</div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <label class="form-check">
+                                                <input type="checkbox" id="recursive-folders" class="form-check-input" checked>
+                                                <span class="form-check-label small">Include subfolders</span>
+                                            </label>
+                                        </div>
+                                        <div class="mt-2 small text-info" id="selected-count">0 folders selected</div>
+                                    </div>
+                                    <div class="col-md-7">
+                                        <div class="small text-muted mb-2">Selected paths:</div>
+                                        <textarea id="selected-paths" class="form-control form-control-sm bg-secondary text-white border-0" rows="5" readonly placeholder="No folders selected"></textarea>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -153,8 +196,15 @@
                 consoleBox.appendChild(line);
                 consoleBox.scrollTop = consoleBox.scrollHeight;
 
-                // Simple state check based on log content
-                if (event.data.includes("Pipeline execution completed")) {
+                // State check based on log content
+                if (event.data.includes("Pipeline completed") || event.data.includes("Pipeline (by folders) completed")) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = "▶ Start Pipeline";
+                    loadHistory(); // Refresh history
+                    loadStats(); // Refresh stats
+                }
+                // Error handling
+                if (event.data.includes("Error:") || event.data.includes("Pipeline failed")) {
                     startBtn.disabled = false;
                     startBtn.textContent = "▶ Start Pipeline";
                     loadHistory(); // Refresh history
@@ -180,6 +230,99 @@
         connectWS();
         loadHistory();
 
+        // Load Stats
+        function loadStats() {
+            fetch('/api/stats')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('total-photos').textContent = data.total_photos || 0;
+                    document.getElementById('total-species').textContent = data.total_species || 0;
+                });
+        }
+
+        // Load Folder Tree
+        let folderTreeData = [];
+        let selectedFolders = new Set();
+
+        function loadFolderTree() {
+            fetch('/api/pipeline/folders')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('folder-tree').innerHTML = '<div class="text-danger small">Error: ' + data.error + '</div>';
+                        return;
+                    }
+                    folderTreeData = data.tree || [];
+                    renderFolderTree(folderTreeData, document.getElementById('folder-tree'));
+                })
+                .catch(err => {
+                    document.getElementById('folder-tree').innerHTML = '<div class="text-danger small">Load failed: ' + err + '</div>';
+                });
+        }
+
+        function renderFolderTree(nodes, container) {
+            if (!nodes || nodes.length === 0) {
+                container.innerHTML = '<div class="text-muted small">No folders found</div>';
+                return;
+            }
+            const ul = document.createElement('ul');
+            ul.className = 'list-unstyled mb-0';
+            ul.style.marginLeft = '1rem';
+
+            nodes.forEach(node => {
+                const li = document.createElement('li');
+                li.className = 'form-check';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'form-check-input folder-checkbox';
+                checkbox.value = node.path;
+                checkbox.dataset.name = node.name;
+
+                if (selectedFolders.has(node.path)) {
+                    checkbox.checked = true;
+                }
+
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        selectedFolders.add(node.path);
+                    } else {
+                        selectedFolders.delete(node.path);
+                    }
+                    updateSelectedPaths();
+                });
+
+                const label = document.createElement('label');
+                label.className = 'form-check-label small';
+                label.appendChild(document.createTextNode(' ' + node.name));
+
+                li.appendChild(checkbox);
+                li.appendChild(label);
+                ul.appendChild(li);
+
+                if (node.children && node.children.length > 0) {
+                    renderFolderTree(node.children, li);
+                }
+            });
+
+            container.innerHTML = '';
+            container.appendChild(ul);
+        }
+
+        function updateSelectedPaths() {
+            const textarea = document.getElementById('selected-paths');
+            const countDiv = document.getElementById('selected-count');
+
+            const paths = Array.from(selectedFolders).sort();
+            textarea.value = paths.join('\n');
+            countDiv.textContent = paths.length + ' folder(s) selected';
+        }
+
+        // Load folder tree when tab is clicked
+        document.getElementById('folder-tab').addEventListener('shown.bs.tab', loadFolderTree);
+        // Also load initially in case it's the default
+        setTimeout(loadFolderTree, 500);
+
         // Load History
         function loadHistory() {
             fetch('/api/scan_history')
@@ -193,9 +336,24 @@
                     }
                     data.forEach(row => {
                         const tr = document.createElement('tr');
+                        // Check if this is a folder-based scan (starts with "Folders:")
+                        const isFolderMode = row.range_start && row.range_start.startsWith('Folders:');
+                        let rangeHtml;
+                        if (isFolderMode) {
+                            // For folder mode, show paths separated by <br>
+                            const startPaths = row.range_start.replace('Folders: ', '').split(',');
+                            const endPaths = row.range_end ? row.range_end.split(',') : [];
+                            rangeHtml = startPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
+                            if (endPaths.length > 0) {
+                                rangeHtml += '<br>⬇<br>' + endPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
+                            }
+                        } else {
+                            // For date mode, show date range with arrow
+                            rangeHtml = `${row.range_start}<br>⬇<br>${row.range_end}`;
+                        }
                         tr.innerHTML = `
                             <td>${row.start_time.split(' ')[0]}<br><small>${row.start_time.split(' ')[1]}</small></td>
-                            <td>${row.range_start}<br>⬇<br>${row.range_end}</td>
+                            <td>${rangeHtml}</td>
                             <td>${row.processed_count}</td>
                             <td>${row.duration_seconds}s</td>
                             <td>${row.status}</td>
@@ -207,53 +365,118 @@
 
         // 2. Start Pipeline
         startBtn.addEventListener('click', () => {
-            const sDateRaw = document.getElementById('start-date').value;
-            const eDateRaw = document.getElementById('end-date').value;
-            
-            // Convert 2023-10-01 -> 20231001
-            const sDate = sDateRaw ? sDateRaw.replace(/-/g, '') : null;
-            const eDate = eDateRaw ? eDateRaw.replace(/-/g, '') : null;
-            
-            const msg = (sDate || eDate) 
-                ? `Start processing range [${sDate || 'Min'} - ${eDate || 'Max'}]?`
-                : "Start processing ALL sources? (This might take a while)";
+            // Check which tab is active
+            const dateTabActive = document.getElementById('date-tab').classList.contains('active');
 
-            if(!confirm(msg)) return;
-            
-            startBtn.disabled = true;
-            startBtn.textContent = "⏳ Running...";
-            consoleBox.innerHTML = "<div>Requesting start...</div>";
-            
-            fetch('/api/pipeline/start', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    start_date: sDate,
-                    end_date: eDate
+            if (dateTabActive) {
+                // Date range mode
+                const sDateRaw = document.getElementById('start-date').value;
+                const eDateRaw = document.getElementById('end-date').value;
+
+                // Convert 2023-10-01 -> 20231001
+                const sDate = sDateRaw ? sDateRaw.replace(/-/g, '') : null;
+                const eDate = eDateRaw ? eDateRaw.replace(/-/g, '') : null;
+
+                const msg = (sDate || eDate)
+                    ? `Start processing range [${sDate || 'Min'} - ${eDate || 'Max'}]?`
+                    : "Start processing ALL sources? (This might take a while)";
+
+                if(!confirm(msg)) return;
+
+                startBtn.disabled = true;
+                startBtn.textContent = "⏳ Running...";
+                // 不清空日志框，追加新请求信息
+                const requestLine = document.createElement('div');
+                requestLine.textContent = "=== Requesting new pipeline run ===";
+                requestLine.style.color = '#ff9800';
+                requestLine.style.marginTop = '10px';
+                consoleBox.appendChild(requestLine);
+                consoleBox.appendChild(document.createElement('div')).textContent = "Waiting for pipeline to start...";
+
+                fetch('/api/pipeline/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        start_date: sDate,
+                        end_date: eDate
+                    })
                 })
-            })
-            .then(r => r.json())
-            .then(data => {
-                console.log('[API] Response:', data);
-                if(data.status === 'error') {
-                    alert(data.message);
-                    startBtn.disabled = false;
-                    startBtn.textContent = "▶ Start Pipeline";
+                .then(r => r.json())
+                .then(data => {
+                    console.log('[API] Response:', data);
+                    if(data.status === 'error') {
+                        alert(data.message);
+                        startBtn.disabled = false;
+                        startBtn.textContent = "▶ Start Pipeline";
+                        const line = document.createElement('div');
+                        line.textContent = 'Error: ' + data.message;
+                        line.style.color = 'red';
+                        consoleBox.appendChild(line);
+                    }
+                })
+                .catch(err => {
+                    console.error('[API] Error:', err);
                     const line = document.createElement('div');
-                    line.textContent = 'Error: ' + data.message;
+                    line.textContent = 'Request failed: ' + err;
                     line.style.color = 'red';
                     consoleBox.appendChild(line);
+                    startBtn.disabled = false;
+                    startBtn.textContent = "▶ Start Pipeline";
+                });
+            } else {
+                // Folder mode
+                const paths = Array.from(selectedFolders);
+                if (paths.length === 0) {
+                    alert('Please select at least one folder');
+                    return;
                 }
-            })
-            .catch(err => {
-                console.error('[API] Error:', err);
-                const line = document.createElement('div');
-                line.textContent = 'Request failed: ' + err;
-                line.style.color = 'red';
-                consoleBox.appendChild(line);
-                startBtn.disabled = false;
-                startBtn.textContent = "▶ Start Pipeline";
-            });
+
+                const recursive = document.getElementById('recursive-folders').checked;
+                const msg = `Start processing ${paths.length} folder(s)?${recursive ? ' (including subfolders)' : ''}`;
+
+                if(!confirm(msg)) return;
+
+                startBtn.disabled = true;
+                startBtn.textContent = "⏳ Running...";
+                // 不清空日志框，追加新请求信息
+                const requestLine = document.createElement('div');
+                requestLine.textContent = "=== Requesting new pipeline run ===";
+                requestLine.style.color = '#ff9800';
+                requestLine.style.marginTop = '10px';
+                consoleBox.appendChild(requestLine);
+                consoleBox.appendChild(document.createElement('div')).textContent = "Waiting for pipeline to start...";
+
+                fetch('/api/pipeline/start_by_folders', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        paths: paths,
+                        recursive: recursive
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    console.log('[API] Response:', data);
+                    if(data.status === 'error') {
+                        alert(data.message);
+                        startBtn.disabled = false;
+                        startBtn.textContent = "▶ Start Pipeline";
+                        const line = document.createElement('div');
+                        line.textContent = 'Error: ' + data.message;
+                        line.style.color = 'red';
+                        consoleBox.appendChild(line);
+                    }
+                })
+                .catch(err => {
+                    console.error('[API] Error:', err);
+                    const line = document.createElement('div');
+                    line.textContent = 'Request failed: ' + err;
+                    line.style.color = 'red';
+                    consoleBox.appendChild(line);
+                    startBtn.disabled = false;
+                    startBtn.textContent = "▶ Start Pipeline";
+                });
+            }
         });
 
         // 3. Reset System

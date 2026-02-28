@@ -1094,46 +1094,89 @@ function Start-Daemon {
 }
 
 function Stop-Daemon {
-    # 查找所有正在运行的 python 进程（可能来自之前的启动）
-    $pythonProcs = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -like "*app.py*" -or $_.CommandLine -like "*uvicorn*"
-    }
+    # 首先尝试从 PID 文件读取并停止
+    $stopped = $false
 
-    if (-not $pythonProcs) {
-        # 如果没找到，尝试从 PID 文件读取
-        if (Test-Path $PID_FILE) {
-            try {
-                $info = Get-Content $PID_FILE | ConvertFrom-Json
-                $pid = $info.pid
+    if (Test-Path $PID_FILE) {
+        try {
+            $info = Get-Content $PID_FILE | ConvertFrom-Json
+            $pid = $info.pid
+
+            # 检查进程是否存在
+            $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+
+            if ($proc) {
+                Log-Info "正在停止服务 (PID: $pid, 端口: $($info.port))..."
+                taskkill /PID $pid /F 2>$null
+                Start-Sleep -Seconds 1
                 $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-                if ($proc) {
-                    Log-Info "正在停止服务 (PID: $pid, 端口: $($info.port))..."
-                    taskkill /PID $pid /F 2>$null
+                if (-not $proc) {
                     Remove-Item $PID_FILE -Force
                     Log-Success "服务已停止"
                     return $true
                 }
-            } catch {
-                # 忽略错误
+                $stopped = $true
             }
+        } catch {
+            # 忽略错误，继续尝试其他方法
+        }
+    }
+
+    # 如果还没停止，尝试查找所有 python 进程
+    if (-not $stopped) {
+        # 尝试多种进程名
+        foreach ($name in @("python", "python3", "python3.11", "python3.12")) {
+            $pythonProcs = Get-Process -Name $name -ErrorAction SilentlyContinue
+            if ($pythonProcs) {
+                foreach ($proc in $pythonProcs) {
+                    # 尝试通过端口来识别
+                    try {
+                        $connections = Get-NetTCPConnection -LocalPort 8000,8001,8002,8003,8004,8005,8006,8007,8008,8009 -ErrorAction SilentlyContinue
+                        if ($connections -and $connections.OwningProcess -contains $proc.Id) {
+                            Log-Info "正在停止服务 (PID: $($proc.Id), 端口: $($connections[0].LocalPort))..."
+                            taskkill /PID $proc.Id /F 2>$null
+                            $stopped = $true
+                        }
+                    } catch { }
+                }
+            }
+        }
+    }
+
+    if ($stopped) {
+        if (Test-Path $PID_FILE) {
             Remove-Item $PID_FILE -Force
         }
-
-        Log-Warn "没有找到运行中的服务"
-        return $false
+        Log-Success "服务已停止"
+        return $true
     }
 
-    # 停止找到的进程
-    foreach ($proc in $pythonProcs) {
-        Log-Info "正在停止服务 (PID: $($proc.Id))..."
-        taskkill /PID $proc.Id /F 2>$null
+    # 最后的尝试：直接杀掉所有包含 app.py 的 python 进程
+    $allPython = Get-Process -Name "python" -ErrorAction SilentlyContinue
+    if ($allPython) {
+        foreach ($proc in $allPython) {
+            try {
+                # 使用 wmic 获取命令行参数
+                $cmdLine = (wmic process where "ProcessId=$($proc.Id)" get CommandLine /value) 2>$null
+                if ($cmdLine -match "app\.py|uvicorn") {
+                    Log-Info "正在停止服务 (PID: $($proc.Id))..."
+                    taskkill /PID $proc.Id /F 2>$null
+                    $stopped = $true
+                }
+            } catch { }
+        }
     }
 
-    if (Test-Path $PID_FILE) {
-        Remove-Item $PID_FILE -Force
+    if ($stopped) {
+        if (Test-Path $PID_FILE) {
+            Remove-Item $PID_FILE -Force
+        }
+        Log-Success "服务已停止"
+        return $true
     }
-    Log-Success "服务已停止"
-    return $true
+
+    Log-Warn "没有找到运行中的服务"
+    return $false
 }
 
 function Get-DaemonStatus {

@@ -415,6 +415,11 @@ def index(request: Request, q: str = "", filter: str = "", date: str = "", limit
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
+    stats = get_stats()
+    return templates.TemplateResponse("admin.html", {"request": request, "stats": stats})
+
+def get_stats():
+    """获取统计数据"""
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
@@ -427,13 +432,16 @@ def admin_dashboard(request: Request):
         total_species = 0
     finally:
         conn.close()
-    
-    stats = {
+
+    return {
         "total_photos": total_photos,
-        "total_species": total_species,
-        "storage_usage": 0 # TODO: Calculate properly for nested structure
+        "total_species": total_species
     }
-    return templates.TemplateResponse("admin.html", {"request": request, "stats": stats})
+
+@app.get("/api/stats")
+def get_api_stats():
+    """API: 获取统计数据"""
+    return get_stats()
 
 @app.get("/api/scan_history")
 def get_scan_history():

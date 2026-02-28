@@ -42,27 +42,19 @@
         
         <!-- Stats Cards -->
         <div class="row g-4 mb-4">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card text-center h-100">
                     <div class="card-body">
-                        <h3 class="display-4">{{ stats.total_photos }}</h3>
+                        <h3 class="display-4" id="total-photos">{{ stats.total_photos }}</h3>
                         <p class="text-muted">Total Photos</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card text-center h-100">
                     <div class="card-body">
-                        <h3 class="display-4">{{ stats.total_species }}</h3>
+                        <h3 class="display-4" id="total-species">{{ stats.total_species }}</h3>
                         <p class="text-muted">Unique Species</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card text-center h-100">
-                    <div class="card-body">
-                        <h3 class="display-4">{{ stats.storage_usage }} MB</h3>
-                        <p class="text-muted">Storage Usage</p>
                     </div>
                 </div>
             </div>
@@ -204,8 +196,15 @@
                 consoleBox.appendChild(line);
                 consoleBox.scrollTop = consoleBox.scrollHeight;
 
-                // Simple state check based on log content
-                if (event.data.includes("Pipeline execution completed")) {
+                // State check based on log content
+                if (event.data.includes("Pipeline completed") || event.data.includes("Pipeline (by folders) completed")) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = "▶ Start Pipeline";
+                    loadHistory(); // Refresh history
+                    loadStats(); // Refresh stats
+                }
+                // Error handling
+                if (event.data.includes("Error:") || event.data.includes("Pipeline failed")) {
                     startBtn.disabled = false;
                     startBtn.textContent = "▶ Start Pipeline";
                     loadHistory(); // Refresh history
@@ -230,6 +229,16 @@
 
         connectWS();
         loadHistory();
+
+        // Load Stats
+        function loadStats() {
+            fetch('/api/stats')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('total-photos').textContent = data.total_photos || 0;
+                    document.getElementById('total-species').textContent = data.total_species || 0;
+                });
+        }
 
         // Load Folder Tree
         let folderTreeData = [];

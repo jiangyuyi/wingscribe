@@ -692,6 +692,11 @@ class IOCManager:
         cursor = self.conn.execute("SELECT 1 FROM photos WHERE file_hash = ? LIMIT 1", (file_hash,))
         return cursor.fetchone() is not None
 
+    def get_all_hashes(self) -> set:
+        """获取所有已处理文件的哈希集合，用于批量去重"""
+        cursor = self.conn.execute("SELECT file_hash FROM photos WHERE file_hash IS NOT NULL AND file_hash != ''")
+        return {row[0] for row in cursor.fetchall()}
+
     def add_photo_record(self, record: Dict):
         # Convert absolute paths to relative paths for storage
         record = dict(record)

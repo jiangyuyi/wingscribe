@@ -74,6 +74,50 @@ class TaskManager:
         logger.info("[TaskManager] Thread started, returning success")
         return True
 
+    def start_pipeline_by_folders(self, folder_paths: list, recursive: bool = True):
+        """按文件夹执行 Pipeline"""
+        logger.info(f"[TaskManager] start_pipeline_by_folders called with paths={folder_paths}, recursive={recursive}")
+        if self.is_running:
+            logger.warning("[TaskManager] Pipeline already running, rejecting request")
+            return False
+
+        self.is_running = True
+        self.logs = ["Starting pipeline for selected folders..."]
+        logger.info("[TaskManager] Pipeline flag set, starting thread...")
+
+        # Run in thread
+        thread = threading.Thread(target=self._run_pipeline_thread_by_folders, args=(folder_paths, recursive), daemon=True)
+        thread.start()
+        logger.info("[TaskManager] Thread started, returning success")
+        return True
+
+    def _run_pipeline_thread_by_folders(self, folder_paths: list, recursive: bool):
+        try:
+            # Ensure working directory is project root for relative path resolution
+            os.chdir(str(BASE_DIR))
+
+            # Setup custom logger to capture output
+            log_capture = logging.getLogger()
+            handler = ListLogHandler(self.logs)
+            log_capture.addHandler(handler)
+
+            self.logs.append("Initializing pipeline (this may take a while on first run)...")
+
+            # Create pipeline with timeout protection (120 seconds default)
+            runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
+
+            self.logs.append("Pipeline initialized, processing selected folders...")
+
+            runner.run_by_folders(folder_paths, recursive=recursive)
+
+            logging.info("Pipeline (by folders) execution completed.")
+        except Exception as e:
+            logging.error(f"Pipeline failed: {e}")
+            self.logs.append(f"Error: {str(e)}")
+        finally:
+            self.is_running = False
+            log_capture.removeHandler(handler)
+
     def _run_pipeline_thread(self, start_date, end_date):
         try:
             # Ensure working directory is project root for relative path resolution
@@ -296,6 +340,10 @@ class StartPipelineRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 
+class StartPipelineByFoldersRequest(BaseModel):
+    paths: List[str]
+    recursive: bool = True
+
 # --- Routes ---
 
 @app.get("/", response_class=HTMLResponse)
@@ -407,6 +455,84 @@ def start_pipeline(req: StartPipelineRequest):
     
     task_manager.start_pipeline(s_date, e_date)
     return {"status": "success", "message": "Pipeline started"}
+
+@app.get("/api/pipeline/folders")
+def get_folder_tree():
+    """获取 sources 配置的文件夹树形结构"""
+    try:
+        sources = config.get('paths', {}).get('sources', [])
+        if not sources:
+            return {"tree": []}
+
+        base_dir = config.get('paths', {}).get('base_dir', '')
+
+        tree = []
+        for source in sources:
+            if not source.get('enabled', True):
+                continue
+
+            path_str = source.get('path', '.')
+            # Resolve relative path
+            if base_dir and not Path(path_str).is_absolute():
+                full_path = Path(base_dir) / path_str
+            else:
+                full_path = Path(path_str)
+
+            if not full_path.exists():
+                continue
+
+            # Build tree from this path
+            folder_tree = _build_folder_tree(full_path, source.get('recursive', True))
+            tree.extend(folder_tree)
+
+        return {"tree": tree}
+    except Exception as e:
+        logger.error(f"Error building folder tree: {e}")
+        return {"tree": [], "error": str(e)}
+
+def _build_folder_tree(root_path: Path, recursive: bool, max_depth: int = 5, current_depth: int = 0):
+    """递归构建文件夹树"""
+    if current_depth >= max_depth:
+        return []
+
+    result = []
+    try:
+        for item in sorted(root_path.iterdir()):
+            if not item.is_dir():
+                continue
+
+            # Skip output and system directories
+            if item.name.startswith('.') or item.name.startswith('$'):
+                continue
+
+            node = {
+                "name": item.name,
+                "path": str(item.relative_to(root_path.parent) if root_path.parent != item else item.name),
+                "type": "folder"
+            }
+
+            if recursive and current_depth < max_depth - 1:
+                children = _build_folder_tree(item, recursive, max_depth, current_depth + 1)
+                if children:
+                    node["children"] = children
+
+            result.append(node)
+    except PermissionError:
+        pass
+    except Exception as e:
+        logger.warning(f"Error scanning {root_path}: {e}")
+
+    return result
+
+@app.post("/api/pipeline/start_by_folders")
+def start_pipeline_by_folders(req: StartPipelineByFoldersRequest):
+    """按文件夹执行 Pipeline"""
+    if task_manager.is_running:
+        return {"status": "error", "message": "Pipeline already running"}
+
+    logger.info(f"Starting pipeline by folders: {req.paths}, recursive={req.recursive}")
+    task_manager.start_pipeline_by_folders(req.paths, req.recursive)
+    return {"status": "success", "message": f"Pipeline started for {len(req.paths)} folder(s)"}
 
 @app.websocket("/ws/progress")
 async def websocket_endpoint(websocket: WebSocket):

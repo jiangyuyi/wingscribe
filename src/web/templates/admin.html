@@ -68,18 +68,60 @@
                         <button id="start-btn" class="btn btn-light btn-sm">▶ Start Pipeline</button>
                     </div>
                     <div class="card-body bg-dark text-white">
-                        <!-- Date Range Filters -->
-                        <div class="row g-2 mb-3 align-items-end">
-                            <div class="col-md-4">
-                                <label class="form-label small">Start Date</label>
-                                <input type="date" id="start-date" class="form-control form-control-sm bg-secondary text-white border-0">
+                        <!-- Tab Navigation -->
+                        <ul class="nav nav-tabs mb-3" id="pipelineTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active text-white" id="date-tab" data-bs-toggle="tab" data-bs-target="#date-range-panel" type="button" role="tab">
+                                    By Date Range
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link text-white" id="folder-tab" data-bs-toggle="tab" data-bs-target="#folder-panel" type="button" role="tab">
+                                    By Folders
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="pipelineTabContent">
+                            <!-- Date Range Panel -->
+                            <div class="tab-pane fade show active" id="date-range-panel" role="tabpanel">
+                                <div class="row g-2 mb-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label small">Start Date</label>
+                                        <input type="date" id="start-date" class="form-control form-control-sm bg-secondary text-white border-0">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">End Date</label>
+                                        <input type="date" id="end-date" class="form-control form-control-sm bg-secondary text-white border-0">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <span class="small text-muted d-block mb-1">Filter by folder dates</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label small">End Date</label>
-                                <input type="date" id="end-date" class="form-control form-control-sm bg-secondary text-white border-0">
-                            </div>
-                            <div class="col-md-4">
-                                <span class="small text-muted d-block mb-1">Filter by folder dates</span>
+
+                            <!-- Folder Panel -->
+                            <div class="tab-pane fade" id="folder-panel" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-5">
+                                        <div class="small text-muted mb-2">Select folders to process:</div>
+                                        <div id="folder-tree" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                            <div class="text-center text-muted">Loading...</div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <label class="form-check">
+                                                <input type="checkbox" id="recursive-folders" class="form-check-input" checked>
+                                                <span class="form-check-label small">Include subfolders</span>
+                                            </label>
+                                        </div>
+                                        <div class="mt-2 small text-info" id="selected-count">0 folders selected</div>
+                                    </div>
+                                    <div class="col-md-7">
+                                        <div class="small text-muted mb-2">Selected paths:</div>
+                                        <textarea id="selected-paths" class="form-control form-control-sm bg-secondary text-white border-0" rows="5" readonly placeholder="No folders selected"></textarea>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -180,6 +222,89 @@
         connectWS();
         loadHistory();
 
+        // Load Folder Tree
+        let folderTreeData = [];
+        let selectedFolders = new Set();
+
+        function loadFolderTree() {
+            fetch('/api/pipeline/folders')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('folder-tree').innerHTML = '<div class="text-danger small">Error: ' + data.error + '</div>';
+                        return;
+                    }
+                    folderTreeData = data.tree || [];
+                    renderFolderTree(folderTreeData, document.getElementById('folder-tree'));
+                })
+                .catch(err => {
+                    document.getElementById('folder-tree').innerHTML = '<div class="text-danger small">Load failed: ' + err + '</div>';
+                });
+        }
+
+        function renderFolderTree(nodes, container) {
+            if (!nodes || nodes.length === 0) {
+                container.innerHTML = '<div class="text-muted small">No folders found</div>';
+                return;
+            }
+            const ul = document.createElement('ul');
+            ul.className = 'list-unstyled mb-0';
+            ul.style.marginLeft = '1rem';
+
+            nodes.forEach(node => {
+                const li = document.createElement('li');
+                li.className = 'form-check';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'form-check-input folder-checkbox';
+                checkbox.value = node.path;
+                checkbox.dataset.name = node.name;
+
+                if (selectedFolders.has(node.path)) {
+                    checkbox.checked = true;
+                }
+
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        selectedFolders.add(node.path);
+                    } else {
+                        selectedFolders.delete(node.path);
+                    }
+                    updateSelectedPaths();
+                });
+
+                const label = document.createElement('label');
+                label.className = 'form-check-label small';
+                label.appendChild(document.createTextNode(' ' + node.name));
+
+                li.appendChild(checkbox);
+                li.appendChild(label);
+                ul.appendChild(li);
+
+                if (node.children && node.children.length > 0) {
+                    renderFolderTree(node.children, li);
+                }
+            });
+
+            container.innerHTML = '';
+            container.appendChild(ul);
+        }
+
+        function updateSelectedPaths() {
+            const textarea = document.getElementById('selected-paths');
+            const countDiv = document.getElementById('selected-count');
+
+            const paths = Array.from(selectedFolders).sort();
+            textarea.value = paths.join('\n');
+            countDiv.textContent = paths.length + ' folder(s) selected';
+        }
+
+        // Load folder tree when tab is clicked
+        document.getElementById('folder-tab').addEventListener('shown.bs.tab', loadFolderTree);
+        // Also load initially in case it's the default
+        setTimeout(loadFolderTree, 500);
+
         // Load History
         function loadHistory() {
             fetch('/api/scan_history')
@@ -207,53 +332,106 @@
 
         // 2. Start Pipeline
         startBtn.addEventListener('click', () => {
-            const sDateRaw = document.getElementById('start-date').value;
-            const eDateRaw = document.getElementById('end-date').value;
-            
-            // Convert 2023-10-01 -> 20231001
-            const sDate = sDateRaw ? sDateRaw.replace(/-/g, '') : null;
-            const eDate = eDateRaw ? eDateRaw.replace(/-/g, '') : null;
-            
-            const msg = (sDate || eDate) 
-                ? `Start processing range [${sDate || 'Min'} - ${eDate || 'Max'}]?`
-                : "Start processing ALL sources? (This might take a while)";
+            // Check which tab is active
+            const dateTabActive = document.getElementById('date-tab').classList.contains('active');
 
-            if(!confirm(msg)) return;
-            
-            startBtn.disabled = true;
-            startBtn.textContent = "⏳ Running...";
-            consoleBox.innerHTML = "<div>Requesting start...</div>";
-            
-            fetch('/api/pipeline/start', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    start_date: sDate,
-                    end_date: eDate
+            if (dateTabActive) {
+                // Date range mode
+                const sDateRaw = document.getElementById('start-date').value;
+                const eDateRaw = document.getElementById('end-date').value;
+
+                // Convert 2023-10-01 -> 20231001
+                const sDate = sDateRaw ? sDateRaw.replace(/-/g, '') : null;
+                const eDate = eDateRaw ? eDateRaw.replace(/-/g, '') : null;
+
+                const msg = (sDate || eDate)
+                    ? `Start processing range [${sDate || 'Min'} - ${eDate || 'Max'}]?`
+                    : "Start processing ALL sources? (This might take a while)";
+
+                if(!confirm(msg)) return;
+
+                startBtn.disabled = true;
+                startBtn.textContent = "⏳ Running...";
+                consoleBox.innerHTML = "<div>Requesting start...</div>";
+
+                fetch('/api/pipeline/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        start_date: sDate,
+                        end_date: eDate
+                    })
                 })
-            })
-            .then(r => r.json())
-            .then(data => {
-                console.log('[API] Response:', data);
-                if(data.status === 'error') {
-                    alert(data.message);
-                    startBtn.disabled = false;
-                    startBtn.textContent = "▶ Start Pipeline";
+                .then(r => r.json())
+                .then(data => {
+                    console.log('[API] Response:', data);
+                    if(data.status === 'error') {
+                        alert(data.message);
+                        startBtn.disabled = false;
+                        startBtn.textContent = "▶ Start Pipeline";
+                        const line = document.createElement('div');
+                        line.textContent = 'Error: ' + data.message;
+                        line.style.color = 'red';
+                        consoleBox.appendChild(line);
+                    }
+                })
+                .catch(err => {
+                    console.error('[API] Error:', err);
                     const line = document.createElement('div');
-                    line.textContent = 'Error: ' + data.message;
+                    line.textContent = 'Request failed: ' + err;
                     line.style.color = 'red';
                     consoleBox.appendChild(line);
+                    startBtn.disabled = false;
+                    startBtn.textContent = "▶ Start Pipeline";
+                });
+            } else {
+                // Folder mode
+                const paths = Array.from(selectedFolders);
+                if (paths.length === 0) {
+                    alert('Please select at least one folder');
+                    return;
                 }
-            })
-            .catch(err => {
-                console.error('[API] Error:', err);
-                const line = document.createElement('div');
-                line.textContent = 'Request failed: ' + err;
-                line.style.color = 'red';
-                consoleBox.appendChild(line);
-                startBtn.disabled = false;
-                startBtn.textContent = "▶ Start Pipeline";
-            });
+
+                const recursive = document.getElementById('recursive-folders').checked;
+                const msg = `Start processing ${paths.length} folder(s)?${recursive ? ' (including subfolders)' : ''}`;
+
+                if(!confirm(msg)) return;
+
+                startBtn.disabled = true;
+                startBtn.textContent = "⏳ Running...";
+                consoleBox.innerHTML = "<div>Requesting start...</div>";
+
+                fetch('/api/pipeline/start_by_folders', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        paths: paths,
+                        recursive: recursive
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    console.log('[API] Response:', data);
+                    if(data.status === 'error') {
+                        alert(data.message);
+                        startBtn.disabled = false;
+                        startBtn.textContent = "▶ Start Pipeline";
+                        const line = document.createElement('div');
+                        line.textContent = 'Error: ' + data.message;
+                        line.style.color = 'red';
+                        consoleBox.appendChild(line);
+                    }
+                })
+                .catch(err => {
+                    console.error('[API] Error:', err);
+                    const line = document.createElement('div');
+                    line.textContent = 'Request failed: ' + err;
+                    line.style.color = 'red';
+                    consoleBox.appendChild(line);
+                    startBtn.disabled = false;
+                    startBtn.textContent = "▶ Start Pipeline";
+                });
+            }
         });
 
         // 3. Reset System

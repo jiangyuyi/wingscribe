@@ -1123,71 +1123,80 @@ start_daemon() {
 }
 
 stop_daemon() {
-    if [ ! -f "$PID_FILE" ]; then
-        log_warn "服务未运行（无 PID 文件）"
-        return 1
-    fi
+    # 查找所有正在运行的 python 进程（可能来自之前的启动）
+    local pids=$(pgrep -f "app.py|uvicorn" 2>/dev/null)
 
-    local pid=$(grep -o '"pid":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
-
-    if [ -z "$pid" ]; then
-        log_error "PID 文件格式错误"
-        rm -f "$PID_FILE"
-        return 1
-    fi
-
-    if ! ps -p "$pid" > /dev/null 2>&1; then
-        log_warn "进程不存在，可能已手动停止"
-        rm -f "$PID_FILE"
-        return 0
-    fi
-
-    log_info "正在停止服务 (PID: $pid)..."
-
-    if [ "$FORCE_STOP" = "true" ]; then
-        kill -9 "$pid" 2>/dev/null
-    else
-        kill "$pid" 2>/dev/null
-        sleep 2
-        if ps -p "$pid" > /dev/null 2>&1; then
-            kill -9 "$pid" 2>/dev/null
+    if [ -z "$pids" ]; then
+        # 如果没找到，尝试从 PID 文件读取
+        if [ -f "$PID_FILE" ]; then
+            local pid=$(grep -o '"pid":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
+            if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
+                log_info "正在停止服务 (PID: $pid)..."
+                if [ "$FORCE_STOP" = "true" ]; then
+                    kill -9 "$pid" 2>/dev/null
+                else
+                    kill "$pid" 2>/dev/null
+                    sleep 2
+                    ps -p "$pid" > /dev/null 2>&1 && kill -9 "$pid" 2>/dev/null
+                fi
+                rm -f "$PID_FILE"
+                log_success "服务已停止"
+                return 0
+            fi
+            rm -f "$PID_FILE"
         fi
+
+        log_warn "没有找到运行中的服务"
+        return 1
     fi
 
-    rm -f "$PID_FILE"
+    # 停止找到的进程
+    for pid in $pids; do
+        log_info "正在停止服务 (PID: $pid)..."
+        if [ "$FORCE_STOP" = "true" ]; then
+            kill -9 "$pid" 2>/dev/null
+        else
+            kill "$pid" 2>/dev/null
+            sleep 1
+            ps -p "$pid" > /dev/null 2>&1 && kill -9 "$pid" 2>/dev/null
+        fi
+    done
+
+    [ -f "$PID_FILE" ] && rm -f "$PID_FILE"
     log_success "服务已停止"
     return 0
 }
 
 get_daemon_status() {
-    if [ ! -f "$PID_FILE" ]; then
-        echo -e "${YELLOW}服务未运行${NC}"
-        return 1
-    fi
+    # 查找所有正在运行的 python 进程
+    local pids=$(pgrep -f "app.py|uvicorn" 2>/dev/null)
 
-    local pid=$(grep -o '"pid":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
-
-    if [ -z "$pid" ]; then
-        log_warn "PID 文件格式错误"
-        rm -f "$PID_FILE"
-        return 1
-    fi
-
-    if ps -p "$pid" > /dev/null 2>&1; then
-        local port=$(grep -o '"port":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
-        local bind=$(grep -o '"bind":"[^"]*"' "$PID_FILE" | cut -d'"' -f4)
-        local time=$(grep -o '"time":"[^"]*"' "$PID_FILE" | cut -d'"' -f4)
+    if [ -n "$pids" ]; then
         echo -e "${GREEN}服务运行中${NC}"
-        echo "  PID: $pid"
-        echo "  端口: $port"
-        echo "  绑定地址: $bind"
-        echo "  启动时间: $time"
+        for pid in $pids; do
+            echo "  PID: $pid"
+        done
+        if [ -f "$PID_FILE" ]; then
+            local port=$(grep -o '"port":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
+            local bind=$(grep -o '"bind":"[^"]*"' "$PID_FILE" | cut -d'"' -f4)
+            local time=$(grep -o '"time":"[^"]*"' "$PID_FILE" | cut -d'"' -f4)
+            echo "  端口: $port"
+            echo "  绑定地址: $bind"
+            echo "  启动时间: $time"
+        else
+            echo "  (端口信息不可用)"
+        fi
         return 0
-    else
+    fi
+
+    if [ -f "$PID_FILE" ]; then
         echo -e "${YELLOW}服务已停止（PID 文件存在但进程不存在）${NC}"
         rm -f "$PID_FILE"
         return 1
     fi
+
+    echo -e "${YELLOW}服务未运行${NC}"
+    return 1
 }
 
 #===============================================================================

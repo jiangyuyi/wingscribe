@@ -995,5 +995,16 @@ def update_label(req: UpdateLabelRequest):
     return {"status": "success"}
 
 if __name__ == "__main__":
+    import argparse
     import uvicorn
-    uvicorn.run(app, host=config['web']['host'], port=config['web']['port'])
+
+    parser = argparse.ArgumentParser(description='WingScribe Web Server')
+    parser.add_argument('--host', type=str, default=None, help='Host to bind to')
+    parser.add_argument('--port', type=int, default=None, help='Port to bind to')
+    args = parser.parse_args()
+
+    # Use command line args if provided, otherwise fall back to config
+    host = args.host if args.host else config['web']['host']
+    port = args.port if args.port else config['web']['port']
+
+    uvicorn.run(app, host=host, port=port)

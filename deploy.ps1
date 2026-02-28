@@ -1094,70 +1094,83 @@ function Start-Daemon {
 }
 
 function Stop-Daemon {
-    if (-not (Test-Path $PID_FILE)) {
-        Log-Warn "服务未运行（无 PID 文件）"
-        return $false
+    # 查找所有正在运行的 python 进程（可能来自之前的启动）
+    $pythonProcs = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -like "*app.py*" -or $_.CommandLine -like "*uvicorn*"
     }
 
-    try {
-        $info = Get-Content $PID_FILE | ConvertFrom-Json
-    } catch {
-        Log-Error "PID 文件格式错误"
-        Remove-Item $PID_FILE -Force
-        return $false
-    }
-
-    $pid = $info.pid
-    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-
-    if (-not $proc) {
-        Log-Warn "进程不存在，可能已手动停止"
-        Remove-Item $PID_FILE -Force
-        return $true
-    }
-
-    Log-Info "正在停止服务 (PID: $pid)..."
-
-    if ($Force) {
-        Stop-Process -Id $pid -Force
-    } else {
-        $proc.CloseMainWindow() | Out-Null
-        Start-Sleep -Seconds 2
-        $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-        if ($proc) {
-            Stop-Process -Id $pid -Force
+    if (-not $pythonProcs) {
+        # 如果没找到，尝试从 PID 文件读取
+        if (Test-Path $PID_FILE) {
+            try {
+                $info = Get-Content $PID_FILE | ConvertFrom-Json
+                $pid = $info.pid
+                $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                if ($proc) {
+                    Log-Info "正在停止服务 (PID: $pid, 端口: $($info.port))..."
+                    taskkill /PID $pid /F 2>$null
+                    Remove-Item $PID_FILE -Force
+                    Log-Success "服务已停止"
+                    return $true
+                }
+            } catch {
+                # 忽略错误
+            }
+            Remove-Item $PID_FILE -Force
         }
+
+        Log-Warn "没有找到运行中的服务"
+        return $false
     }
 
-    Remove-Item $PID_FILE -Force
+    # 停止找到的进程
+    foreach ($proc in $pythonProcs) {
+        Log-Info "正在停止服务 (PID: $($proc.Id))..."
+        taskkill /PID $proc.Id /F 2>$null
+    }
+
+    if (Test-Path $PID_FILE) {
+        Remove-Item $PID_FILE -Force
+    }
     Log-Success "服务已停止"
     return $true
 }
 
 function Get-DaemonStatus {
-    if (-not (Test-Path $PID_FILE)) {
-        Write-Host "服务未运行" -ForegroundColor Yellow
-        return $false
+    # 查找所有正在运行的 python 进程
+    $pythonProcs = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -like "*app.py*" -or $_.CommandLine -like "*uvicorn*"
     }
 
-    try {
-        $info = Get-Content $PID_FILE | ConvertFrom-Json
-    } catch {
-        Log-Warn "PID 文件格式错误"
+    if ($pythonProcs) {
+        Write-Host "服务运行中" -ForegroundColor Green
+        $foundPort = $false
+        foreach ($proc in $pythonProcs) {
+            Write-Host "  PID: $($proc.Id)"
+            if (Test-Path $PID_FILE) {
+                try {
+                    $info = Get-Content $PID_FILE | ConvertFrom-Json
+                    Write-Host "  端口: $($info.port)"
+                    Write-Host "  绑定地址: $($info.bind)"
+                    Write-Host "  启动时间: $($info.time)"
+                    $foundPort = $true
+                } catch { }
+            }
+        }
+        if (-not $foundPort) {
+            Write-Host "  (端口信息不可用)"
+        }
+        return $true
+    }
+
+    if (Test-Path $PID_FILE) {
+        Write-Host "服务已停止（PID 文件存在但进程不存在）" -ForegroundColor Yellow
         Remove-Item $PID_FILE -Force
         return $false
     }
 
-    $proc = Get-Process -Id $info.pid -ErrorAction SilentlyContinue
-
-    if ($proc) {
-        Write-Host "服务运行中" -ForegroundColor Green
-        Write-Host "  PID: $($info.pid)"
-        Write-Host "  端口: $($info.port)"
-        Write-Host "  绑定地址: $($info.bind)"
-        Write-Host "  启动时间: $($info.time)"
-        return $true
-    } else {
+    Write-Host "服务未运行" -ForegroundColor Yellow
+    return $false
         Write-Host "服务已停止（PID 文件存在但进程不存在）" -ForegroundColor Yellow
         Remove-Item $PID_FILE -Force
         return $false

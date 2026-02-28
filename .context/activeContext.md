@@ -2,32 +2,14 @@
 
 ## 当前任务
 
-### 任务 21: Pipeline 执行页面增加按文件和文件夹执行功能 [待开始]
-**状态**: 🔄 计划已确认，等待开始
+### 任务 21: Pipeline 执行页面增加按文件和文件夹执行功能 [已完成]
+**状态**: ✅ 完成 (提交: `4e74213`)
 
-**需求确认** (2026-02-28):
-1. 新增独立的执行选择界面（树形多选）
-2. 从配置的 sources 路径扫描文件夹结构
-3. 选中文件夹后递归处理所有子文件夹
-4. 只处理选中的文件/文件夹，忽略日期范围筛选器
-5. 自动跳过库中已存在的文件
-
-**性能优化 - 批量哈希查询**:
-- 问题: 现有 `check_hash_exists()` 逐个文件查询数据库，10000文件需10000次SQL
-- 优化: 添加 `get_all_hashes()` 批量查询接口，一次获取所有哈希到内存 Set
-- 适用: 适合10万级以下文件库
-
-**实现计划**:
-
-#### 阶段 1: 后端 - 数据库优化
-- [ ] `src/metadata/ioc_manager.py` - 添加 `get_all_hashes()` 方法
-
-#### 阶段 2: 后端 - Pipeline 扩展
-- [ ] `src/pipeline_runner.py` - 添加 `existing_hashes` 参数支持
-- [ ] `src/pipeline_runner.py` - 添加 `scan_folders(paths, recursive)` 方法
-
-#### 阶段 3: 后端 - 新增 API
-- [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
+**实现完成**:
+- [X] 数据库: `get_all_hashes()` 批量查询接口
+- [X] Pipeline: `existing_hashes` 参数和 `run_by_folders()` 方法
+- [X] API: `/api/pipeline/folders` 和 `/api/pipeline/start_by_folders`
+- [X] 前端: Tab 切换和文件夹树形选择组件
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API
 - [ ] `src/web/app.py` - TaskManager 支持路径列表模式
 

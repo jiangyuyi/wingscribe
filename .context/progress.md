@@ -398,7 +398,9 @@ paths:
 
 ---
 
-### 21. Pipeline 执行页面增加按文件和文件夹执行功能 [待开始]
+### 21. Pipeline 执行页面增加按文件和文件夹执行功能 [已完成]
+**状态**: ✅ 完成
+
 **目标**: 在 Pipeline 执行页面增加按文件和文件夹选择执行的功能
 
 **需求**:
@@ -420,11 +422,23 @@ paths:
 **实现计划**:
 
 #### 阶段 1: 后端 - 数据库优化
-- [ ] `src/metadata/ioc_manager.py` - 添加 `get_all_hashes()` 方法
+- [X] `src/metadata/ioc_manager.py` - 添加 `get_all_hashes()` 方法
 
 #### 阶段 2: 后端 - Pipeline 扩展
-- [ ] `src/pipeline_runner.py` - 添加 `existing_hashes` 参数支持
-- [ ] `src/pipeline_runner.py` - 添加 `scan_folders(paths, recursive)` 方法
+- [X] `src/pipeline_runner.py` - 添加 `existing_hashes` 参数支持
+- [X] `src/pipeline_runner.py` - 添加 `run_by_folders(paths, recursive)` 方法
+
+#### 阶段 3: 后端 - 新增 API
+- [X] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
+- [X] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API
+- [X] `src/web/app.py` - TaskManager 支持路径列表模式
+
+#### 阶段 4: 前端 - 新增选择界面
+- [X] `src/web/templates/admin.html` - 添加 Tab 切换（日期范围/文件夹）
+- [X] 添加文件夹树形选择组件
+- [X] 添加 JavaScript API 调用
+
+**提交**: `4e74213`
 
 #### 阶段 3: 后端 - 新增 API
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树

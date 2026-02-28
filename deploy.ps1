@@ -7,11 +7,17 @@
 # 参数解析
 #===============================================================================
 param(
+    [Alias("d")]
     [switch]$Daemon,
+    [Alias("s")]
     [switch]$Stop,
+    [Alias("t")]
     [switch]$Status,
+    [Alias("f")]
     [switch]$Force,
+    [Alias("p")]
     [int]$Port = 8000,
+    [Alias("b")]
     [string]$Bind = "0.0.0.0"
 )
 

@@ -336,9 +336,24 @@
                     }
                     data.forEach(row => {
                         const tr = document.createElement('tr');
+                        // Check if this is a folder-based scan (starts with "Folders:")
+                        const isFolderMode = row.range_start && row.range_start.startsWith('Folders:');
+                        let rangeHtml;
+                        if (isFolderMode) {
+                            // For folder mode, show paths separated by <br>
+                            const startPaths = row.range_start.replace('Folders: ', '').split(',');
+                            const endPaths = row.range_end ? row.range_end.split(',') : [];
+                            rangeHtml = startPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
+                            if (endPaths.length > 0) {
+                                rangeHtml += '<br>⬇<br>' + endPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
+                            }
+                        } else {
+                            // For date mode, show date range with arrow
+                            rangeHtml = `${row.range_start}<br>⬇<br>${row.range_end}`;
+                        }
                         tr.innerHTML = `
                             <td>${row.start_time.split(' ')[0]}<br><small>${row.start_time.split(' ')[1]}</small></td>
-                            <td>${row.range_start}<br>⬇<br>${row.range_end}</td>
+                            <td>${rangeHtml}</td>
                             <td>${row.processed_count}</td>
                             <td>${row.duration_seconds}s</td>
                             <td>${row.status}</td>
@@ -370,7 +385,13 @@
 
                 startBtn.disabled = true;
                 startBtn.textContent = "⏳ Running...";
-                consoleBox.innerHTML = "<div>Requesting start...</div>";
+                // 不清空日志框，追加新请求信息
+                const requestLine = document.createElement('div');
+                requestLine.textContent = "=== Requesting new pipeline run ===";
+                requestLine.style.color = '#ff9800';
+                requestLine.style.marginTop = '10px';
+                consoleBox.appendChild(requestLine);
+                consoleBox.appendChild(document.createElement('div')).textContent = "Waiting for pipeline to start...";
 
                 fetch('/api/pipeline/start', {
                     method: 'POST',
@@ -417,7 +438,13 @@
 
                 startBtn.disabled = true;
                 startBtn.textContent = "⏳ Running...";
-                consoleBox.innerHTML = "<div>Requesting start...</div>";
+                // 不清空日志框，追加新请求信息
+                const requestLine = document.createElement('div');
+                requestLine.textContent = "=== Requesting new pipeline run ===";
+                requestLine.style.color = '#ff9800';
+                requestLine.style.marginTop = '10px';
+                consoleBox.appendChild(requestLine);
+                consoleBox.appendChild(document.createElement('div')).textContent = "Waiting for pipeline to start...";
 
                 fetch('/api/pipeline/start_by_folders', {
                     method: 'POST',

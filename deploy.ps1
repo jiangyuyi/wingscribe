@@ -1096,55 +1096,44 @@ function Start-Daemon {
 function Stop-Daemon {
     $stopped = $false
 
-    # 方法1: 首先尝试通过常用端口查找进程
-    $ports = @(8000,8001,8002,8003,8004,8005,8006,8007,8008,8009)
-    foreach ($port in $ports) {
-        $connections = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
-        if ($connections) {
-            $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
-            foreach ($pid in $pids) {
-                Log-Info "正在停止服务 (PID: $pid, 端口: $port)..."
-                taskkill /PID $pid /F 2>$null
-                $stopped = $true
-            }
-        }
-    }
-
-    # 方法2: 如果没找到，尝试从 PID 文件读取
-    if (-not $stopped -and (Test-Path $PID_FILE)) {
+    # 首先尝试从 PID 文件读取并停止（最可靠的方法）
+    if (Test-Path $PID_FILE) {
         try {
             $info = Get-Content $PID_FILE | ConvertFrom-Json
-            $pid = $info.pid
-            $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+            $targetPid = $info.pid
+
+            # 检查进程是否存在
+            $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+
             if ($proc) {
-                Log-Info "正在停止服务 (PID: $pid, 端口: $($info.port))..."
-                taskkill /PID $pid /F 2>$null
-                $stopped = $true
+                Log-Info "正在停止服务 (PID: $targetPid, 端口: $($info.port))..."
+                taskkill /PID $targetPid /F 2>$null
+                Start-Sleep -Seconds 1
+
+                # 验证是否停止成功
+                $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+                if (-not $proc) {
+                    Remove-Item $PID_FILE -Force
+                    Log-Success "服务已停止"
+                    return $true
+                } else {
+                    Log-Warn "服务停止失败，进程仍在运行"
+                    return $false
+                }
+            } else {
+                Log-Warn "进程不存在，可能已手动停止"
+                Remove-Item $PID_FILE -Force
+                return $true
             }
-        } catch { }
-    }
-
-    # 方法3: 最后尝试杀掉所有 python 进程（谨慎使用）
-    if (-not $stopped) {
-        $pythonProcs = Get-Process -Name "python" -ErrorAction SilentlyContinue
-        if ($pythonProcs) {
-            foreach ($proc in $pythonProcs) {
-                Log-Info "正在停止服务 (PID: $($proc.Id))..."
-                taskkill /PID $proc.Id /F 2>$null
-                $stopped = $true
-            }
+        } catch {
+            Log-Warn "读取 PID 文件失败: $_"
         }
+    } else {
+        Log-Warn "没有 PID 文件，请先启动服务"
+        return $false
     }
 
-    if ($stopped) {
-        if (Test-Path $PID_FILE) {
-            Remove-Item $PID_FILE -Force
-        }
-        Log-Success "服务已停止"
-        return $true
-    }
-
-    Log-Warn "没有找到运行中的服务"
+    Log-Warn "服务未运行"
     return $false
 }
 

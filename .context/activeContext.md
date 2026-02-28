@@ -2,20 +2,45 @@
 
 ## 当前任务
 
-### 1. Linux 下原图切换无效问题 [进行中]
-**状态**: 🔄 等待用户测试
+### 任务 21: Pipeline 执行页面增加按文件和文件夹执行功能 [待开始]
+**状态**: 🔄 计划已确认，等待开始
 
-**问题描述**:
-- Windows 下点击裁切图可以正常切换显示原图
-- Linux 下点击无效
+**需求确认** (2026-02-28):
+1. 新增独立的执行选择界面（树形多选）
+2. 从配置的 sources 路径扫描文件夹结构
+3. 选中文件夹后递归处理所有子文件夹
+4. 只处理选中的文件/文件夹，忽略日期范围筛选器
+5. 自动跳过库中已存在的文件
 
-**分析**:
-- 前端使用 `mousedown`/`mouseup` 事件切换图片
-- 需要在 Linux 服务器上查看日志确认 `resolve_web_path()` 的行为
+**性能优化 - 批量哈希查询**:
+- 问题: 现有 `check_hash_exists()` 逐个文件查询数据库，10000文件需10000次SQL
+- 优化: 添加 `get_all_hashes()` 批量查询接口，一次获取所有哈希到内存 Set
+- 适用: 适合10万级以下文件库
 
-**已添加调试日志**:
-- 修改 `src/web/app.py` 中的 `resolve_web_path()` 函数
-- 添加详细日志记录路径解析过程
+**实现计划**:
+
+#### 阶段 1: 后端 - 数据库优化
+- [ ] `src/metadata/ioc_manager.py` - 添加 `get_all_hashes()` 方法
+
+#### 阶段 2: 后端 - Pipeline 扩展
+- [ ] `src/pipeline_runner.py` - 添加 `existing_hashes` 参数支持
+- [ ] `src/pipeline_runner.py` - 添加 `scan_folders(paths, recursive)` 方法
+
+#### 阶段 3: 后端 - 新增 API
+- [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
+- [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API
+- [ ] `src/web/app.py` - TaskManager 支持路径列表模式
+
+#### 阶段 4: 前端 - 新增选择界面
+- [ ] `src/web/templates/index.html` - 添加 Tab 切换（日期范围/文件文件夹）
+- [ ] 添加文件夹树形选择组件
+- [ ] 添加 JavaScript API 调用
+
+**涉及文件**:
+- `src/metadata/ioc_manager.py`
+- `src/pipeline_runner.py`
+- `src/web/app.py`
+- `src/web/templates/index.html`
 
 ---
 
@@ -38,22 +63,15 @@
 ### 5. 首页翻页按钮消失修复
 - 在 index.html 模板中添加静态分页按钮
 
+### 20. Linux 下原图切换无效问题
+- 已完成并提交
+
+### 22. 照片切换功能改用按钮切换
+- 已完成并提交 (`adc318d`)
+
 ---
 
 ## 待处理任务
-
-### 任务 21: Pipeline 执行页面增加按文件和文件夹执行功能
-- **目标**: 在 Pipeline 执行页面增加按文件和文件夹选择执行的功能
-- **需求**:
-  - 读取文件夹列表并支持多选
-  - 用户可以选择特定文件或文件夹进行单独处理
-
-### 任务 22: 照片切换功能改用按钮切换
-- **目标**: 将点击切换改为两个按钮切换
-- **需求**:
-  - 不再使用长按/鼠标按下切换
-  - 添加两个按钮：「显示裁切图」「显示原图」
-  - 用户点击按钮切换显示
 
 ### 任务 23: 新增鸟种统计页面
 - **目标**: 新增一个页面显示拍到过的鸟种统计信息

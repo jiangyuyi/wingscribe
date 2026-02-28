@@ -405,6 +405,43 @@ paths:
 - 读取文件夹列表并支持多选
 - 用户可以选择特定文件或文件夹进行单独处理
 
+**需求确认** (2026-02-28):
+1. **界面**: 新增独立的执行选择界面（树形多选）
+2. **数据来源**: 从配置的 sources 路径扫描文件夹结构
+3. **处理方式**: 选中文件夹后递归处理所有子文件夹
+4. **执行逻辑**: 只处理选中的文件/文件夹，忽略日期范围筛选器
+5. **去重**: 自动跳过库中已存在的文件
+
+**性能优化 - 批量哈希查询**:
+- 问题: 现有 `check_hash_exists()` 逐个文件查询数据库，10000文件需10000次SQL
+- 优化: 添加 `get_all_hashes()` 批量查询接口，一次获取所有哈希到内存
+- 适用: 适合10万级以下文件库
+
+**实现计划**:
+
+#### 阶段 1: 后端 - 数据库优化
+- [ ] `src/metadata/ioc_manager.py` - 添加 `get_all_hashes()` 方法
+
+#### 阶段 2: 后端 - Pipeline 扩展
+- [ ] `src/pipeline_runner.py` - 添加 `existing_hashes` 参数支持
+- [ ] `src/pipeline_runner.py` - 添加 `scan_folders(paths, recursive)` 方法
+
+#### 阶段 3: 后端 - 新增 API
+- [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
+- [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API
+- [ ] `src/web/app.py` - TaskManager 支持路径列表模式
+
+#### 阶段 4: 前端 - 新增选择界面
+- [ ] `src/web/templates/index.html` - 添加 Tab 切换（日期范围/文件文件夹）
+- [ ] 添加文件夹树形选择组件
+- [ ] 添加 JavaScript API 调用
+
+**涉及文件**:
+- `src/metadata/ioc_manager.py`
+- `src/pipeline_runner.py`
+- `src/web/app.py`
+- `src/web/templates/index.html`
+
 ---
 
 ### 22. 照片切换功能改用按钮切换 [已完成]

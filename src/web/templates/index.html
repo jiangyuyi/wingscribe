@@ -21,18 +21,6 @@
         .confidence-low { color: red; }
         .card.status-uncertain { border: 2px solid #ffc107; }
         .badge-uncertain { background-color: #ffc107 !important; color: #000; }
-        .original-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.6);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            display: none;
-        }
-        .card:hover .original-badge { display: block; }
         .location-tag {
             font-size: 0.8rem;
             color: #666;
@@ -296,14 +284,26 @@
                     <div class="photo-card">
                         <div class="card h-100 shadow-sm {{ 'status-uncertain' if is_uncertain else '' }}">
                             <div class="position-relative">
-                                <!-- Image: Toggle between processed and raw -->
-                                <img src="{{ processed_path }}"
+                                <!-- Image Toggle Buttons -->
+                                <div class="btn-group btn-group-sm position-absolute top-0 start-0 m-1 view-toggle" style="z-index: 10;">
+                                    <button class="btn btn-dark {{ 'active' if processed_path else '' }}"
+                                            data-view="processed"
+                                            {{ 'disabled' if not processed_path }}>
+                                        裁切
+                                    </button>
+                                    <button class="btn btn-dark {{ 'active' if not processed_path and raw_path else '' }}"
+                                            data-view="raw"
+                                            {{ 'disabled' if not raw_path }}>
+                                        原图
+                                    </button>
+                                </div>
+                                <!-- Image -->
+                                <img src="{{ processed_path if processed_path else raw_path }}"
                                      class="card-img-top main-img"
                                      data-processed="{{ processed_path }}"
                                      data-raw="{{ raw_path }}"
                                      alt="{{ photo.primary_bird_cn }}"
                                      loading="lazy">
-                                <span class="original-badge">Hold to view Original</span>
                             </div>
 
                             <div class="card-body">
@@ -754,13 +754,25 @@
                 <div class="photo-card">
                     <div class="card h-100 shadow-sm ${isUncertain ? 'status-uncertain' : ''}">
                         <div class="position-relative">
-                            <img src="${processedPath}"
+                            <!-- Image Toggle Buttons -->
+                            <div class="btn-group btn-group-sm position-absolute top-0 start-0 m-1 view-toggle" style="z-index: 10;">
+                                <button class="btn btn-dark ${processedPath ? 'active' : ''}"
+                                        data-view="processed"
+                                        ${!processedPath ? 'disabled' : ''}>
+                                    裁切
+                                </button>
+                                <button class="btn btn-dark ${!processedPath && rawPath ? 'active' : ''}"
+                                        data-view="raw"
+                                        ${!rawPath ? 'disabled' : ''}>
+                                    原图
+                                </button>
+                            </div>
+                            <img src="${processedPath || rawPath}"
                                  class="card-img-top main-img"
                                  data-processed="${processedPath}"
                                  data-raw="${rawPath}"
                                  alt="${photo.primary_bird_cn}"
                                  loading="lazy">
-                            <span class="original-badge">Hold to view Original</span>
                         </div>
 
                         <div class="card-body">
@@ -963,18 +975,30 @@
         });
 
         // ========================
-        // 2. Image Toggle (Raw/Processed)
+        // 2. Image Toggle (Raw/Processed) via Buttons
         // ========================
         function attachImageToggleHandlers() {
-            document.querySelectorAll('.main-img').forEach(img => {
-                const rawSrc = img.dataset.raw;
-                if (!rawSrc) return;
+            // 按钮点击切换
+            document.querySelectorAll('.view-toggle .btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const card = btn.closest('.photo-card');
+                    const img = card.querySelector('.main-img');
+                    const view = btn.dataset.view;
 
-                img.addEventListener('mousedown', () => { img.src = rawSrc; });
-                img.addEventListener('mouseup', () => { img.src = img.dataset.processed; });
-                img.addEventListener('mouseleave', () => { img.src = img.dataset.processed; });
-                img.addEventListener('touchstart', (e) => { e.preventDefault(); img.src = rawSrc; });
-                img.addEventListener('touchend', () => { img.src = img.dataset.processed; });
+                    // 更新按钮状态
+                    card.querySelectorAll('.view-toggle .btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // 切换图片
+                    if (view === 'raw' && img.dataset.raw) {
+                        img.src = img.dataset.raw;
+                    } else if (view === 'processed' && img.dataset.processed) {
+                        img.src = img.dataset.processed;
+                    } else if (img.dataset.raw) {
+                        img.src = img.dataset.raw;
+                    }
+                });
             });
         }
 

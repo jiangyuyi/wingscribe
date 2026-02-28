@@ -465,6 +465,18 @@ paths:
 
 **提交**: `475101b`
 
+---
+
+### 21.3 修复 Pipeline UI展示问题 [已完成]
+**状态**: ✅ 完成
+
+**修复内容**:
+- [X] 问题1: 改为追加日志而非清空，保留历史日志
+- [X] 问题2: 文件夹模式不显示箭头
+- [X] 问题3: history表格文件夹路径分行显示
+
+**提交**: `9f0669d`
+
 #### 阶段 3: 后端 - 新增 API
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API

@@ -807,6 +807,25 @@ class FeatherTracePipeline:
 
         logging.info(f"Running pipeline for folders: {folder_paths} (recursive={recursive})")
 
+        # Get configured sources to find the correct source_root for PathParser
+        sources = self.config.get('paths', {}).get('sources', [])
+        source_roots = {}  # Map: resolved source path -> PathParser source_root
+
+        for source in sources:
+            if not source.get('enabled', True):
+                continue
+            path_str = source.get('path', '.')
+            # Resolve relative path to absolute
+            if self.base_dir and path_str and not Path(path_str).is_absolute():
+                resolved = str(Path(self.base_dir) / path_str)
+            else:
+                resolved = path_str
+            source_roots[resolved] = resolved  # Use source root itself as source_root for PathParser
+
+        # If no sources configured, fall back to base_dir
+        if not source_roots:
+            source_roots = {self.base_dir: self.base_dir}
+
         # Resolve folder paths to absolute
         base_dir = self.base_dir
         resolved_paths = []
@@ -829,13 +848,24 @@ class FeatherTracePipeline:
                     logging.warning(f"Folder path not found: {path_str}")
                     continue
 
-                source_root_abs = Path(provider.get_local_path(path_str))
+                # Find the correct source_root for PathParser
+                # Use the longest matching source root
+                source_root_abs = None
+                for src_root in source_roots:
+                    if path_str.startswith(src_root) or (src_root and Path(path_str).parent.startswith(src_root)):
+                        source_root_abs = Path(src_root)
+                        break
+
+                if source_root_abs is None:
+                    # Fallback: use base_dir or path_str itself
+                    source_root_abs = Path(self.base_dir) if self.base_dir else Path(path_str)
+
                 parser = PathParser(source_root_abs, None)
 
                 # Get output directory to exclude
                 exclude_dirs = [self.output_root] if self.output_root else []
 
-                logging.info(f"Scanning folder: {path_str} (Recursive: {recursive})")
+                logging.info(f"Scanning folder: {path_str} (Recursive: {recursive}, source_root: {source_root_abs})")
 
                 # List files in folder (recursive or not)
                 if recursive:

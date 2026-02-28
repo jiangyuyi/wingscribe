@@ -1171,10 +1171,6 @@ function Get-DaemonStatus {
 
     Write-Host "服务未运行" -ForegroundColor Yellow
     return $false
-        Write-Host "服务已停止（PID 文件存在但进程不存在）" -ForegroundColor Yellow
-        Remove-Item $PID_FILE -Force
-        return $false
-    }
 }
 
 function Show-Menu {

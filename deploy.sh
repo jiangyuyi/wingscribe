@@ -1107,14 +1107,14 @@ start_daemon() {
 
     # 后台启动服务
     log_info "Starting WingScribe service in background..."
-    nohup "$venv_python" "$web_script" --port "$PORT" --host "$BIND" > /tmp/wingscribe_out.log 2>&1 &
+    nohup "$venv_python" "$web_script" --port "$PORT" --host "$BIND" > "${PROJECT_ROOT}/wingscribe_out.log" 2>&1 &
     local pid=$!
 
     if [ -n "$pid" ]; then
         # 保存 PID 信息
         echo "{\"pid\":$pid,\"port\":$PORT,\"bind\":\"$BIND\",\"time\":\"$(date '+%Y-%m-%d %H:%M:%S')\"}" > "$PID_FILE"
         log_success "服务已启动: http://${BIND}:${PORT} (PID: $pid)"
-        log_info "日志输出: /tmp/wingscribe_out.log"
+        log_info "日志输出: ${PROJECT_ROOT}/wingscribe_out.log"
         return 0
     else
         log_error "启动服务失败"

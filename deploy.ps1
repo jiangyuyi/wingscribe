@@ -1072,7 +1072,7 @@ function Start-Daemon {
     Log-Info "Starting WingScribe service in background..."
     $process = Start-Process -FilePath $venvPython `
         -ArgumentList $webScript, "--port", $Port, "--host", $Bind `
-        -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\wingscribe_out.log" -RedirectStandardError "$env:TEMP\wingscribe_err.log"
+        -PassThru -NoNewWindow -RedirectStandardOutput "$PROJECT_ROOT\wingscribe_out.log" -RedirectStandardError "$PROJECT_ROOT\wingscribe_err.log"
 
     if ($process) {
         # 保存 PID 信息
@@ -1085,7 +1085,7 @@ function Start-Daemon {
         $pidInfo | Out-File -FilePath $PID_FILE -Encoding UTF8
 
         Log-Success "服务已启动: http://$Bind`:$Port (PID: $($process.Id))"
-        Log-Info "日志输出: $env:TEMP\wingscribe_out.log"
+        Log-Info "日志输出: $PROJECT_ROOT\wingscribe_out.log"
         return $true
     } else {
         Log-Error "启动服务失败"

@@ -440,6 +440,18 @@ paths:
 
 **提交**: `4e74213`
 
+---
+
+### 21.1 修复文件夹路径和UI问题 [已完成]
+**状态**: ✅ 完成
+
+**修复内容**:
+- [X] 问题1: 修改 `_build_folder_tree()` 添加 `base_rel_path` 参数，返回正确的相对路径
+- [X] 问题2: 添加 `IGNORED_DIRS` 集合，排除回收站文件夹
+- [X] 问题3: 添加 CSS 样式修复 Tab 按钮高亮颜色
+
+**提交**: `60baad9`
+
 #### 阶段 3: 后端 - 新增 API
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API

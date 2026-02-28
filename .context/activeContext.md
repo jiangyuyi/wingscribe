@@ -2,6 +2,16 @@
 
 ## 当前任务
 
+### 任务 21.x 修复文件夹路径和UI问题 [已完成]
+**状态**: ✅ 完成 (提交: `60baad9`)
+
+**修复内容**:
+- [X] 问题1: 返回正确的相对路径（包含source前缀）
+- [X] 问题2: 排除回收站文件夹
+- [X] 问题3: Tab按钮高亮颜色
+
+---
+
 ### 任务 21: Pipeline 执行页面增加按文件和文件夹执行功能 [已完成]
 **状态**: ✅ 完成 (提交: `4e74213`)
 
@@ -10,7 +20,6 @@
 - [X] Pipeline: `existing_hashes` 参数和 `run_by_folders()` 方法
 - [X] API: `/api/pipeline/folders` 和 `/api/pipeline/start_by_folders`
 - [X] 前端: Tab 切换和文件夹树形选择组件
-- [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API
 - [ ] `src/web/app.py` - TaskManager 支持路径列表模式
 
 #### 阶段 4: 前端 - 新增选择界面

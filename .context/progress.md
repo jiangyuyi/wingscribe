@@ -452,6 +452,19 @@ paths:
 
 **提交**: `60baad9`
 
+---
+
+### 21.2 修复 Pipeline 执行后UI状态和刷新问题 [已完成]
+**状态**: ✅ 完成
+
+**修复内容**:
+- [X] 问题1: 修改日志检测，匹配 "Pipeline completed" 和 "Pipeline (by folders) completed"
+- [X] 问题1: 添加错误检测，匹配 "Error:" 和 "Pipeline failed"
+- [X] 问题2: 添加 loadStats() 刷新统计数据，新增 /api/stats API
+- [X] 问题3: 删除未实现的 storage usage 显示
+
+**提交**: `475101b`
+
 #### 阶段 3: 后端 - 新增 API
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/folders` 获取文件夹树
 - [ ] `src/web/app.py` - 添加 `/api/pipeline/start_by_folders` 执行API

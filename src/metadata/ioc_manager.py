@@ -404,9 +404,15 @@ class IOCManager:
             logging.error(f"Failed to import Excel: {e}")
 
     def get_bird_info(self, scientific_name: str) -> Optional[Dict]:
-        cursor = self.conn.execute("SELECT * FROM taxonomy WHERE scientific_name=?", (scientific_name,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
+        if not scientific_name:
+            return None
+        try:
+            cursor = self.conn.execute("SELECT * FROM taxonomy WHERE scientific_name=?", (scientific_name,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            logging.warning(f"get_bird_info failed for '{scientific_name}': {e}")
+            return None
 
     def search_species(self, query: str, limit: int = 20) -> List[Dict]:
         q_like = f"%{query}%"

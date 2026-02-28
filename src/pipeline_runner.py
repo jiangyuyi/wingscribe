@@ -416,7 +416,7 @@ class FeatherTracePipeline:
             display_results = results if show_alternatives else [results[0]]
 
             for i, res in enumerate(results):
-                r_sci = res['scientific_name']
+                r_sci = res.get('scientific_name') or 'Unknown'
                 r_conf = res['confidence'] * 100
                 r_info = self.db.get_bird_info(r_sci)
                 r_cn = r_info['chinese_name'] if r_info else r_sci

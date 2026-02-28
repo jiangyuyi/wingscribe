@@ -26,6 +26,58 @@ PYTHON_CMD=""
 HAS_GPU=false
 CUDA_VERSION=""
 DRIVER_VERSION=""
+PID_FILE="${PROJECT_ROOT}/.wingscribe.pid"
+
+#===============================================================================
+# 参数解析
+#===============================================================================
+
+# 默认值
+DAEMON_MODE=false
+STOP_MODE=false
+STATUS_MODE=false
+FORCE_STOP=false
+PORT=8000
+BIND="0.0.0.0"
+
+# 解析命令行参数
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--daemon)
+            DAEMON_MODE=true
+            shift
+            ;;
+        -s|--stop)
+            STOP_MODE=true
+            shift
+            ;;
+        -t|--status)
+            STATUS_MODE=true
+            shift
+            ;;
+        -f|--force)
+            FORCE_STOP=true
+            shift
+            ;;
+        -p|--port)
+            PORT="$2"
+            shift 2
+            ;;
+        -b|--bind)
+            BIND="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
 
 #===============================================================================
 # 工具函数
@@ -1017,6 +1069,128 @@ start_web_server() {
 }
 
 #===============================================================================
+# 后台服务管理函数
+#===============================================================================
+
+start_daemon() {
+    local venv_python="${PROJECT_ROOT}/venv/bin/python"
+    local web_script="${PROJECT_ROOT}/src/web/app.py"
+
+    if [ ! -f "$venv_python" ]; then
+        log_error "Virtual environment not found!"
+        log_info "Please run 'deploy' first"
+        return 1
+    fi
+
+    if [ ! -f "$web_script" ]; then
+        log_error "Web script not found: $web_script"
+        return 1
+    fi
+
+    # 检查端口是否占用
+    if lsof -i:${PORT} >/dev/null 2>&1; then
+        log_error "端口 ${PORT} 已被占用"
+        return 1
+    fi
+
+    # 检查是否已有进程在运行
+    if [ -f "$PID_FILE" ]; then
+        local old_pid=$(grep -o '"pid":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
+        if [ -n "$old_pid" ] && ps -p "$old_pid" > /dev/null 2>&1; then
+            log_warn "服务已在运行 (PID: $old_pid)"
+            return 1
+        else
+            # 进程不存在，清理 PID 文件
+            rm -f "$PID_FILE"
+        fi
+    fi
+
+    # 后台启动服务
+    log_info "Starting WingScribe service in background..."
+    nohup "$venv_python" "$web_script" --port "$PORT" --host "$BIND" > /tmp/wingscribe_out.log 2>&1 &
+    local pid=$!
+
+    if [ -n "$pid" ]; then
+        # 保存 PID 信息
+        echo "{\"pid\":$pid,\"port\":$PORT,\"bind\":\"$BIND\",\"time\":\"$(date '+%Y-%m-%d %H:%M:%S')\"}" > "$PID_FILE"
+        log_success "服务已启动: http://${BIND}:${PORT} (PID: $pid)"
+        log_info "日志输出: /tmp/wingscribe_out.log"
+        return 0
+    else
+        log_error "启动服务失败"
+        return 1
+    fi
+}
+
+stop_daemon() {
+    if [ ! -f "$PID_FILE" ]; then
+        log_warn "服务未运行（无 PID 文件）"
+        return 1
+    fi
+
+    local pid=$(grep -o '"pid":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
+
+    if [ -z "$pid" ]; then
+        log_error "PID 文件格式错误"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+
+    if ! ps -p "$pid" > /dev/null 2>&1; then
+        log_warn "进程不存在，可能已手动停止"
+        rm -f "$PID_FILE"
+        return 0
+    fi
+
+    log_info "正在停止服务 (PID: $pid)..."
+
+    if [ "$FORCE_STOP" = "true" ]; then
+        kill -9 "$pid" 2>/dev/null
+    else
+        kill "$pid" 2>/dev/null
+        sleep 2
+        if ps -p "$pid" > /dev/null 2>&1; then
+            kill -9 "$pid" 2>/dev/null
+        fi
+    fi
+
+    rm -f "$PID_FILE"
+    log_success "服务已停止"
+    return 0
+}
+
+get_daemon_status() {
+    if [ ! -f "$PID_FILE" ]; then
+        echo -e "${YELLOW}服务未运行${NC}"
+        return 1
+    fi
+
+    local pid=$(grep -o '"pid":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
+
+    if [ -z "$pid" ]; then
+        log_warn "PID 文件格式错误"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+
+    if ps -p "$pid" > /dev/null 2>&1; then
+        local port=$(grep -o '"port":[0-9]*' "$PID_FILE" | grep -o '[0-9]*')
+        local bind=$(grep -o '"bind":"[^"]*"' "$PID_FILE" | cut -d'"' -f4)
+        local time=$(grep -o '"time":"[^"]*"' "$PID_FILE" | cut -d'"' -f4)
+        echo -e "${GREEN}服务运行中${NC}"
+        echo "  PID: $pid"
+        echo "  端口: $port"
+        echo "  绑定地址: $bind"
+        echo "  启动时间: $time"
+        return 0
+    else
+        echo -e "${YELLOW}服务已停止（PID 文件存在但进程不存在）${NC}"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
+
+#===============================================================================
 # 菜单界面
 #===============================================================================
 
@@ -1043,9 +1217,12 @@ show_menu() {
     echo -e "  ${WHITE}[3]${NC} Update Project"
     echo -e "  ${WHITE}[4]${NC} Install CUDA (GPU Support)"
     echo -e "  ${WHITE}[5]${NC} Reinstall PyTorch (Fix GPU)"
-    echo -e "  ${WHITE}[6]${NC} Start Service"
-    echo -e "  ${WHITE}[7]${NC} Help"
-    echo -e "  ${WHITE}[8]${NC} Exit"
+    echo -e "  ${WHITE}[6]${NC} Start Service (Foreground)"
+    echo -e "  ${WHITE}[7]${NC} Start Service (Daemon)"
+    echo -e "  ${WHITE}[8]${NC} Stop Service"
+    echo -e "  ${WHITE}[9]${NC} Service Status"
+    echo -e "  ${WHITE}[10]${NC} Help"
+    echo -e "  ${WHITE}[11]${NC} Exit"
     echo ""
     echo -e "  ${CYAN}========================================${NC}"
 }
@@ -1059,7 +1236,7 @@ show_help() {
 ========================================
 
 Usage:
-  $0 [command]
+  $0 [command] [options]
 
 Commands:
   deploy           Full deployment (install + config)
@@ -1068,19 +1245,32 @@ Commands:
   update           Update project
   cuda             Install CUDA (GPU support)
   pytorch          Reinstall PyTorch (fix GPU issues)
-  web              Start Web server
+  web              Start Web server (foreground)
   help             Show this help
 
+Options:
+  -d, --daemon     Start service in background
+  -s, --stop       Stop background service
+  -t, --status     Show service status
+  -f, --force      Force stop (for --stop)
+  -p, --port       Port number (default: 8000)
+  -b, --bind       Bind address (default: 0.0.0.0)
+  -h, --help       Show this help
+
 Examples:
-  $0 deploy           # Full deployment
-  $0 config           # Configure only
-  $0 pytorch          # Reinstall PyTorch for GPU
-  $0 web              # Start Web service
+  $0 deploy                    # Full deployment
+  $0 config                    # Configure only
+  $0 pytorch                   # Reinstall PyTorch for GPU
+  $0 web                       # Start Web service (foreground)
+  $0 -d                        # Start in background
+  $0 -d -p 8080                # Start on port 8080
+  $0 -s                        # Stop background service
+  $0 -t                        # Show service status
 
 Quick Start:
   1. Run: $0 deploy
   2. Configure photo directory
-  3. Run: $0 web
+  3. Run: $0 -d
   4. Open: http://localhost:8000
 
 Format: Year/yyyymmdd_Location/*.jpg
@@ -1097,6 +1287,22 @@ main() {
 
     # 检测 GPU（全局）
     test_gpu
+
+    # 处理命令行参数（在参数解析部分已设置变量）
+    if [ "$DAEMON_MODE" = "true" ]; then
+        start_daemon
+        return
+    fi
+
+    if [ "$STOP_MODE" = "true" ]; then
+        stop_daemon
+        return
+    fi
+
+    if [ "$STATUS_MODE" = "true" ]; then
+        get_daemon_status
+        return
+    fi
 
     local command="${1:-}"
 
@@ -1289,11 +1495,38 @@ main() {
                 start_web_server
                 ;;
             7)
+                echo -e "${CYAN}========================================${NC}"
+                echo -e "${CYAN}  ${GREEN}Start Service (Daemon)${NC}"
+                echo -e "${CYAN}========================================${NC}"
+                echo ""
+                start_daemon
+                echo ""
+                pause
+                ;;
+            8)
+                echo -e "${CYAN}========================================${NC}"
+                echo -e "${CYAN}  ${GREEN}Stop Service${NC}"
+                echo -e "${CYAN}========================================${NC}"
+                echo ""
+                stop_daemon
+                echo ""
+                pause
+                ;;
+            9)
+                echo -e "${CYAN}========================================${NC}"
+                echo -e "${CYAN}  ${GREEN}Service Status${NC}"
+                echo -e "${CYAN}========================================${NC}"
+                echo ""
+                get_daemon_status
+                echo ""
+                pause
+                ;;
+            10)
                 clear
                 show_help
                 pause
                 ;;
-            8)
+            11)
                 echo ""
                 echo "  Goodbye!"
                 echo ""

@@ -2,6 +2,17 @@
 
 ## 当前任务
 
+### 任务 24: 增强一键部署脚本 [已完成]
+**状态**: ✅ 完成
+
+**修改内容**:
+- deploy.ps1: 添加 -Daemon/-d、-Stop/-s、-Status/-t、-Port/-p、-Bind/-b、-Force/-f 参数
+- deploy.sh: 添加 -d/--daemon、-s/--stop、-t/--status、-f/--force、-p/--port、-b/--bind 参数
+- 两脚本都支持后台启动、停止、状态查询功能
+- PID 文件: .wingscribe.pid
+
+---
+
 ### 任务 21.x 修复文件夹路径和UI问题 [已完成]
 **状态**: ✅ 完成 (提交: `60baad9`)
 

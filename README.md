@@ -68,10 +68,10 @@ mkdir wingscribe
 cd wingscribe
 
 # 国内用户（Gitee，无需梯子）：
-Invoke-WebRequest -Uri "https://gitee.com/jiangyuyi/wingscribe/raw/master/scripts/deploy.ps1" -OutFile deploy.ps1; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; .\deploy.ps1
+Invoke-WebRequest -Uri "https://gitee.com/jiangyuyi/wingscribe/raw/master/deploy.ps1" -OutFile deploy.ps1; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; .\deploy.ps1
 
 # 海外用户：
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/scripts/deploy.ps1" -OutFile deploy.ps1; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; .\deploy.ps1
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/deploy.ps1" -OutFile deploy.ps1; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; .\deploy.ps1
 ```
 
 > **说明**: Windows 默认禁止运行 PowerShell 脚本。上述命令会自动设置执行策略并运行一键部署。
@@ -80,29 +80,57 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jiangyuyi/wingscribe/m
 
 ```bash
 # 国内用户（Gitee，无需梯子）：
-curl -fsSL https://gitee.com/jiangyuyi/wingscribe/raw/master/scripts/deploy.sh -o deploy.sh && bash deploy.sh deploy
+curl -fsSL https://gitee.com/jiangyuyi/wingscribe/raw/master/deploy.sh -o deploy.sh && bash deploy.sh deploy
 
 # 海外用户：
-curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/scripts/deploy.sh -o deploy.sh && bash deploy.sh deploy
+curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/deploy.sh -o deploy.sh && bash deploy.sh deploy
 ```
 
 > **说明**: Gitee 为国内镜像站，下载速度更快且无需翻墙工具；GitHub 为官方仓库，版本更新更及时。
 
 #### 可用命令
 
-| 命令             | 说明                 |
-| ---------------- | -------------------- |
-| `deploy`       | 完整部署流程 (推荐)  |
-| `install`      | 仅安装依赖           |
-| `config`       | 运行配置向导         |
-| `update`       | 更新项目             |
-| `cuda`         | 安装 CUDA (GPU 支持) |
-| `web`          | 启动 Web 服务        |
-| `docker:local` | Docker 本地部署      |
-| `docker:cpu`   | Docker CPU 识别服务  |
-| `cloud:config` | 配置云平台 API       |
-| `cloud:list`   | 列出可用云平台       |
-| `help`         | 显示帮助             |
+| 命令             | 说明                   |
+| ---------------- | ---------------------- |
+| `deploy`       | 完整部署流程 (推荐)   |
+| `install`      | 仅安装依赖             |
+| `config`       | 运行配置向导           |
+| `update`       | 更新项目               |
+| `cuda`         | 安装 CUDA (GPU 支持)   |
+| `pytorch`      | 重新安装 PyTorch      |
+| `web`          | 启动 Web 服务 (前台)  |
+| `-d`           | 后台启动服务           |
+| `-s`           | 停止后台服务           |
+| `-t`           | 查看服务状态           |
+| `help`         | 显示帮助               |
+
+#### 后台服务管理
+
+部署脚本支持后台启动服务，方便在服务器上长期运行：
+
+```bash
+# Windows PowerShell
+.\deploy.ps1 -d              # 后台启动
+.\deploy.ps1 -d -p 8080     # 指定端口启动
+.\deploy.ps1 -s              # 停止服务
+.\deploy.ps1 -s -f           # 强制停止
+.\deploy.ps1 -t              # 查看状态
+
+# Linux/macOS
+./deploy.sh -d              # 后台启动
+./deploy.sh -d -p 8080      # 指定端口启动
+./deploy.sh -s              # 停止服务
+./deploy.sh -s -f            # 强制停止
+./deploy.sh -t               # 查看状态
+```
+
+参数说明：
+- `-d, --daemon`: 后台启动服务
+- `-s, --stop`: 停止后台服务
+- `-t, --status`: 查看服务状态
+- `-f, --force`: 强制停止
+- `-p, --port`: 指定端口 (默认: 8000)
+- `-b, --bind`: 绑定地址 (默认: 0.0.0.0)
 
 #### 部署流程
 
@@ -127,10 +155,14 @@ curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/scripts
 │  [1] 🚀 开始部署                        │
 │  [2] ⚙️  配置选项                       │
 │  [3] 📦 更新项目                        │
-│  [4] ⬇️  下载模型                       │
-│  [5] ▶️  启动服务                       │
-│  [6] 📖 查看帮助                       │
-│  [7] ❌  退出                           │
+│  [4] ⬇️  安装 CUDA                      │
+│  [5] 🔄 重新安装 PyTorch                │
+│  [6] ▶️  启动服务 (前台)                │
+│  [7] 🔻 后台启动服务                    │
+│  [8] ⏹️ 停止服务                        │
+│  [9] 📊 服务状态                        │
+│  [10] 📖 查看帮助                      │
+│  [11] ❌ 退出                           │
 └────────────────────────────────────────┘
 ```
 

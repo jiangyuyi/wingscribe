@@ -535,3 +535,188 @@ paths:
 - 显示鸟种列表（类似当前侧边栏的展示方式）
 - 不显示照片数量
 - 支持点击后跳转到该鸟种的筛选页面
+
+---
+
+### 24. 增强一键部署脚本 [已完成]
+**状态**: ✅ 完成
+
+**修改内容**:
+- [X] deploy.ps1 添加后台启动 (-Daemon/-d)、停止 (-Stop/-s)、状态 (-Status/-t) 功能
+- [X] deploy.sh 添加后台启动 (-d)、停止 (-s)、状态 (-t) 功能
+- [X] 两边都支持端口 (-p/--port) 和绑定地址 (-b/--bind) 参数
+- [X] 添加 PID 文件管理 (.wingscribe.pid)
+- [X] 更新菜单选项，增加后台管理入口
+**目标**: 为 deploy.ps1 和 deploy.sh 添加后台启动和后台停止功能
+
+**需求**:
+1. **后台启动功能**:
+   - 使用 `-Daemon` 或 `-d` 参数启动服务
+   - 服务在后台运行，不阻塞终端
+   - 支持指定端口（默认 8000）
+   - 支持指定绑定地址（默认 0.0.0.0）
+   - 启动成功后输出服务 URL 和 PID
+
+2. **后台停止功能**:
+   - 使用 `-Stop` 或 `-s` 参数停止服务
+   - 通过 PID 文件查找并终止进程
+   - 支持强制终止（-Force）
+   - 停止前尝试优雅关闭，等待进程结束
+
+3. **PID 文件管理**:
+   - 在项目根目录创建 `.wingscribe.pid` 文件
+   - 记录进程 PID 和启动时间
+   - 启动时检查是否已有进程在运行
+
+4. **状态查询功能**:
+   - 使用 `-Status` 或 `-t` 参数查看服务状态
+   - 显示是否在运行、PID、启动时间、端口
+
+**修改文件**:
+- `deploy.ps1` (Windows PowerShell)
+- `deploy.sh` (Linux/macOS bash)
+
+**实现方案**:
+
+#### deploy.ps1 (PowerShell)
+```powershell
+# 新增参数
+param(
+    [switch]$Daemon,
+    [switch]$Stop,
+    [switch]$Status,
+    [switch]$Force,
+    [int]$Port = 8000,
+    [string]$Bind = "0.0.0.0"
+)
+
+# PID 文件路径
+$PID_FILE = ".wingscribe.pid"
+
+# 启动函数
+function Start-WingScribeDaemon {
+    # 检查端口是否占用
+    $proc = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    if ($proc) {
+        Write-Host "端口 $Port 已被占用" -ForegroundColor Red
+        exit 1
+    }
+
+    # 后台启动
+    $process = Start-Process -FilePath "python" `
+        -ArgumentList "src/web/app.py", "--port", $Port, "--host", $Bind `
+        -PassThru -NoNewWindow
+
+    # 保存 PID
+    @{
+        pid = $process.Id
+        port = $Port
+        time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    } | ConvertTo-Json | Out-File $PID_FILE
+
+    Write-Host "服务已启动: http://$Bind`:$Port (PID: $($process.Id))" -ForegroundColor Green
+}
+
+# 停止函数
+function Stop-WingScribeDaemon {
+    if (-not (Test-Path $PID_FILE)) {
+        Write-Host "服务未运行（无 PID 文件）" -ForegroundColor Yellow
+        return
+    }
+
+    $info = Get-Content $PID_FILE | ConvertFrom-Json
+    $pid = $info.pid
+
+    if (-not (Get-Process -Id $pid -ErrorAction SilentlyContinue)) {
+        Write-Host "进程不存在，可能已手动停止" -ForegroundColor Yellow
+        Remove-Item $PID_FILE -Force
+        return
+    }
+
+    Stop-Process -Id $pid -Force:$Force
+    Remove-Item $PID_FILE -Force
+    Write-Host "服务已停止" -ForegroundColor Green
+}
+
+# 状态函数
+function Get-WingScribeStatus {
+    if (-not (Test-Path $PID_FILE)) {
+        Write-Host "服务未运行" -ForegroundColor Yellow
+        return
+    }
+
+    $info = Get-Content $PID_FILE | ConvertFrom-Json
+    $proc = Get-Process -Id $info.pid -ErrorAction SilentlyContinue
+
+    if ($proc) {
+        Write-Host "服务运行中" -ForegroundColor Green
+        Write-Host "  PID: $($info.pid)"
+        Write-Host "  端口: $($info.port)"
+        Write-Host "  启动时间: $($info.time)"
+    } else {
+        Write-Host "服务已停止（PID 文件存在但进程不存在）" -ForegroundColor Yellow
+        Remove-Item $PID_FILE -Force
+    }
+}
+```
+
+#### deploy.sh (Bash)
+```bash
+# PID 文件路径
+PID_FILE=".wingscribe.pid"
+
+# 启动函数
+start_daemon() {
+    # 检查端口
+    if lsof -i:$PORT >/dev/null 2>&1; then
+        echo "端口 $PORT 已被占用"
+        exit 1
+    fi
+
+    # 后台启动
+    nohup python3 src/web/app.py --port $PORT --host $BIND > /dev/null 2>&1 &
+    PID=$!
+
+    # 保存 PID
+    echo "{\"pid\":$PID,\"port\":$PORT,\"time\":\"$(date '+%Y-%m-%d %H:%M:%S')\"}" > $PID_FILE
+
+    echo "服务已启动: http://$BIND:$PORT (PID: $PID)"
+}
+
+# 停止函数
+stop_daemon() {
+    if [[ ! -f $PID_FILE ]]; then
+        echo "服务未运行（无 PID 文件）"
+        return
+    fi
+
+    PID=$(grep -o '"pid":[0-9]*' $PID_FILE | grep -o '[0-9]*')
+
+    if ! ps -p $PID > /dev/null 2>&1; then
+        echo "进程不存在，可能已手动停止"
+        rm -f $PID_FILE
+        return
+    fi
+
+    kill $PID 2>/dev/null
+    rm -f $PID_FILE
+    echo "服务已停止"
+}
+
+# 状态函数
+status_daemon() {
+    if [[ ! -f $PID_FILE ]]; then
+        echo "服务未运行"
+        return
+    fi
+
+    PID=$(grep -o '"pid":[0-9]*' $PID_FILE | grep -o '[0-9]*')
+
+    if ps -p $PID > /dev/null 2>&1; then
+        echo "服务运行中 (PID: $PID)"
+    else
+        echo "服务已停止（PID 文件存在但进程不存在）"
+        rm -f $PID_FILE
+    fi
+}
+```

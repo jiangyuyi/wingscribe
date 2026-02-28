@@ -3,6 +3,24 @@
 # WingScribe Windows Deployment Script
 #===============================================================================
 
+#===============================================================================
+# 参数解析
+#===============================================================================
+param(
+    [Alias("d")]
+    [switch]$Daemon,
+    [Alias("s")]
+    [switch]$Stop,
+    [Alias("t")]
+    [switch]$Status,
+    [Alias("f")]
+    [switch]$Force,
+    [Alias("p")]
+    [int]$Port = 8000,
+    [Alias("b")]
+    [string]$Bind = "0.0.0.0"
+)
+
 $ProgressPreference = "SilentlyContinue"
 
 # 检查并设置执行策略（允许运行脚本）
@@ -17,6 +35,7 @@ try {
 }
 
 $PROJECT_ROOT = $PSScriptRoot
+$PID_FILE = Join-Path $PROJECT_ROOT ".wingscribe.pid"
 $GITEE_MIRROR = "https://gitee.com/jiangyuyi/wingscribe.git"
 $GITHUB_ORIGIN = "https://github.com/jiangyuyi/wingscribe.git"
 $PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
@@ -1010,6 +1029,141 @@ function Start-WebServer {
     return $true
 }
 
+#===============================================================================
+# 后台服务管理函数
+#===============================================================================
+
+function Start-Daemon {
+    $venvPython = "$PROJECT_ROOT\venv\Scripts\python.exe"
+    $webScript = "$PROJECT_ROOT\src\web\app.py"
+
+    if (-not (Test-Path $venvPython)) {
+        Log-Error "Virtual environment not found!"
+        Log-Info "Please run [1] Start Deployment first"
+        return $false
+    }
+
+    if (-not (Test-Path $webScript)) {
+        Log-Error "Web script not found: $webScript"
+        return $false
+    }
+
+    # 检查端口是否占用
+    $conn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    if ($conn) {
+        Log-Error "端口 $Port 已被占用"
+        return $false
+    }
+
+    # 检查是否已有进程在运行
+    if (Test-Path $PID_FILE) {
+        $info = Get-Content $PID_FILE | ConvertFrom-Json
+        $existingProc = Get-Process -Id $info.pid -ErrorAction SilentlyContinue
+        if ($existingProc) {
+            Log-Warn "服务已在运行 (PID: $($info.pid), 端口: $($info.port))"
+            return $false
+        } else {
+            # 进程不存在，清理 PID 文件
+            Remove-Item $PID_FILE -Force
+        }
+    }
+
+    # 后台启动服务
+    Log-Info "Starting WingScribe service in background..."
+    $process = Start-Process -FilePath $venvPython `
+        -ArgumentList $webScript, "--port", $Port, "--host", $Bind `
+        -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\wingscribe_out.log" -RedirectStandardError "$env:TEMP\wingscribe_err.log"
+
+    if ($process) {
+        # 保存 PID 信息
+        $pidInfo = @{
+            pid = $process.Id
+            port = $Port
+            bind = $Bind
+            time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        } | ConvertTo-Json
+        $pidInfo | Out-File -FilePath $PID_FILE -Encoding UTF8
+
+        Log-Success "服务已启动: http://$Bind`:$Port (PID: $($process.Id))"
+        Log-Info "日志输出: $env:TEMP\wingscribe_out.log"
+        return $true
+    } else {
+        Log-Error "启动服务失败"
+        return $false
+    }
+}
+
+function Stop-Daemon {
+    if (-not (Test-Path $PID_FILE)) {
+        Log-Warn "服务未运行（无 PID 文件）"
+        return $false
+    }
+
+    try {
+        $info = Get-Content $PID_FILE | ConvertFrom-Json
+    } catch {
+        Log-Error "PID 文件格式错误"
+        Remove-Item $PID_FILE -Force
+        return $false
+    }
+
+    $pid = $info.pid
+    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+
+    if (-not $proc) {
+        Log-Warn "进程不存在，可能已手动停止"
+        Remove-Item $PID_FILE -Force
+        return $true
+    }
+
+    Log-Info "正在停止服务 (PID: $pid)..."
+
+    if ($Force) {
+        Stop-Process -Id $pid -Force
+    } else {
+        $proc.CloseMainWindow() | Out-Null
+        Start-Sleep -Seconds 2
+        $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        if ($proc) {
+            Stop-Process -Id $pid -Force
+        }
+    }
+
+    Remove-Item $PID_FILE -Force
+    Log-Success "服务已停止"
+    return $true
+}
+
+function Get-DaemonStatus {
+    if (-not (Test-Path $PID_FILE)) {
+        Write-Host "服务未运行" -ForegroundColor Yellow
+        return $false
+    }
+
+    try {
+        $info = Get-Content $PID_FILE | ConvertFrom-Json
+    } catch {
+        Log-Warn "PID 文件格式错误"
+        Remove-Item $PID_FILE -Force
+        return $false
+    }
+
+    $proc = Get-Process -Id $info.pid -ErrorAction SilentlyContinue
+
+    if ($proc) {
+        Write-Host "服务运行中" -ForegroundColor Green
+        Write-Host "  PID: $($info.pid)"
+        Write-Host "  端口: $($info.port)"
+        Write-Host "  绑定地址: $($info.bind)"
+        Write-Host "  启动时间: $($info.time)"
+        return $true
+    } else {
+        Write-Host "服务已停止（PID 文件存在但进程不存在）" -ForegroundColor Yellow
+        Remove-Item $PID_FILE -Force
+        return $false
+    }
+}
+
 function Show-Menu {
     Clear-Host
     Write-Host ""
@@ -1037,9 +1191,12 @@ function Show-Menu {
     Write-Host "  [3] Update Project" -ForegroundColor White
     Write-Host "  [4] Install CUDA (GPU Support)" -ForegroundColor White
     Write-Host "  [5] Reinstall PyTorch (Fix GPU)" -ForegroundColor White
-    Write-Host "  [6] Start Service" -ForegroundColor White
-    Write-Host "  [7] Help" -ForegroundColor White
-    Write-Host "  [8] Exit" -ForegroundColor White
+    Write-Host "  [6] Start Service (Foreground)" -ForegroundColor White
+    Write-Host "  [7] Start Service (Daemon)" -ForegroundColor White
+    Write-Host "  [8] Stop Service" -ForegroundColor White
+    Write-Host "  [9] Service Status" -ForegroundColor White
+    Write-Host "  [10] Help" -ForegroundColor White
+    Write-Host "  [11] Exit" -ForegroundColor White
     Write-Host ""
     Write-Host "  ========================================  " -ForegroundColor Cyan
 }
@@ -1047,9 +1204,24 @@ function Show-Menu {
 function Invoke-Main {
     $script:PYTHON_CMD = $null
     $script:HAS_GPU = $false
+
+    # 处理命令行参数
+    if ($Daemon) {
+        Start-Daemon
+        return
+    }
+    if ($Stop) {
+        Stop-Daemon
+        return
+    }
+    if ($Status) {
+        Get-DaemonStatus
+        return
+    }
+
     while ($true) {
         Show-Menu
-        $choice = Read-Host "Enter option (1-8)"
+        $choice = Read-Host "Enter option (1-11)"
         Write-Host ""
         switch ($choice) {
             "1" {
@@ -1215,6 +1387,33 @@ function Invoke-Main {
             }
             "6" { Start-WebServer }
             "7" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Start Service (Daemon)" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Start-Daemon
+                Write-Host ""
+                Pause-Host
+            }
+            "8" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Stop Service" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Stop-Daemon
+                Write-Host ""
+                Pause-Host
+            }
+            "9" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Service Status" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Get-DaemonStatus
+                Write-Host ""
+                Pause-Host
+            }
+            "10" {
                 Clear-Host
                 Write-Host ""
                 Write-Host "  Help" -ForegroundColor Cyan
@@ -1248,7 +1447,7 @@ function Invoke-Main {
                 Write-Host ""
                 Pause-Host
             }
-            "8" { Write-Host ""; Write-Host "  Goodbye!"; Write-Host ""; exit 0 }
+            "11" { Write-Host ""; Write-Host "  Goodbye!"; Write-Host ""; exit 0 }
             default { Log-Error "Invalid option"; Start-Sleep -Seconds 1 }
         }
     }

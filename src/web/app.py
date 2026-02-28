@@ -456,6 +456,9 @@ def start_pipeline(req: StartPipelineRequest):
     task_manager.start_pipeline(s_date, e_date)
     return {"status": "success", "message": "Pipeline started"}
 
+# 需要排除的系统文件夹列表
+IGNORED_DIRS = {'@Recycle', '$RECYCLE.BIN', '.Trash-', '@eaDir', 'System Volume Information'}
+
 @app.get("/api/pipeline/folders")
 def get_folder_tree():
     """获取 sources 配置的文件夹树形结构"""
@@ -481,8 +484,8 @@ def get_folder_tree():
             if not full_path.exists():
                 continue
 
-            # Build tree from this path
-            folder_tree = _build_folder_tree(full_path, source.get('recursive', True))
+            # Build tree from this path, pass path_str for relative path calculation
+            folder_tree = _build_folder_tree(full_path, source.get('recursive', True), path_str)
             tree.extend(folder_tree)
 
         return {"tree": tree}
@@ -490,8 +493,14 @@ def get_folder_tree():
         logger.error(f"Error building folder tree: {e}")
         return {"tree": [], "error": str(e)}
 
-def _build_folder_tree(root_path: Path, recursive: bool, max_depth: int = 5, current_depth: int = 0):
-    """递归构建文件夹树"""
+def _build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = "", max_depth: int = 5, current_depth: int = 0):
+    """递归构建文件夹树
+
+    Args:
+        root_path: 绝对路径的根目录
+        recursive: 是否递归扫描子目录
+        base_rel_path: 相对于 base_dir 的基础路径（如 "1按年份/2026"）
+    """
     if current_depth >= max_depth:
         return []
 
@@ -501,18 +510,26 @@ def _build_folder_tree(root_path: Path, recursive: bool, max_depth: int = 5, cur
             if not item.is_dir():
                 continue
 
-            # Skip output and system directories
+            # Skip system directories and recycle bins
             if item.name.startswith('.') or item.name.startswith('$'):
                 continue
+            if item.name in IGNORED_DIRS or any(item.name.startswith(p.replace('-', '')) for p in IGNORED_DIRS if '-'):
+                continue
+
+            # Calculate relative path from base_dir
+            if base_rel_path:
+                rel_path = f"{base_rel_path}/{item.name}"
+            else:
+                rel_path = item.name
 
             node = {
                 "name": item.name,
-                "path": str(item.relative_to(root_path.parent) if root_path.parent != item else item.name),
+                "path": rel_path,
                 "type": "folder"
             }
 
             if recursive and current_depth < max_depth - 1:
-                children = _build_folder_tree(item, recursive, max_depth, current_depth + 1)
+                children = _build_folder_tree(item, recursive, rel_path, max_depth, current_depth + 1)
                 if children:
                     node["children"] = children
 

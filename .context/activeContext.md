@@ -12,22 +12,42 @@
 
 ---
 
+### 任务 21.2 修复 Pipeline 执行后UI状态和刷新问题 [已完成]
+**状态**: ✅ 完成 (提交: `475101b`)
+
+**修复内容**:
+- [X] 问题1: 修改日志检测，匹配 "Pipeline completed"
+- [X] 问题2: 添加 loadStats() 刷新统计数据
+
+---
+
+### 任务 21.3 修复 Pipeline UI展示问题 [已完成]
+**状态**: ✅ 完成 (提交: `9f0669d`)
+
+**修复内容**:
+- [X] 问题1: 第二次执行日志不显示 - 改为追加日志
+- [X] 问题2: 文件夹模式不显示箭头
+- [X] 问题3: history表格文件夹路径分行显示
+
+---
+
+### 任务 21.4 修复 Pipeline 路径生成问题 [已完成]
+**状态**: ✅ 完成 (提交: `37346a0`)
+
+**修复内容**:
+- [X] 问题1&3: 修改 run_by_folders 使用正确的 source_root
+- [X] 问题2: 随问题1一起修复（未再复现）
+
+---
+
 ### 任务 21: Pipeline 执行页面增加按文件和文件夹执行功能 [已完成]
-**状态**: ✅ 完成 (提交: `4e74213`)
-
-**实现完成**:
-- [X] 数据库: `get_all_hashes()` 批量查询接口
-- [X] Pipeline: `existing_hashes` 参数和 `run_by_folders()` 方法
-- [X] API: `/api/pipeline/folders` 和 `/api/pipeline/start_by_folders`
-- [X] 前端: Tab 切换和文件夹树形选择组件
-- [ ] `src/web/app.py` - TaskManager 支持路径列表模式
-
-#### 阶段 4: 前端 - 新增选择界面
-- [ ] `src/web/templates/index.html` - 添加 Tab 切换（日期范围/文件文件夹）
-- [ ] 添加文件夹树形选择组件
-- [ ] 添加 JavaScript API 调用
+**状态**: ✅ 完成 (合并到 master 后生效)
 
 **涉及文件**:
+- src/metadata/ioc_manager.py
+- src/pipeline_runner.py
+- src/web/app.py
+- src/web/templates/admin.html
 - `src/metadata/ioc_manager.py`
 - `src/pipeline_runner.py`
 - `src/web/app.py`

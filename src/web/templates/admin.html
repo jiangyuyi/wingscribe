@@ -192,6 +192,10 @@
                             </div>
                         </div>
 
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small text-muted">Console Output</span>
+                            <button onclick="clearConsole()" class="btn btn-sm btn-outline-secondary">Clear Log</button>
+                        </div>
                         <div id="console" class="console-box">
                             <div>Ready. Waiting for command...</div>
                         </div>
@@ -238,6 +242,27 @@
         const startBtn = document.getElementById('start-btn');
         let ws = null;
         let wsConnected = false;
+        const MAX_LOG_LINES = 5000; // 日志行数上限
+
+        // 清空日志
+        function clearConsole() {
+            consoleBox.innerHTML = '<div>Log cleared.</div>';
+        }
+
+        // 添加日志行并限制行数
+        function appendLog(text, color = null) {
+            const line = document.createElement('div');
+            line.textContent = text;
+            if (color) line.style.color = color;
+            consoleBox.appendChild(line);
+
+            // 限制日志行数
+            while (consoleBox.children.length > MAX_LOG_LINES) {
+                consoleBox.removeChild(consoleBox.firstChild);
+            }
+
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
 
         function connectWS() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -248,17 +273,11 @@
             ws.onopen = () => {
                 console.log('[WS] Connected');
                 wsConnected = true;
-                const line = document.createElement('div');
-                line.textContent = '[WS] Connected to log server';
-                line.style.color = '#666';
-                consoleBox.appendChild(line);
+                appendLog('[WS] Connected to log server', '#666');
             };
 
             ws.onmessage = (event) => {
-                const line = document.createElement('div');
-                line.textContent = event.data;
-                consoleBox.appendChild(line);
-                consoleBox.scrollTop = consoleBox.scrollHeight;
+                appendLog(event.data);
 
                 // State check based on log content
                 if (event.data.includes("Pipeline completed") || event.data.includes("Pipeline (by folders) completed")) {
@@ -277,10 +296,7 @@
 
             ws.onerror = (error) => {
                 console.error('[WS] Error:', error);
-                const line = document.createElement('div');
-                line.textContent = '[WS] Error occurred';
-                line.style.color = 'red';
-                consoleBox.appendChild(line);
+                appendLog('[WS] Error occurred', 'red');
             };
 
             ws.onclose = () => {
@@ -511,12 +527,8 @@
                 startBtn.disabled = true;
                 startBtn.textContent = "⏳ Running...";
                 // 不清空日志框，追加新请求信息
-                const requestLine = document.createElement('div');
-                requestLine.textContent = "=== Requesting new pipeline run ===";
-                requestLine.style.color = '#ff9800';
-                requestLine.style.marginTop = '10px';
-                consoleBox.appendChild(requestLine);
-                consoleBox.appendChild(document.createElement('div')).textContent = "Waiting for pipeline to start...";
+                appendLog("=== Requesting new pipeline run ===", '#ff9800');
+                appendLog("Waiting for pipeline to start...");
 
                 fetch('/api/pipeline/start', {
                     method: 'POST',
@@ -533,18 +545,12 @@
                         alert(data.message);
                         startBtn.disabled = false;
                         startBtn.textContent = "▶ Start Pipeline";
-                        const line = document.createElement('div');
-                        line.textContent = 'Error: ' + data.message;
-                        line.style.color = 'red';
-                        consoleBox.appendChild(line);
+                        appendLog('Error: ' + data.message, 'red');
                     }
                 })
                 .catch(err => {
                     console.error('[API] Error:', err);
-                    const line = document.createElement('div');
-                    line.textContent = 'Request failed: ' + err;
-                    line.style.color = 'red';
-                    consoleBox.appendChild(line);
+                    appendLog('Request failed: ' + err, 'red');
                     startBtn.disabled = false;
                     startBtn.textContent = "▶ Start Pipeline";
                 });
@@ -564,12 +570,8 @@
                 startBtn.disabled = true;
                 startBtn.textContent = "⏳ Running...";
                 // 不清空日志框，追加新请求信息
-                const requestLine = document.createElement('div');
-                requestLine.textContent = "=== Requesting new pipeline run ===";
-                requestLine.style.color = '#ff9800';
-                requestLine.style.marginTop = '10px';
-                consoleBox.appendChild(requestLine);
-                consoleBox.appendChild(document.createElement('div')).textContent = "Waiting for pipeline to start...";
+                appendLog("=== Requesting new pipeline run ===", '#ff9800');
+                appendLog("Waiting for pipeline to start...");
 
                 fetch('/api/pipeline/start_by_folders', {
                     method: 'POST',
@@ -586,18 +588,12 @@
                         alert(data.message);
                         startBtn.disabled = false;
                         startBtn.textContent = "▶ Start Pipeline";
-                        const line = document.createElement('div');
-                        line.textContent = 'Error: ' + data.message;
-                        line.style.color = 'red';
-                        consoleBox.appendChild(line);
+                        appendLog('Error: ' + data.message, 'red');
                     }
                 })
                 .catch(err => {
                     console.error('[API] Error:', err);
-                    const line = document.createElement('div');
-                    line.textContent = 'Request failed: ' + err;
-                    line.style.color = 'red';
-                    consoleBox.appendChild(line);
+                    appendLog('Request failed: ' + err, 'red');
                     startBtn.disabled = false;
                     startBtn.textContent = "▶ Start Pipeline";
                 });

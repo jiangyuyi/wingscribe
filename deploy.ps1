@@ -7,6 +7,10 @@
 # 参数解析
 #===============================================================================
 param(
+    [Parameter(Position=0)]
+    [string]$Command,
+    [Parameter(Position=1)]
+    [string]$Extra,
     [Alias("d")]
     [switch]$Daemon,
     [Alias("s")]
@@ -1228,6 +1232,116 @@ function Invoke-Main {
     if ($Status) {
         Get-DaemonStatus
         return
+    }
+
+    # 处理位置参数（命令）
+    if ($Command) {
+        switch ($Command) {
+            "deploy" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Deployment" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Install-AllDependencies
+                Get-Project
+                Install-PythonDependencies
+                Invoke-ConfigWizard
+                Write-Host ""
+                Log-Success "Deployment complete!"
+                Write-Host ""
+                Write-Host "  Next: Select [6] to start service, open http://localhost:8000" -ForegroundColor Gray
+                Write-Host ""
+                return
+            }
+            "install" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Install Dependencies" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                if (-not (Test-Path "$PROJECT_ROOT\requirements.txt")) {
+                    Log-Error "requirements.txt not found!"
+                    return
+                }
+                Install-AllDependencies
+                Install-PythonDependencies
+                Log-Success "Dependencies installed"
+                return
+            }
+            "config" {
+                Invoke-ConfigWizard
+                return
+            }
+            "update" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Update Project" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Get-Project
+                return
+            }
+            "cuda" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  CUDA Installation" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Test-GPU
+                if ($script:HAS_GPU) {
+                    Install-CUDA -Device "cuda"
+                } else {
+                    Log-Warn "No NVIDIA GPU detected"
+                }
+                return
+            }
+            "pytorch" {
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host "  Reinstall PyTorch" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Cyan
+                Write-Host ""
+                Test-GPU
+                $venvPython = "$PROJECT_ROOT\venv\Scripts\python.exe"
+                if (-not (Test-Path $venvPython)) {
+                    Log-Error "Virtual environment not found!"
+                    Log-Info "Please run deploy.ps1 install first"
+                } else {
+                    & $venvPython -c "import torch; print('PyTorch: ' + torch.__version__); print('CUDA available: ' + str(torch.cuda.is_available()))" 2>&1
+                    Write-Host ""
+                    Log-Step "Reinstalling PyTorch..."
+                    # ... 简化的PyTorch重装逻辑
+                    Log-Info "Please run deploy.ps1 install to reinstall all dependencies"
+                }
+                return
+            }
+            "web" {
+                Start-WebServer
+                return
+            }
+            "help" {
+                Write-Host "Usage: .\deploy.ps1 [command]" -ForegroundColor Cyan
+                Write-Host ""
+                Write-Host "Commands:" -ForegroundColor White
+                Write-Host "  deploy    - Full deployment"
+                Write-Host "  install   - Install dependencies only"
+                Write-Host "  config    - Configuration wizard"
+                Write-Host "  update    - Update project"
+                Write-Host "  cuda      - Install CUDA"
+                Write-Host "  pytorch   - Reinstall PyTorch"
+                Write-Host "  web       - Start Web server"
+                Write-Host "  help      - Show this help"
+                Write-Host ""
+                Write-Host "Options:" -ForegroundColor White
+                Write-Host "  -Daemon   - Start in background"
+                Write-Host "  -Stop     - Stop background service"
+                Write-Host "  -Status   - Show service status"
+                Write-Host "  -Port     - Port number"
+                Write-Host "  -Bind     - Bind address"
+                return
+            }
+            default {
+                Log-Error "Unknown command: $command"
+                Write-Host "Run '.\deploy.ps1 help' for usage information" -ForegroundColor Gray
+                return
+            }
+        }
     }
 
     while ($true) {

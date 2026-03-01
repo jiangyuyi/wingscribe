@@ -5,7 +5,7 @@
 
 WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它利用计算机视觉 (YOLOv8) 和多模态大模型 (BioCLIP) 技术，自动完成照片的**检测、筛选、物种识别、元数据注入**以及**层级归档**，并提供一个支持人工校对的本地 Web 界面。
 
-本项目是我个人的第一个从零开始完全使用Vibe Coding的项目，使用了Gemini CLI 、Claude Code with MiniMax2.1/GLM4.7，作为一个观鸟爱好者，图片库的识别和整理一直是我的一大痛点，这个项目也算是圆了几年前的一个小梦想。
+本项目是我个人的第一个从零开始完全使用Vibe Coding的项目，使用了Gemini CLI 、Claude Code with MiniMax2.5，作为一个观鸟爱好者，图片库的识别和整理一直是我的一大痛点，这个项目也算是圆了几年前的一个小梦想。
 
 本项目支持**本地 GPU/CPU 识别**和**云平台 API 识别**两种模式。
 
@@ -51,7 +51,7 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
 ## 🛠️ 环境要求
 
 * **操作系统**: Windows 10/11, macOS, 或 Linux。
-* **Python**: 3.10 或更高版本。
+* **Python**: 3.11, 不推荐使用Python 3.13, 环境配置会遇到很多问题。
 * **GPU (可选)**: 推荐使用 NVIDIA RTX 系列显卡以加速本地 BioCLIP 推理（需要 CUDA 12.1+）。
 
 ---
@@ -79,6 +79,10 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jiangyuyi/wingscribe/m
 #### Linux / macOS / WSL 用户
 
 ```bash
+#先创建一个空文件夹
+mkdir wingscribe
+cd wingscribe
+
 # 国内用户（Gitee，无需梯子）：
 curl -fsSL https://gitee.com/jiangyuyi/wingscribe/raw/master/deploy.sh -o deploy.sh && bash deploy.sh deploy
 
@@ -90,19 +94,19 @@ curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/deploy.
 
 #### 可用命令
 
-| 命令             | 说明                   |
-| ---------------- | ---------------------- |
-| `deploy`       | 完整部署流程 (推荐)   |
-| `install`      | 仅安装依赖             |
-| `config`       | 运行配置向导           |
-| `update`       | 更新项目               |
-| `cuda`         | 安装 CUDA (GPU 支持)   |
-| `pytorch`      | 重新安装 PyTorch      |
-| `web`          | 启动 Web 服务 (前台)  |
-| `-d`           | 后台启动服务           |
-| `-s`           | 停止后台服务           |
-| `-t`           | 查看服务状态           |
-| `help`         | 显示帮助               |
+| 命令        | 说明                 |
+| ----------- | -------------------- |
+| `deploy`  | 完整部署流程 (推荐)  |
+| `install` | 仅安装依赖           |
+| `config`  | 运行配置向导         |
+| `update`  | 更新项目             |
+| `cuda`    | 安装 CUDA (GPU 支持) |
+| `pytorch` | 重新安装 PyTorch     |
+| `web`     | 启动 Web 服务 (前台) |
+| `-d`      | 后台启动服务         |
+| `-s`      | 停止后台服务         |
+| `-t`      | 查看服务状态         |
+| `help`    | 显示帮助             |
 
 #### 后台服务管理
 
@@ -125,6 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/deploy.
 ```
 
 参数说明：
+
 - `-d, --daemon`: 后台启动服务
 - `-s, --stop`: 停止后台服务
 - `-t, --status`: 查看服务状态
@@ -430,6 +435,7 @@ crontab -e
 ```
 
 备份脚本特性：
+
 - 使用 SQLite `.backup` 命令，确保数据库正在使用时也能安全备份
 - 自动保留最近 7 天的备份
 - 备份文件命名格式: `wingscribe_YYYYMMDD_HHmmss.db`
@@ -545,11 +551,8 @@ while True:
 * **BioCLIP**: [https://imageomics.github.io/bioclip/](https://imageomics.github.io/bioclip/) (视觉模型)
 * **懂鸟**: [https://ai.open.hhodata.com/](https://ai.open.hhodata.com/) (中国鸟类识别 API)
 * **HuggingFace**: [https://huggingface.co/](https://huggingface.co/) (云端推理 API)
-* **魔搭社区**: [https://modelscope.cn/](https://modelscope.cn/) (国内模型服务)
-* **阿里云**: [https://www.aliyun.com/](https://www.aliyun.com/) (图像识别服务)
-* **百度智能云**: [https://ai.baidu.com/](https://ai.baidu.com/) (图像识别服务)
 
 ---
 
 **许可证**: MIT
-**作者**: 鱼酱 (with Gemini Assistant)
+**作者**: 鱼酱 (with Claude Code + Minimax2.5)

@@ -27,6 +27,7 @@ HAS_GPU=false
 CUDA_VERSION=""
 DRIVER_VERSION=""
 PID_FILE="${PROJECT_ROOT}/.wingscribe.pid"
+COMMAND=""
 
 #===============================================================================
 # 参数解析
@@ -70,6 +71,23 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_help
             exit 0
+            ;;
+        deploy|install|config|update|cuda|pytorch|web|help)
+            # 位置参数（命令），保存后退出循环
+            COMMAND="$1"
+            shift
+            break
+            ;;
+        d|i|c|u)
+            # 短命令别名
+            case "$1" in
+                d) COMMAND="deploy" ;;
+                i) COMMAND="install" ;;
+                c) COMMAND="config" ;;
+                u) COMMAND="update" ;;
+            esac
+            shift
+            break
             ;;
         *)
             echo "Unknown option: $1"
@@ -1314,7 +1332,7 @@ main() {
         return
     fi
 
-    local command="${1:-}"
+    local command="${COMMAND:-${1:-}}"
 
     # 如果有命令行参数，直接执行对应命令
     if [ -n "$command" ]; then

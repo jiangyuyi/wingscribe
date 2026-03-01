@@ -340,13 +340,9 @@
                         const isFolderMode = row.range_start && row.range_start.startsWith('Folders:');
                         let rangeHtml;
                         if (isFolderMode) {
-                            // For folder mode, show paths separated by <br>
-                            const startPaths = row.range_start.replace('Folders: ', '').split(',');
-                            const endPaths = row.range_end ? row.range_end.replace('Folders: ', '').split(',') : [];
-                            rangeHtml = startPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
-                            if (endPaths.length > 0) {
-                                rangeHtml += '<br>⬇<br>' + endPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
-                            }
+                            // For folder mode, show all paths separated by <br>
+                            const folderPaths = row.range_start.replace('Folders: ', '').split(',');
+                            rangeHtml = folderPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
                         } else {
                             // For date mode, show date range with arrow
                             rangeHtml = `${row.range_start}<br>⬇<br>${row.range_end}`;

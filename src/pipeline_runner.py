@@ -932,8 +932,8 @@ class FeatherTracePipeline:
         self.db.add_scan_history({
             'start_time': start_time_str,
             'end_time': end_time_str,
-            'range_start': "Folders: " + ",".join(folder_paths[:3]),
-            'range_end': "Folders: " + ",".join(folder_paths[-3:]) if len(folder_paths) > 3 else "",
+            'range_start': "Folders: " + ",".join(folder_paths),
+            'range_end': "",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
             'status': 'Completed'

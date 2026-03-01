@@ -342,7 +342,7 @@
                         if (isFolderMode) {
                             // For folder mode, show paths separated by <br>
                             const startPaths = row.range_start.replace('Folders: ', '').split(',');
-                            const endPaths = row.range_end ? row.range_end.split(',') : [];
+                            const endPaths = row.range_end ? row.range_end.replace('Folders: ', '').split(',') : [];
                             rangeHtml = startPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');
                             if (endPaths.length > 0) {
                                 rangeHtml += '<br>⬇<br>' + endPaths.map(p => `<span class="text-info">${p}</span>`).join('<br>');

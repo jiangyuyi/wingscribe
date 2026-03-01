@@ -653,6 +653,17 @@ def reset_system():
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
+@app.post("/api/admin/rebuild_stats")
+def rebuild_species_stats():
+    """重建物种统计表（首次使用或数据不一致时调用）"""
+    try:
+        manager = IOCManager(str(db_path))
+        manager.rebuild_species_stats()
+        manager.close()
+        return {"status": "success", "message": "Species stats table rebuilt"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
 @app.get("/api/search_species")
 def search_species(q: str):
     manager = IOCManager(str(db_path))
@@ -665,7 +676,11 @@ def get_taxonomy_tree(include_empty: bool = True, date: str = None):
     """获取分类树，支持显示/隐藏空层级和日期筛选"""
     manager = IOCManager(str(db_path))
     try:
-        tree = manager.get_taxonomy_tree(include_empty=include_empty, date_filter=date)
+        # Use fast method when no date filter (uses precomputed stats table)
+        if date:
+            tree = manager.get_taxonomy_tree(include_empty=include_empty, date_filter=date)
+        else:
+            tree = manager.get_taxonomy_tree_fast(include_empty=include_empty)
         return tree
     finally:
         manager.close()

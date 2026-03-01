@@ -142,6 +142,24 @@ class IOCManager:
         try: self.conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_date ON photos(captured_date)")
         except: pass
 
+        # Species Stats Table (for fast taxonomy tree queries)
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS species_stats (
+                scientific_name TEXT PRIMARY KEY,
+                photo_count INTEGER DEFAULT 0,
+                order_cn TEXT,
+                order_sci TEXT,
+                family_cn TEXT,
+                family_sci TEXT,
+                genus_cn TEXT,
+                genus_sci TEXT,
+                chinese_name TEXT,
+                english_name TEXT,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        try: self.conn.execute("CREATE INDEX IF NOT EXISTS idx_species_stats_count ON species_stats(photo_count DESC)")
+        except: pass
         self.conn.commit()
 
     def load_genus_mapping(self, cn_excel_path: str) -> Dict[str, str]:
@@ -729,15 +747,31 @@ class IOCManager:
         sql = f"INSERT INTO photos ({keys}) VALUES ({placeholders})"
         cursor = self.conn.execute(sql, values)
         self.conn.commit()
+
+        # Update species stats
+        if record.get('scientific_name'):
+            self.update_species_stats_for_photo(record['scientific_name'])
+
         return cursor.lastrowid
-        
+
     def update_photo_species(self, photo_id: int, scientific_name: str, chinese_name: str):
+        # Get old scientific_name before update
+        cursor = self.conn.execute("SELECT scientific_name FROM photos WHERE id = ?", (photo_id,))
+        row = cursor.fetchone()
+        old_sci_name = row[0] if row else None
+
         self.conn.execute('''
-            UPDATE photos 
+            UPDATE photos
             SET scientific_name = ?, primary_bird_cn = ?, confidence_score = 1.0
             WHERE id = ?
         ''', (scientific_name, chinese_name, photo_id))
         self.conn.commit()
+
+        # Update species stats for both old and new species
+        if old_sci_name:
+            self.update_species_stats_for_photo(old_sci_name)
+        if scientific_name:
+            self.update_species_stats_for_photo(scientific_name)
 
     def add_scan_history(self, record: Dict):
         keys = ', '.join(record.keys())
@@ -751,6 +785,168 @@ class IOCManager:
     def get_recent_scans(self, limit: int = 5) -> List[Dict]:
         cursor = self.conn.execute("SELECT * FROM scan_history ORDER BY id DESC LIMIT ?", (limit,))
         return [dict(row) for row in cursor.fetchall()]
+
+    # ========== Species Stats Table Methods ==========
+
+    def rebuild_species_stats(self):
+        """重建物种统计表（从 photos 表重新计算所有统计）"""
+        logging.info("Rebuilding species stats table...")
+
+        # Rebuild stats from photos table with taxonomy info
+        sql = '''
+            INSERT OR REPLACE INTO species_stats (
+                scientific_name, photo_count, order_cn, order_sci,
+                family_cn, family_sci, genus_cn, genus_sci,
+                chinese_name, english_name, last_updated
+            )
+            SELECT
+                t.scientific_name,
+                COUNT(DISTINCT p.id) as photo_count,
+                t.order_cn, t.order_sci,
+                t.family_cn, t.family_sci,
+                t.genus_cn, t.genus_sci,
+                t.chinese_name, t.english_name,
+                CURRENT_TIMESTAMP
+            FROM taxonomy t
+            LEFT JOIN photos p ON t.scientific_name = p.scientific_name
+            GROUP BY t.scientific_name
+        '''
+        self.conn.execute(sql)
+        self.conn.commit()
+        logging.info("Species stats table rebuilt")
+
+    def update_species_stats_for_photo(self, scientific_name: str):
+        """更新单个物种的统计（照片添加/修改后调用）"""
+        if not scientific_name:
+            return
+
+        sql = '''
+            INSERT OR REPLACE INTO species_stats (
+                scientific_name, photo_count, order_cn, order_sci,
+                family_cn, family_sci, genus_cn, genus_sci,
+                chinese_name, english_name, last_updated
+            )
+            SELECT
+                t.scientific_name,
+                COUNT(DISTINCT p.id) as photo_count,
+                t.order_cn, t.order_sci,
+                t.family_cn, t.family_sci,
+                t.genus_cn, t.genus_sci,
+                t.chinese_name, t.english_name,
+                CURRENT_TIMESTAMP
+            FROM taxonomy t
+            LEFT JOIN photos p ON t.scientific_name = p.scientific_name
+            WHERE t.scientific_name = ?
+            GROUP BY t.scientific_name
+        '''
+        self.conn.execute(sql, (scientific_name,))
+        self.conn.commit()
+
+    def get_species_stats_fast(self, min_count: int = 1) -> List[Dict]:
+        """快速获取有照片的物种统计（从预计算表）"""
+        cursor = self.conn.execute('''
+            SELECT * FROM species_stats
+            WHERE photo_count >= ?
+            ORDER BY photo_count DESC
+        ''', (min_count,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_taxonomy_tree_fast(self, include_empty: bool = False) -> List[Dict]:
+        """使用预计算统计表的快速分类树查询"""
+        # Get all stats
+        stats = self.get_species_stats_fast(min_count=0 if include_empty else 1)
+
+        # Build tree structure in memory
+        orders_dict = {}
+        for stat in stats:
+            order_cn = stat['order_cn'] or ''
+            order_sci = stat['order_sci'] or ''
+            family_cn = stat['family_cn'] or ''
+            family_sci = stat['family_sci'] or ''
+            genus_cn = stat['genus_cn'] or ''
+            genus_sci = stat['genus_sci'] or ''
+            count = stat['photo_count']
+
+            if not order_cn:
+                continue
+
+            # Get or create order
+            if order_cn not in orders_dict:
+                orders_dict[order_cn] = {
+                    'order_cn': order_cn,
+                    'order_sci': order_sci,
+                    'photo_count': 0,
+                    'families': {}
+                }
+            order = orders_dict[order_cn]
+            order['photo_count'] += count
+
+            # Get or create family
+            if family_cn and family_cn not in order['families']:
+                order['families'][family_cn] = {
+                    'family_cn': family_cn,
+                    'family_sci': family_sci,
+                    'photo_count': 0,
+                    'genera': {}
+                }
+            if family_cn:
+                family = order['families'][family_cn]
+                family['photo_count'] += count
+
+                # Get or create genus
+                if genus_sci and genus_sci not in family['genera']:
+                    family['genera'][genus_sci] = {
+                        'genus_cn': genus_cn,
+                        'genus_sci': genus_sci,
+                        'photo_count': 0,
+                        'species': []
+                    }
+                if genus_sci:
+                    genus = family['genera'][genus_sci]
+                    genus['photo_count'] += count
+                    genus['species'].append({
+                        'scientific_name': stat['scientific_name'],
+                        'chinese_name': stat['chinese_name'],
+                        'english_name': stat['english_name'],
+                        'photo_count': count
+                    })
+
+        # Convert to final structure
+        result = []
+        for order_cn, order in sorted(orders_dict.items()):
+            if not include_empty and order['photo_count'] == 0:
+                continue
+
+            families_data = []
+            for family_cn, family in sorted(order['families'].items()):
+                if not include_empty and family['photo_count'] == 0:
+                    continue
+
+                genera_data = []
+                for genus_sci, genus in sorted(family['genera'].items()):
+                    if not include_empty and genus['photo_count'] == 0:
+                        continue
+
+                    species_list = genus['species']
+                    if not include_empty:
+                        species_list = [sp for sp in species_list if sp['photo_count'] > 0]
+
+                    if include_empty or species_list:
+                        genus['species_count'] = len(species_list)
+                        genus['species'] = species_list
+                        genera_data.append(genus)
+
+                if include_empty or genera_data:
+                    family['genera_count'] = len(genera_data)
+                    family['genera'] = genera_data
+                    families_data.append(family)
+
+            if include_empty or families_data:
+                order['families_count'] = len(families_data)
+                order['families'] = families_data
+                result.append(order)
+
+        return result
 
     def close(self):
         self.conn.close()

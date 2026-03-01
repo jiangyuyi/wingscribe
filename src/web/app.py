@@ -472,7 +472,7 @@ IGNORED_DIRS = {'@Recycle', '$RECYCLE.BIN', '.Trash-', '@eaDir', 'System Volume 
 
 @app.get("/api/pipeline/folders")
 def get_folder_tree():
-    """获取 sources 配置的文件夹树形结构"""
+    """获取 sources 配置的文件夹树形结构（只返回第一层）"""
     try:
         sources = config.get('paths', {}).get('sources', [])
         if not sources:
@@ -495,14 +495,38 @@ def get_folder_tree():
             if not full_path.exists():
                 continue
 
-            # Build tree from this path, pass path_str for relative path calculation
-            folder_tree = _build_folder_tree(full_path, source.get('recursive', True), path_str)
+            # Build tree from this path, only first level (lazy load children)
+            folder_tree = _build_folder_tree(full_path, recursive=False, base_rel_path=path_str, max_depth=1)
             tree.extend(folder_tree)
 
         return {"tree": tree}
     except Exception as e:
         logger.error(f"Error building folder tree: {e}")
         return {"tree": [], "error": str(e)}
+
+
+@app.get("/api/pipeline/folders/{full_path:path}")
+def get_folder_children(full_path: str):
+    """获取指定路径的子目录（懒加载）"""
+    try:
+        base_dir = config.get('paths', {}).get('base_dir', '')
+
+        # Resolve full_path relative to base_dir
+        if base_dir and not Path(full_path).is_absolute():
+            current_path = Path(base_dir) / full_path
+        else:
+            current_path = Path(full_path)
+
+        if not current_path.exists() or not current_path.is_dir():
+            return {"children": []}
+
+        # Build one level of children
+        children = _build_folder_tree(current_path, recursive=False, base_rel_path=full_path, max_depth=1)
+
+        return {"children": children}
+    except Exception as e:
+        logger.error(f"Error getting folder children: {e}")
+        return {"children": [], "error": str(e)}
 
 def _build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = "", max_depth: int = 5, current_depth: int = 0):
     """递归构建文件夹树

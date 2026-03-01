@@ -25,6 +25,70 @@
             color: #fff;
             border-bottom-color: #212529;
         }
+        /* 文件夹树样式 - 完全仿VS Code */
+        #folder-tree {
+            background: #1e1e1e;
+            color: #cccccc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            border-radius: 4px;
+            padding: 4px 0;
+        }
+        #folder-tree ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        #folder-tree li {
+            display: block;
+            width: 100%;
+        }
+        #folder-tree .folder-row {
+            display: flex;
+            align-items: center;
+            padding: 2px 8px;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        #folder-tree .folder-row:hover {
+            background: #2a2d2e;
+        }
+        #folder-tree .folder-row.selected {
+            background: #094771;
+        }
+        #folder-tree .folder-arrow {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 4px;
+            color: #aaaaaa;
+            font-size: 10px;
+            line-height: 16px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        #folder-tree .folder-arrow:hover {
+            color: #ffffff;
+        }
+        #folder-tree .folder-checkbox {
+            margin-right: 6px;
+            accent-color: #4fc3f7;
+        }
+        #folder-tree .folder-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #folder-tree .folder-children {
+            margin-left: 18px;
+        }
+        /* 选中的文件夹列表 */
+        #selected-paths {
+            background: #1e1e1e;
+            color: #4fc3f7;
+            font-family: monospace;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -61,8 +125,8 @@
         </div>
 
         <div class="row">
-            <!-- Pipeline Control -->
-            <div class="col-md-8">
+            <!-- Pipeline Control - Full Width -->
+            <div class="col-12">
                 <div class="card mb-4">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Batch Processing</h5>
@@ -104,24 +168,26 @@
 
                             <!-- Folder Panel -->
                             <div class="tab-pane fade" id="folder-panel" role="tabpanel">
-                                <div class="row">
-                                    <div class="col-md-5">
-                                        <div class="small text-muted mb-2">Select folders to process:</div>
-                                        <div id="folder-tree" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
-                                            <div class="text-center text-muted">Loading...</div>
-                                        </div>
-                                        <div class="mt-2">
-                                            <label class="form-check">
-                                                <input type="checkbox" id="recursive-folders" class="form-check-input" checked>
-                                                <span class="form-check-label small">Include subfolders</span>
-                                            </label>
-                                        </div>
-                                        <div class="mt-2 small text-info" id="selected-count">0 folders selected</div>
+                                <!-- 已选列表在顶部 -->
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="small text-muted">Selected folders:</span>
+                                        <span class="small text-info" id="selected-count">0 selected</span>
                                     </div>
-                                    <div class="col-md-7">
-                                        <div class="small text-muted mb-2">Selected paths:</div>
-                                        <textarea id="selected-paths" class="form-control form-control-sm bg-secondary text-white border-0" rows="5" readonly placeholder="No folders selected"></textarea>
+                                    <textarea id="selected-paths" class="form-control form-control-sm" rows="3" readonly placeholder="Click folders below to select..."></textarea>
+                                </div>
+                                <!-- 文件夹树在下方 -->
+                                <div class="mb-2">
+                                    <div class="small text-muted mb-2">Available folders (click to select):</div>
+                                    <div id="folder-tree" style="max-height: 250px; overflow-y: auto;">
+                                        <div class="text-center text-muted py-3">Loading...</div>
                                     </div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-check">
+                                        <input type="checkbox" id="recursive-folders" class="form-check-input" checked>
+                                        <span class="form-check-label small">Include subfolders</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -152,10 +218,8 @@
                         </table>
                     </div>
                 </div>
-            </div>
 
-            <!-- Danger Zone -->
-            <div class="col-md-4">
+                <!-- Danger Zone - 移到下面 -->
                 <div class="card border-danger mb-4">
                     <div class="card-header bg-danger text-white">Danger Zone</div>
                     <div class="card-body">
@@ -260,49 +324,114 @@
                 });
         }
 
+        // Cache for loaded children
+        const childrenCache = {};
+
         function renderFolderTree(nodes, container) {
             if (!nodes || nodes.length === 0) {
-                container.innerHTML = '<div class="text-muted small">No folders found</div>';
+                container.innerHTML = '<div class="text-muted small py-2">No folders found</div>';
                 return;
             }
             const ul = document.createElement('ul');
-            ul.className = 'list-unstyled mb-0';
-            ul.style.marginLeft = '1rem';
 
             nodes.forEach(node => {
                 const li = document.createElement('li');
-                li.className = 'form-check';
 
+                // 行容器
+                const row = document.createElement('div');
+                row.className = 'folder-row';
+
+                // Check if has children in cache
+                const hasCachedChildren = childrenCache[node.path] && childrenCache[node.path].length > 0;
+
+                // Expand/collapse arrow
+                const arrowSpan = document.createElement('span');
+                arrowSpan.className = 'folder-arrow';
+                if (hasCachedChildren) {
+                    arrowSpan.textContent = '▼';
+                    arrowSpan.dataset.loaded = 'true';
+                } else {
+                    arrowSpan.textContent = '▶';
+                    arrowSpan.dataset.loaded = 'false';
+                }
+
+                // Click arrow to load/collapse children
+                arrowSpan.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const path = node.path;
+
+                    if (arrowSpan.dataset.loaded === 'true') {
+                        // Collapse - hide children
+                        const childLi = li.querySelector('.folder-children');
+                        if (childLi) {
+                            childLi.remove();
+                        }
+                        arrowSpan.textContent = '▶';
+                        arrowSpan.dataset.loaded = 'false';
+                    } else if (arrowSpan.dataset.loaded === 'false') {
+                        // Expand - load children from server
+                        arrowSpan.textContent = '⏳';
+                        try {
+                            const resp = await fetch(`/api/pipeline/folders/${encodeURIComponent(path)}`);
+                            const data = await resp.json();
+                            if (data.children && data.children.length > 0) {
+                                childrenCache[path] = data.children;
+                                const childUl = document.createElement('ul');
+                                childUl.className = 'folder-children';
+                                renderFolderTree(data.children, childUl);
+                                li.appendChild(childUl);
+                                arrowSpan.textContent = '▼';
+                                arrowSpan.dataset.loaded = 'true';
+                            } else {
+                                arrowSpan.textContent = '📁';
+                                arrowSpan.dataset.loaded = 'leaf';
+                            }
+                        } catch (err) {
+                            console.error('Failed to load children:', err);
+                            arrowSpan.textContent = '▶';
+                        }
+                    }
+                });
+
+                // Checkbox
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.className = 'form-check-input folder-checkbox';
+                checkbox.className = 'folder-checkbox';
                 checkbox.value = node.path;
                 checkbox.dataset.name = node.name;
 
                 if (selectedFolders.has(node.path)) {
                     checkbox.checked = true;
+                    row.classList.add('selected');
                 }
 
                 checkbox.addEventListener('change', (e) => {
                     if (e.target.checked) {
                         selectedFolders.add(node.path);
+                        row.classList.add('selected');
                     } else {
                         selectedFolders.delete(node.path);
+                        row.classList.remove('selected');
                     }
                     updateSelectedPaths();
                 });
 
-                const label = document.createElement('label');
-                label.className = 'form-check-label small';
-                label.appendChild(document.createTextNode(' ' + node.name));
+                // Folder name
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'folder-name';
+                nameSpan.textContent = node.name;
 
-                li.appendChild(checkbox);
-                li.appendChild(label);
+                // Click on name also toggles selection
+                nameSpan.addEventListener('click', () => {
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                });
+
+                row.appendChild(arrowSpan);
+                row.appendChild(checkbox);
+                row.appendChild(nameSpan);
+                li.appendChild(row);
                 ul.appendChild(li);
-
-                if (node.children && node.children.length > 0) {
-                    renderFolderTree(node.children, li);
-                }
             });
 
             container.innerHTML = '';

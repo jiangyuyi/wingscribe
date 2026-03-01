@@ -1,75 +1,94 @@
 # WingScribe Database Backup Script (Windows PowerShell)
 # ============================================================
 #
-# 用途: 备份 SQLite 数据库文件
-# 特性: 使用 SQLite .backup 命令确保备份安全（支持数据库正在使用时备份）
+# Usage: Backup SQLite database safely using Python sqlite3 module
 #
-# 使用方法:
-#   .\backup_db.ps1 -Source "data\db\wingscribe.db" -Destination "Y:\备份\wingscribe"
+# Examples:
+#   .\backup_db.ps1 -Source "..\data\db\wingscribe.db" -Destination "Y:\Backup\wingscribe"
 #
-# 参数:
-#   -Source     源数据库文件路径 (默认: data\db\wingscribe.db)
-#   -Destination 备份目标目录 (默认: Y:\备份\wingscribe)
-#   -KeepDays   保留最近几天的备份 (默认: 7)
+# Parameters:
+#   -Source      Source database file (default: ..\data\db\wingscribe.db)
+#   -Destination Backup destination directory (default: Y:\Backup\wingscribe)
+#   -KeepDays    Number of days to keep backups (default: 7)
 #
-# 定时任务设置 (每天凌晨 3 点执行):
+# Schedule as daily task (3 AM):
 #   schtasks /create /tn "WingScribe Backup" /tr "powershell -File C:\path\to\scripts\backup_db.ps1" /sc daily /st 03:00
 #
 # ============================================================
 
 param(
-    [string]$Source = "data\db\wingscribe.db",      # 源数据库文件（相对于当前目录）
-    [string]$Destination = "Y:\备份\wingscribe",      # 备份目标目录
-    [int]$KeepDays = 7                               # 保留最近几天的备份
+    [string]$Source = "..\data\db\wingscribe.db",
+    [string]$Destination = "Y:\Backup\wingscribe",
+    [int]$KeepDays = 7
 )
 
 $ErrorActionPreference = "Stop"
 
-# 解析绝对路径
+# Resolve absolute paths
 $SourcePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Source)
 $DestDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
 
-# 检查源文件是否存在
+# Check source file exists
 if (-not (Test-Path $SourcePath)) {
-    Write-Host "错误: 源数据库文件不存在: $SourcePath" -ForegroundColor Red
+    Write-Host "Error: Source database file not found: $SourcePath" -ForegroundColor Red
     exit 1
 }
 
-# 创建目标目录（如果不存在）
+# Create destination directory if needed
 if (-not (Test-Path $DestDir)) {
-    Write-Host "创建备份目录: $DestDir" -ForegroundColor Yellow
+    Write-Host "Creating backup directory: $DestDir" -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
 }
 
-# 生成备份文件名（带时间戳）
+# Generate backup filename with timestamp
 $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $BackupFileName = "wingscribe_$Timestamp.db"
 $BackupPath = Join-Path $DestDir $BackupFileName
 
-Write-Host "开始备份数据库..." -ForegroundColor Cyan
-Write-Host "  源文件: $SourcePath"
-Write-Host "  目标文件: $BackupPath"
+Write-Host "Starting database backup..." -ForegroundColor Cyan
+Write-Host "  Source: $SourcePath"
+Write-Host "  Target: $BackupPath"
 
-# 使用 sqlite3 .backup 命令进行安全备份
-$sqliteCmd = "sqlite3 `"$SourcePath`" `".backup '$BackupPath'`""
+# Use Python sqlite3 for backup
+$pythonScript = @"
+import sqlite3
+import sys
+try:
+    source = r'$SourcePath'
+    target = r'$BackupPath'
+    conn = sqlite3.connect(source)
+    backup = sqlite3.connect(target)
+    conn.backup(backup)
+    backup.close()
+    conn.close()
+    print('OK')
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+"@
 
 try {
-    Invoke-Expression $sqliteCmd
+    $result = python -c $pythonScript 2>&1
 
-    if (Test-Path $BackupPath) {
-        $fileSize = (Get-Item $BackupPath).Length / 1MB
-        Write-Host "备份成功! 文件大小: $([math]::Round($fileSize, 2)) MB" -ForegroundColor Green
+    if ($LASTEXITCODE -eq 0 -and $result -eq "OK") {
+        if (Test-Path $BackupPath) {
+            $fileSize = (Get-Item $BackupPath).Length / 1MB
+            Write-Host "Backup successful! File size: $([math]::Round($fileSize, 2)) MB" -ForegroundColor Green
+        } else {
+            Write-Host "Error: Backup file was not created" -ForegroundColor Red
+            exit 1
+        }
     } else {
-        Write-Host "错误: 备份文件未创建" -ForegroundColor Red
+        Write-Host "Error: Backup failed - $result" -ForegroundColor Red
         exit 1
     }
 } catch {
-    Write-Host "错误: 备份失败 - $_" -ForegroundColor Red
+    Write-Host "Error: Failed to run Python - $_" -ForegroundColor Red
     exit 1
 }
 
-# 清理旧备份（保留最近 N 天）
-Write-Host "清理旧备份（保留最近 $KeepDays 天）..." -ForegroundColor Cyan
+# Clean old backups (keep last N days)
+Write-Host "Cleaning old backups (keeping last $KeepDays days)..." -ForegroundColor Cyan
 
 $CutoffDate = (Get-Date).AddDays(-$KeepDays)
 $OldBackups = Get-ChildItem -Path $DestDir -Filter "wingscribe_*.db" |
@@ -77,16 +96,16 @@ $OldBackups = Get-ChildItem -Path $DestDir -Filter "wingscribe_*.db" |
 
 if ($OldBackups) {
     foreach ($file in $OldBackups) {
-        Write-Host "  删除: $($file.Name)" -ForegroundColor Yellow
+        Write-Host "  Deleting: $($file.Name)" -ForegroundColor Yellow
         Remove-Item $file.FullName -Force
     }
-    Write-Host "已清理 $($OldBackups.Count) 个旧备份" -ForegroundColor Green
+    Write-Host "Cleaned $($OldBackups.Count) old backup(s)" -ForegroundColor Green
 } else {
-    Write-Host "没有需要清理的旧备份" -ForegroundColor Gray
+    Write-Host "No old backups to clean" -ForegroundColor Gray
 }
 
-# 显示当前备份列表
-Write-Host "`n当前备份列表:" -ForegroundColor Cyan
+# Show current backup list
+Write-Host "`nCurrent backup list:" -ForegroundColor Cyan
 Get-ChildItem -Path $DestDir -Filter "wingscribe_*.db" |
     Sort-Object LastWriteTime -Descending |
     ForEach-Object {
@@ -94,4 +113,4 @@ Get-ChildItem -Path $DestDir -Filter "wingscribe_*.db" |
         Write-Host "  $($_.Name) - $size MB - $($_.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))"
     }
 
-Write-Host "`n备份完成!" -ForegroundColor Green
+Write-Host "`nBackup complete!" -ForegroundColor Green

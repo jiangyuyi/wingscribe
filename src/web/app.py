@@ -202,12 +202,15 @@ def is_absolute_path(p: str) -> bool:
         return True
     return False
 
-# Resolve db_path - based on base_dir
-db_path_config = config['paths'].get('db_path', 'data/db/wingscribe.db')
-if is_absolute_path(db_path_config):
+# Resolve db_path - independent of base_dir (relative to current working directory if not set)
+db_path_config = config['paths'].get('db_path')
+if db_path_config is None:
+    # Default: relative to current working directory
+    db_path = Path('data/db/wingscribe.db')
+elif is_absolute_path(db_path_config):
     db_path = Path(db_path_config)
 else:
-    db_path = base_dir / db_path_config if base_dir else BASE_DIR / db_path_config
+    db_path = Path(db_path_config)
 
 # Handle output.root_dir - based on base_dir
 output_root = config['paths']['output']['root_dir']

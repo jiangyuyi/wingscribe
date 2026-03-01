@@ -11,7 +11,8 @@ from pathlib import Path
 from datetime import datetime
 
 # Add project root to sys.path to allow running as script
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(PROJECT_ROOT)
 
 from src.metadata.ioc_manager import IOCManager
 from src.core.detector import BirdDetector
@@ -110,12 +111,15 @@ class FeatherTracePipeline:
         # Get base_dir for relative path storage
         base_dir = self.config.get('paths', {}).get('base_dir', '')
 
-        # Resolve db_path - based on base_dir
-        db_path_config = self.config['paths'].get('db_path', 'data/db/wingscribe.db')
-        if Path(db_path_config).is_absolute():
+        # Resolve db_path - independent of base_dir (relative to cwd if not set)
+        db_path_config = self.config['paths'].get('db_path')
+        if db_path_config is None:
+            # Default: relative to current working directory
+            db_path = Path('data/db/wingscribe.db')
+        elif Path(db_path_config).is_absolute():
             db_path = Path(db_path_config)
         else:
-            db_path = Path(base_dir) / db_path_config if base_dir else Path(db_path_config)
+            db_path = Path(db_path_config)
 
         self.db = IOCManager(str(db_path), base_dir)
         self.device = self.config['processing'].get('device', 'cpu')

@@ -384,6 +384,58 @@ paths:
 
 ---
 
+### 4. 数据库配置与备份
+
+WingScribe 使用 SQLite 数据库，默认存储在运行目录下。建议将数据库放在本地以获得最佳性能，并将备份保存到 NAS。
+
+#### 4.1 数据库路径配置
+
+数据库路径 (`db_path`) 独立于 `base_dir`，支持以下配置方式：
+
+```yaml
+paths:
+  # 照片基准目录
+  base_dir: "Y:/我的照片/2026"
+
+  # 数据库路径（可选，不写则默认使用运行目录下的 data/db/wingscribe.db）
+  # 推荐配置为本地路径以提升性能
+  # db_path: "C:/Users/jiang/data/wingscribe.db"  # 绝对路径（推荐放本地）
+  # db_path: "data/db/wingscribe.db"              # 相对路径（相对于运行目录）
+```
+
+#### 4.2 定时备份
+
+项目提供了备份脚本，支持自动清理旧备份。
+
+**Windows PowerShell:**
+
+```powershell
+# 手动执行
+.\scripts\backup_db.ps1 -Source "data\db\wingscribe.db" -Destination "Y:\备份\wingscribe"
+
+# 设置定时任务（每天凌晨 3 点）
+schtasks /create /tn "WingScribe Backup" /tr "powershell -File C:\path\to\scripts\backup_db.ps1 -Destination Y:\备份\wingscribe" /sc daily /st 03:00
+```
+
+**Linux/macOS:**
+
+```bash
+# 手动执行
+./scripts/backup_db.sh "data/db/wingscribe.db" "/mnt/nas/backup/wingscribe" 7
+
+# 设置定时任务 (crontab)
+crontab -e
+# 添加以下行:
+# 0 3 * * * /path/to/wingscribe/scripts/backup_db.sh >> /var/log/wingscribe_backup.log 2>&1
+```
+
+备份脚本特性：
+- 使用 SQLite `.backup` 命令，确保数据库正在使用时也能安全备份
+- 自动保留最近 7 天的备份
+- 备份文件命名格式: `wingscribe_YYYYMMDD_HHmmss.db`
+
+---
+
 ### 5. NAS / 远程存储
 
 要处理存储在 NAS (群晖, 威联通等) 上的照片，您必须先将网络共享挂载为本地驱动器。

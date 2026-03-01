@@ -720,3 +720,41 @@ status_daemon() {
     fi
 }
 ```
+
+---
+
+### 26. SQLite 数据库本地存储与定期备份 [已完成]
+**目标**: 将 SQLite 数据库文件放在本地目录（而非 NAS），并实现定期备份
+
+**背景**:
+- 当前数据库文件存储在 NAS 上（base_dir 目录下）
+- SQLite 不适合网络存储（性能差、锁问题）
+- 需要将 db_path 独立于 base_dir 配置
+
+**实现**:
+1. **db_path 独立配置**:
+   - 不设置时，默认相对于运行目录 (`data/db/wingscribe.db`)
+   - 支持绝对路径（如 `C:/Users/jiang/data/wingscribe.db`）
+   - 支持相对路径（相对于运行目录）
+
+2. **备份脚本**:
+   - 使用 SQLite `.backup` 命令确保安全
+   - 支持自定义源目录和目标目录
+   - 自动清理 7 天前的旧备份
+
+**修改文件**:
+- [X] `src/web/app.py` - db_path 路径解析逻辑
+- [X] `src/pipeline_runner.py` - db_path 路径解析逻辑
+- [X] `config/settings.yaml` - 添加注释说明
+- [X] `config/settings.example.yaml` - 更新示例
+- [X] `scripts/backup_db.ps1` - Windows 备份脚本
+- [X] `scripts/backup_db.sh` - Linux/macOS 备份脚本
+
+**使用方法**:
+```bash
+# Windows
+.\scripts\backup_db.ps1 -Source "data\db\wingscribe.db" -Destination "Y:\备份\wingscribe"
+
+# Linux
+./scripts/backup_db.sh "data/db/wingscribe.db" "/mnt/nas/backup/wingscribe" 7
+```

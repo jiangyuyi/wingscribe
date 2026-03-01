@@ -13,6 +13,16 @@
 
 ---
 
+### 任务 26: SQLite 数据库本地存储与定期备份 [已完成]
+**状态**: ✅ 完成
+
+**实现**:
+- db_path 默认相对于运行目录，不设置时自动使用 `data/db/wingscribe.db`
+- 支持绝对路径配置
+- 创建备份脚本: `scripts/backup_db.ps1` (Windows) / `scripts/backup_db.sh` (Linux)
+
+---
+
 ### 任务 21.x 修复文件夹路径和UI问题 [已完成]
 **状态**: ✅ 完成 (提交: `60baad9`)
 

@@ -34,8 +34,11 @@ paths:
     # 是否将元数据写回原始照片 (慎用！这会修改您的原始素材)
     write_back_to_source: false
 
-  # 数据库路径：相对于 base_dir
-  db_path: "data/db/wingscribe.db"
+  # 数据库路径：独立于 base_dir
+  # - 不写此配置时，默认使用相对于运行目录的 "data/db/wingscribe.db"
+  # - 支持绝对路径，如 "C:/Users/jiang/data/wingscribe.db"（推荐：放本地以提升性能）
+  # - 支持相对路径，相对于运行目录
+  # db_path: "data/db/wingscribe.db"
 
   # IOC 鸟类分类数据 Excel 文件路径：相对于 base_dir
   ioc_list_path: "data/references/Multiling IOC 15.1_d.xlsx"

@@ -653,7 +653,7 @@ def reset_system():
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
-@app.post("/api/admin/rebuild_stats")
+@app.get("/api/admin/rebuild_stats")
 def rebuild_species_stats():
     """重建物种统计表（首次使用或数据不一致时调用）"""
     try:

@@ -1086,6 +1086,7 @@ function Start-Daemon {
 
         Log-Success "服务已启动: http://$Bind`:$Port (PID: $($process.Id))"
         Log-Info "日志输出: $PROJECT_ROOT\wingscribe_out.log"
+        Log-Info "首次启动后请调用 http://$Bind`:$Port/api/admin/rebuild_stats 重建物种统计表"
         return $true
     } else {
         Log-Error "启动服务失败"

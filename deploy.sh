@@ -1115,6 +1115,7 @@ start_daemon() {
         echo "{\"pid\":$pid,\"port\":$PORT,\"bind\":\"$BIND\",\"time\":\"$(date '+%Y-%m-%d %H:%M:%S')\"}" > "$PID_FILE"
         log_success "服务已启动: http://${BIND}:${PORT} (PID: $pid)"
         log_info "日志输出: ${PROJECT_ROOT}/wingscribe_out.log"
+        log_info "首次启动后请调用 http://${BIND}:${PORT}/api/admin/rebuild_stats 重建物种统计表"
         return 0
     else
         log_error "启动服务失败"

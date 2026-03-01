@@ -136,6 +136,12 @@ class IOCManager:
 
             self.conn.commit()
 
+        # Create indexes for photos table (for taxonomy tree queries)
+        try: self.conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_sci_name ON photos(scientific_name)")
+        except: pass
+        try: self.conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_date ON photos(captured_date)")
+        except: pass
+
         self.conn.commit()
 
     def load_genus_mapping(self, cn_excel_path: str) -> Dict[str, str]:
@@ -445,124 +451,129 @@ class IOCManager:
             分类树列表，每个元素是一个目（Order）对象，包含其下的科、属、物种
         """
         # Build WHERE clause for date filter if needed
+        date_join = ""
         date_where = ""
         params = []
         if date_filter:
-            date_where = "AND p.captured_date = ?"
+            date_join = "JOIN photos p2 ON p.scientific_name = p2.scientific_name"
+            date_where = "AND p2.captured_date = ?"
             params.append(date_filter)
 
-        # Get all orders
-        orders_sql = f'''
-            SELECT DISTINCT order_cn, order_sci
-            FROM taxonomy
-            WHERE order_cn IS NOT NULL AND order_cn != ''
-            ORDER BY order_cn
+        # Step 1: Get all taxonomy data with photo counts in ONE query
+        # This replaces the 12,500+ individual queries with a single efficient query
+        sql = f'''
+            SELECT
+                t.order_cn, t.order_sci,
+                t.family_cn, t.family_sci,
+                t.genus_cn, t.genus_sci,
+                t.scientific_name, t.chinese_name, t.english_name,
+                COUNT(DISTINCT p.id) as photo_count
+            FROM taxonomy t
+            LEFT JOIN photos p ON t.scientific_name = p.scientific_name
+            {date_join}
+            WHERE t.order_cn IS NOT NULL AND t.order_cn != ''
+            GROUP BY t.scientific_name
+            ORDER BY t.order_cn, t.family_cn, t.genus_cn, t.chinese_name
         '''
-        orders = [dict(row) for row in self.conn.execute(orders_sql)]
+        rows = self.conn.execute(sql, params).fetchall()
 
+        # Step 2: Build tree structure in memory (O(n) instead of O(n*k))
+        # Using dictionaries for O(1) lookup
+        orders_dict = {}
+        families_dict = {}
+        genera_dict = {}
+
+        for row in rows:
+            order_cn = row['order_cn']
+            order_sci = row['order_sci']
+            family_cn = row['family_cn'] or ''
+            family_sci = row['family_sci'] or ''
+            genus_cn = row['genus_cn'] or ''
+            genus_sci = row['genus_sci'] or ''
+            sci_name = row['scientific_name']
+            cn_name = row['chinese_name']
+            en_name = row['english_name']
+            count = row['photo_count']
+
+            # Skip empty entries if not requested
+            if not include_empty and count == 0:
+                # But we still need to include species if parent has photos
+                pass
+
+            # Get or create order
+            if order_cn not in orders_dict:
+                orders_dict[order_cn] = {
+                    'order_cn': order_cn,
+                    'order_sci': order_sci,
+                    'photo_count': 0,
+                    'families': {}
+                }
+            order = orders_dict[order_cn]
+            order['photo_count'] += count
+
+            # Get or create family
+            if family_cn and family_cn not in orders_dict[order_cn]['families']:
+                orders_dict[order_cn]['families'][family_cn] = {
+                    'family_cn': family_cn,
+                    'family_sci': family_sci,
+                    'photo_count': 0,
+                    'genera': {}
+                }
+            if family_cn:
+                family = orders_dict[order_cn]['families'][family_cn]
+                family['photo_count'] += count
+
+                # Get or create genus
+                if genus_sci and genus_sci not in family['genera']:
+                    family['genera'][genus_sci] = {
+                        'genus_cn': genus_cn,
+                        'genus_sci': genus_sci,
+                        'photo_count': 0,
+                        'species': []
+                    }
+                if genus_sci:
+                    genus = family['genera'][genus_sci]
+                    genus['photo_count'] += count
+                    genus['species'].append({
+                        'scientific_name': sci_name,
+                        'chinese_name': cn_name,
+                        'english_name': en_name,
+                        'photo_count': count
+                    })
+
+        # Step 3: Convert to final structure, filtering out empty entries
         result = []
-        for order in orders:
-            # Count photos for this order
-            order_count_sql = f'''
-                SELECT COUNT(DISTINCT p.id)
-                FROM taxonomy t
-                LEFT JOIN photos p ON t.scientific_name = p.scientific_name
-                WHERE t.order_cn = ? AND t.order_sci = ?
-                {date_where}
-            '''
-            order_count = self.conn.execute(order_count_sql, [order['order_cn'], order['order_sci']] + params).fetchone()[0]
-
-            if not include_empty and order_count == 0:
+        for order_cn, order in sorted(orders_dict.items()):
+            if not include_empty and order['photo_count'] == 0:
                 continue
 
-            # Get families for this order
-            families_sql = f'''
-                SELECT DISTINCT family_cn, family_sci
-                FROM taxonomy
-                WHERE order_cn = ? AND family_cn IS NOT NULL AND family_cn != ''
-                ORDER BY family_cn
-            '''
-            families = [dict(row) for row in self.conn.execute(families_sql, [order['order_cn']])]
-
             families_data = []
-            for family in families:
-                # Count photos for this family
-                family_count_sql = f'''
-                    SELECT COUNT(DISTINCT p.id)
-                    FROM taxonomy t
-                    LEFT JOIN photos p ON t.scientific_name = p.scientific_name
-                    WHERE t.family_cn = ? AND t.family_sci = ?
-                    {date_where}
-                '''
-                family_count = self.conn.execute(family_count_sql, [family['family_cn'], family['family_sci']] + params).fetchone()[0]
-
-                if not include_empty and family_count == 0:
+            for family_cn, family in sorted(order['families'].items()):
+                if not include_empty and family['photo_count'] == 0:
                     continue
 
-                # Get genera for this family
-                genera_sql = f'''
-                    SELECT DISTINCT genus_cn, genus_sci
-                    FROM taxonomy
-                    WHERE family_cn = ? AND genus_sci IS NOT NULL AND genus_sci != ''
-                    ORDER BY genus_sci
-                '''
-                genera = [dict(row) for row in self.conn.execute(genera_sql, [family['family_cn']])]
-
                 genera_data = []
-                for genus in genera:
-                    # Count photos for this genus
-                    genus_count_sql = f'''
-                        SELECT COUNT(DISTINCT p.id)
-                        FROM taxonomy t
-                        LEFT JOIN photos p ON t.scientific_name = p.scientific_name
-                        WHERE t.genus_sci = ?
-                        {date_where}
-                    '''
-                    genus_count = self.conn.execute(genus_count_sql, [genus['genus_sci']] + params).fetchone()[0]
-
-                    if not include_empty and genus_count == 0:
+                for genus_sci, genus in sorted(family['genera'].items()):
+                    if not include_empty and genus['photo_count'] == 0:
                         continue
 
-                    # Get species for this genus
-                    species_sql = f'''
-                        SELECT scientific_name, chinese_name, english_name
-                        FROM taxonomy
-                        WHERE genus_sci = ?
-                        ORDER BY chinese_name
-                    '''
-                    species_list = [dict(row) for row in self.conn.execute(species_sql, [genus['genus_sci']])]
+                    # Filter species: keep only those with photos or if include_empty
+                    species_list = genus['species']
+                    if not include_empty:
+                        species_list = [sp for sp in species_list if sp['photo_count'] > 0]
 
-                    # Count photos for each species
-                    species_data = []
-                    for sp in species_list:
-                        species_count_sql = f'''
-                            SELECT COUNT(DISTINCT p.id)
-                            FROM taxonomy t
-                            LEFT JOIN photos p ON t.scientific_name = p.scientific_name
-                            WHERE t.scientific_name = ?
-                            {date_where}
-                        '''
-                        species_count = self.conn.execute(species_count_sql, [sp['scientific_name']] + params).fetchone()[0]
-
-                        if include_empty or species_count > 0:
-                            sp['photo_count'] = species_count
-                            species_data.append(sp)
-
-                    if include_empty or species_data:
-                        genus['species_count'] = len(species_data)
-                        genus['photo_count'] = genus_count
-                        genus['species'] = species_data
+                    if include_empty or species_list:
+                        genus['species_count'] = len(species_list)
+                        genus['species'] = species_list
                         genera_data.append(genus)
 
                 if include_empty or genera_data:
                     family['genera_count'] = len(genera_data)
-                    family['photo_count'] = family_count
                     family['genera'] = genera_data
                     families_data.append(family)
 
             if include_empty or families_data:
                 order['families_count'] = len(families_data)
-                order['photo_count'] = order_count
                 order['families'] = families_data
                 result.append(order)
 

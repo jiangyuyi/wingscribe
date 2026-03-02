@@ -106,6 +106,11 @@ class TaskManager:
             # Create pipeline with timeout protection (120 seconds default)
             runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
 
+            # 设置进度回调
+            def progress_callback(processed, total):
+                self.logs.append(f"[PROGRESS] {processed}/{total}")
+            runner.set_progress_callback(progress_callback)
+
             self.logs.append("Pipeline initialized, processing selected folders...")
 
             runner.run_by_folders(folder_paths, recursive=recursive)
@@ -132,6 +137,11 @@ class TaskManager:
 
             # Create pipeline with timeout protection (120 seconds default)
             runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
+
+            # 设置进度回调
+            def progress_callback(processed, total):
+                self.logs.append(f"[PROGRESS] {processed}/{total}")
+            runner.set_progress_callback(progress_callback)
 
             self.logs.append("Pipeline initialized, starting processing...")
 

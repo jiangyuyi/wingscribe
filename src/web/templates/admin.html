@@ -196,6 +196,17 @@
                             <span class="small text-muted">Console Output</span>
                             <button onclick="clearConsole()" class="btn btn-sm btn-outline-secondary">Clear Log</button>
                         </div>
+                        <!-- 进度条 -->
+                        <div id="progress-container" class="mb-2" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span id="progress-text" class="small">0/0</span>
+                                <span id="progress-percent" class="small">0%</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
                         <div id="console" class="console-box">
                             <div>Ready. Waiting for command...</div>
                         </div>
@@ -264,6 +275,38 @@
             consoleBox.scrollTop = consoleBox.scrollHeight;
         }
 
+        // 进度条功能
+        function showProgress() {
+            const container = document.getElementById('progress-container');
+            container.style.display = 'block';
+            const bar = document.getElementById('progress-bar');
+            bar.style.width = '0%';
+            bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+            document.getElementById('progress-text').textContent = '0/0';
+            document.getElementById('progress-percent').textContent = '0%';
+        }
+
+        function hideProgress() {
+            const container = document.getElementById('progress-container');
+            const bar = document.getElementById('progress-bar');
+            bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            bar.style.width = '100%';
+            document.getElementById('progress-percent').textContent = '100%';
+            // 3秒后隐藏
+            setTimeout(() => {
+                container.style.display = 'none';
+                bar.style.width = '0%';
+            }, 3000);
+        }
+
+        function updateProgress(processed, total) {
+            showProgress();
+            const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('progress-text').textContent = processed + '/' + total;
+            document.getElementById('progress-percent').textContent = percent + '%';
+        }
+
         function connectWS() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/progress`;
@@ -277,6 +320,15 @@
             };
 
             ws.onmessage = (event) => {
+                // 处理进度更新
+                const progressMatch = event.data.match(/\[PROGRESS\] (\d+)\/(\d+)/);
+                if (progressMatch) {
+                    const processed = parseInt(progressMatch[1]);
+                    const total = parseInt(progressMatch[2]);
+                    updateProgress(processed, total);
+                    return; // 不显示进度信息在日志中
+                }
+
                 appendLog(event.data);
 
                 // State check based on log content
@@ -285,12 +337,14 @@
                     startBtn.textContent = "▶ Start Pipeline";
                     loadHistory(); // Refresh history
                     loadStats(); // Refresh stats
+                    hideProgress(); // 隐藏进度条
                 }
                 // Error handling
                 if (event.data.includes("Error:") || event.data.includes("Pipeline failed")) {
                     startBtn.disabled = false;
                     startBtn.textContent = "▶ Start Pipeline";
                     loadHistory(); // Refresh history
+                    hideProgress(); // 隐藏进度条
                 }
             };
 
@@ -526,6 +580,8 @@
 
                 startBtn.disabled = true;
                 startBtn.textContent = "⏳ Running...";
+                // 显示进度条
+                showProgress();
                 // 不清空日志框，追加新请求信息
                 appendLog("=== Requesting new pipeline run ===", '#ff9800');
                 appendLog("Waiting for pipeline to start...");
@@ -569,6 +625,8 @@
 
                 startBtn.disabled = true;
                 startBtn.textContent = "⏳ Running...";
+                // 显示进度条
+                showProgress();
                 // 不清空日志框，追加新请求信息
                 appendLog("=== Requesting new pipeline run ===", '#ff9800');
                 appendLog("Waiting for pipeline to start...");

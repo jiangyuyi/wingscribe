@@ -124,6 +124,22 @@ class FeatherTracePipeline:
         self.db = IOCManager(str(db_path), base_dir)
         self.device = self.config['processing'].get('device', 'cpu')
 
+        # 日志等级配置
+        self.log_level = self.config.get('web', {}).get('log_level', 'info').lower()
+        # 进度跟踪
+        self.total_files = 0
+        self.processed_count = 0
+        self._progress_callback = None
+
+    def set_progress_callback(self, callback):
+        """设置进度回调函数"""
+        self._progress_callback = callback
+
+    def _emit_progress(self):
+        """发送进度更新"""
+        if self._progress_callback and self.total_files > 0:
+            self._progress_callback(self.processed_count, self.total_files)
+
         # Lazy load detector with timeout protection
         self._detector = None
         self._detector_loaded = False
@@ -529,7 +545,12 @@ class FeatherTracePipeline:
             })
             
             log_name = cn_name if not is_low_conf else f"Uncertain ({top_result['scientific_name']})"
-            logging.info(f"Processed: {entry.name} -> {log_name} ({confidence*100:.1f}%)")
+            # 根据日志等级决定输出详细程度
+            if self.log_level == 'debug':
+                logging.info(f"Processed: {entry.name} -> {log_name} ({confidence*100:.1f}%)")
+            # 更新进度
+            self.processed_count += 1
+            self._emit_progress()
             
         except Exception as e:
             logging.error(f"Failed to archive {entry.name}: {e}")
@@ -718,6 +739,8 @@ class FeatherTracePipeline:
                 else:
                     iterator = provider.list_dir(path_str, recursive=recursive)
 
+                # 收集有效的图片文件并统计总数
+                valid_entries = []
                 for entry in iterator:
                     is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
                     if is_dir: continue
@@ -726,12 +749,10 @@ class FeatherTracePipeline:
                     entry_path = entry.path
 
                     # Skip files in output directory
-                    # 不使用 resolve()，避免 UNC 路径问题
                     if self.output_root:
                         try:
                             entry_path_obj = Path(entry_path)
                             output_path_obj = Path(self.output_root)
-                            # 使用规范化路径比较
                             entry_norm = os.path.normpath(str(entry_path_obj))
                             output_norm = os.path.normpath(str(output_path_obj))
                             if entry_norm.startswith(output_norm):
@@ -742,7 +763,14 @@ class FeatherTracePipeline:
 
                     if not entry_name.lower().endswith(('.jpg', '.jpeg')):
                         continue
-                    
+
+                    valid_entries.append((entry, entry_path, entry_name))
+
+                # 设置进度总数
+                self.total_files += len(valid_entries)
+                self._emit_progress()
+
+                for entry, entry_path, entry_name in valid_entries:
                     meta = parser.parse(entry_path)
                     
                     c_date = meta.get('captured_date')
@@ -877,6 +905,8 @@ class FeatherTracePipeline:
                 else:
                     iterator = provider.list_dir(path_str, recursive=False)
 
+                # 收集有效的图片文件
+                valid_entries = []
                 for entry in iterator:
                     is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
                     if is_dir:
@@ -901,6 +931,13 @@ class FeatherTracePipeline:
                     if not entry_name.lower().endswith(('.jpg', '.jpeg')):
                         continue
 
+                    valid_entries.append((entry, entry_path))
+
+                # 设置进度总数
+                self.total_files += len(valid_entries)
+                self._emit_progress()
+
+                for entry, entry_path in valid_entries:
                     # Parse path metadata (without date filtering)
                     meta = parser.parse(entry_path)
 

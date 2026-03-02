@@ -46,6 +46,8 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
 
 ![WebUI Preview](docs/webui_screenshot_placeholder.png)
 
+![WebUI Preview](docs/webui_screenshot_placeholder2.png)
+
 *支持物种分类筛选、动态翻页和原图对比功能。*
 
 ---

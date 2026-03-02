@@ -1,11 +1,11 @@
 import pytest
 import os
 from pathlib import Path
-from src.pipeline_runner import FeatherTracePipeline
+from src.pipeline_runner import WingScribePipeline
 from src.core.io.local import LocalProvider
 
 # Mocking the pipeline to avoid loading heavy models during init
-class MockPipeline(FeatherTracePipeline):
+class MockPipeline(WingScribePipeline):
     def __init__(self):
         # Skip super init
         pass

@@ -1,4 +1,4 @@
-# FeatherTrace TUI 界面依赖
+# WingScribe TUI 界面依赖
 # 用于部署脚本的交互式界面
 
 rich>=13.0.0

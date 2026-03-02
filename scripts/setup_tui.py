@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FeatherTrace TUI 环境设置脚本
+WingScribe TUI 环境设置脚本
 
 此脚本用于安装 TUI 界面所需的 Python 依赖。
 用于部署脚本的交互式界面。
@@ -137,7 +137,7 @@ def run_tui():
 def main():
     """主函数"""
     print("=" * 50)
-    print("  🪶 FeatherTrace TUI 环境设置")
+    print("  🪶 WingScribe TUI 环境设置")
     print("=" * 50)
 
     # 检查 Python

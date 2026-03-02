@@ -35,7 +35,7 @@ config = load_config(
 )
 
 app = FastAPI(
-    title="FeatherTrace Recognition Service",
+    title="WingScribe Recognition Service",
     description="鸟类识别 REST API 服务",
     version="2.0.0"
 )

@@ -252,7 +252,7 @@ function Install-CUDA {
     Write-Host "========================================" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "  GPU detected but CUDA/cuDNN not installed." -ForegroundColor White
-    Write-Host "  FeatherTrace requires CUDA for GPU acceleration." -ForegroundColor Gray
+    Write-Host "  WingScribe requires CUDA for GPU acceleration." -ForegroundColor Gray
     Write-Host ""
     Write-Host "  Option 1: Auto-download (requires admin)" -ForegroundColor Cyan
     Write-Host "  Option 2: Manual download links" -ForegroundColor Cyan
@@ -1183,7 +1183,7 @@ function Show-Menu {
     Clear-Host
     Write-Host ""
     Write-Host "  ========================================  " -ForegroundColor Cyan
-    Write-Host "  FeatherTrace Deployment" -ForegroundColor Cyan -NoNewline
+    Write-Host "  WingScribe Deployment" -ForegroundColor Cyan -NoNewline
     Write-Host "  AI Bird Photo Management" -ForegroundColor Gray
     Write-Host "  ========================================  " -ForegroundColor Cyan
     Write-Host ""

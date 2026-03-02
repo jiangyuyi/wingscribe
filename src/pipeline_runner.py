@@ -88,7 +88,7 @@ class SmartScanner:
         except PermissionError:
             pass
 
-class FeatherTracePipeline:
+class WingScribePipeline:
     def __init__(self, config_path: str = "config/settings.yaml", init_timeout: int = 120):
         """
         Initialize the pipeline.
@@ -489,10 +489,10 @@ class FeatherTracePipeline:
             
             if is_low_conf:
                 description = "Uncertain Bird (Low Confidence)"
-                keywords = ["FeatherTrace", "LowConfidence", meta.get('location_tag')]
+                keywords = ["WingScribe", "LowConfidence", meta.get('location_tag')]
             else:
                 description = f"{cn_name} ({sci_name})"
-                keywords = [cn_name, sci_name, meta.get('location_tag'), "FeatherTrace"]
+                keywords = [cn_name, sci_name, meta.get('location_tag'), "WingScribe"]
 
             # Filter out None values from keywords
             keywords = [k for k in keywords if k is not None]
@@ -1020,5 +1020,5 @@ if __name__ == "__main__":
         logging.error("System check failed. Please fix the issues above and restart.")
         sys.exit(1)
         
-    runner = FeatherTracePipeline(config_path)
+    runner = WingScribePipeline(config_path)
     runner.run()

@@ -2,7 +2,7 @@
 
 ## System Overview
 
-FeatherTrace is an automated pipeline for bird photography management. It bridges the gap between raw data ingestion and organized, searchable archives.
+WingScribe is an automated pipeline for bird photography management. It bridges the gap between raw data ingestion and organized, searchable archives.
 
 ### Core Components
 

@@ -24,7 +24,7 @@ sys.path.append(str(BASE_DIR))
 from src.metadata.ioc_manager import IOCManager
 from src.metadata.exif_writer import ExifWriter # Added import
 from src.utils.config_loader import load_config, validate_paths_config
-from src.pipeline_runner import FeatherTracePipeline # Import Pipeline
+from src.pipeline_runner import WingScribePipeline # Import Pipeline
 from src.core.io.path_generator import PathGenerator # Added import
 from src.web.routes.recognition import router as recognition_router
 
@@ -104,7 +104,7 @@ class TaskManager:
             self.logs.append("Initializing pipeline (this may take a while on first run)...")
 
             # Create pipeline with timeout protection (120 seconds default)
-            runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
+            runner = WingScribePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
 
             # 设置进度回调
             def progress_callback(processed, total):
@@ -136,7 +136,7 @@ class TaskManager:
             self.logs.append("Initializing pipeline (this may take a while on first run)...")
 
             # Create pipeline with timeout protection (120 seconds default)
-            runner = FeatherTracePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
+            runner = WingScribePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
 
             # 设置进度回调
             def progress_callback(processed, total):
@@ -1039,15 +1039,15 @@ def update_label(req: UpdateLabelRequest):
     # 7. Update Metadata for Original Image (if exists)
     original_path = photo.get('original_path')
     if original_path and os.path.exists(original_path):
-        # We might want to append "FeatherTrace" to keywords if not present, 
+        # We might want to append "WingScribe" to keywords if not present,
         # but purely replacing with the new set is safer to keep consistency with the new ID.
-        # Ideally, we should read existing keywords and merge, but for now, 
+        # Ideally, we should read existing keywords and merge, but for now,
         # strictly following the requirement "Update tags" with the corrected info.
-        # Adding "FeatherTrace" tag to mark it as touched by our system is good practice though.
-        
+        # Adding "WingScribe" tag to mark it as touched by our system is good practice though.
+
         # Re-creating the logic from pipeline_runner:
         source_tags = tags.copy()
-        source_tags["IPTC:Keywords"] = source_tags["IPTC:Keywords"] + ["FeatherTrace"]
+        source_tags["IPTC:Keywords"] = source_tags["IPTC:Keywords"] + ["WingScribe"]
         
         exif_writer.write_metadata(original_path, source_tags)
 

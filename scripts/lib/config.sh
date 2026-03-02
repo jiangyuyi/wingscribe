@@ -323,7 +323,7 @@ generate_settings_yaml() {
     local relative_output_dir="${OUTPUT_DIR#${SOURCE_DIR}/}"
 
     cat > "$settings_file" << EOF
-# FeatherTrace 配置文件
+# WingScribe 配置文件
 # 由一键部署脚本自动生成
 # 时间: $(date '+%Y-%m-%d %H:%M:%S')
 
@@ -403,7 +403,7 @@ generate_secrets_yaml() {
         log_warn "请编辑 $secrets_file 添加 API Key"
     else
         cat > "$secrets_file" << 'EOF'
-# FeatherTrace 密钥配置
+# WingScribe 密钥配置
 # 由一键部署脚本自动生成
 # 请根据需要填写以下 API Key
 

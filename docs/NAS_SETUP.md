@@ -1,6 +1,6 @@
 # NAS Setup Guide (WebDAV / SMB)
 
-FeatherTrace supports network storage (NAS) via **OS-level mounting**. This means you mount your remote drive (WebDAV or Samba/SMB) as a local drive letter (Windows) or directory (macOS/Linux), and then configure FeatherTrace to use that path.
+WingScribe supports network storage (NAS) via **OS-level mounting**. This means you mount your remote drive (WebDAV or Samba/SMB) as a local drive letter (Windows) or directory (macOS/Linux), and then configure WingScribe to use that path.
 
 ## 1. Mount Remote Drive
 
@@ -29,7 +29,7 @@ Example (SMB via cifs):
 sudo mount -t cifs -o username=user,password=pass //192.168.1.100/Photos /mnt/nas_photos
 ```
 
-## 2. Configure FeatherTrace
+## 2. Configure WingScribe
 
 Edit `config/settings.yaml`. Set `base_dir` to the mounted path, and add sources for scanning.
 
@@ -56,7 +56,7 @@ paths:
 ```
 
 ## 3. Restart Application
-After editing `settings.yaml`, restart the FeatherTrace web server for changes to take effect:
+After editing `settings.yaml`, restart the WingScribe web server for changes to take effect:
 ```bash
 python src/web/app.py
 ```

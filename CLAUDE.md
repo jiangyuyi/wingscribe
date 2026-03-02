@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WingScribe (飞羽志) is an automated bird photography management system that uses computer vision (YOLOv11) and multimodal AI models (BioCLIP) to automatically detect, filter, identify species, inject metadata, and organize bird photos into a hierarchical archive with a local web interface for manual verification.
 
-**Technology Stack:** Python 3.10+, PyTorch, YOLOv11, BioCLIP (OpenCLIP), FastAPI, MySQL/PostgreSQL, ExifTool
+**Technology Stack:** Python 3.10+, PyTorch, YOLOv11, BioCLIP (OpenCLIP), FastAPI, SQLite, ExifTool
 
 ## Common Commands
 
@@ -35,15 +35,34 @@ python src/pipeline_runner.py --start 20240101 --end 20240131
 
 ### Testing
 ```bash
+# Install test dependencies (included in requirements.txt)
+pip install pytest pytest-cov pytest-mock
+
 # Run all tests
-pytest tests/
+pytest tests/ -v
 
 # Run specific test file
-pytest tests/test_path_parser.py
+pytest tests/test_path_parser.py -v
 
 # Run specific test
 pytest tests/test_path_parser.py::TestPathParserRecursive::test_basic_existing_behavior
+
+# Run tests with coverage report
+pytest tests/ --cov=src --cov-report=html
+
+# View coverage report (opens in browser)
+# Open htmlcov/index.html
 ```
+
+**Test Modules:**
+- `test_path_parser.py` - Path parsing from folder structure
+- `test_path_generator.py` - Output path generation
+- `test_quality.py` - Image blur detection
+- `test_local_provider.py` - Local file system provider
+- `test_exif_writer.py` - Metadata writing
+- `test_detector.py` - YOLO bird detection
+- `test_db_manager.py` - Database operations
+- `test_config.py` - Configuration loading
 
 ### Database Operations
 ```bash
@@ -63,6 +82,25 @@ python scripts/download_model.py
 python scripts/check_gpu.py
 ```
 
+### Deploy Scripts
+```bash
+# Windows PowerShell
+.\deploy.ps1 install
+.\deploy.ps1 config
+.\deploy.ps1 update
+.\deploy.ps1 web
+.\deploy.ps1 cuda
+.\deploy.ps1 pytorch
+
+# Linux/macOS Bash
+./deploy.sh install
+./deploy.sh config
+./deploy.sh update
+./deploy.sh web
+./deploy.sh cuda
+./deploy.sh pytorch
+```
+
 ## Architecture
 
 ### Core Pipeline (`src/pipeline_runner.py`)
@@ -77,6 +115,15 @@ The `WingScribePipeline` class orchestrates the entire ETL process:
 
 **Key Pattern - Batch Processing**: The pipeline uses a batch buffer (`self.batch_buffer`) with threading locks to accumulate detections before running recognition inference. This is critical for performance when using local BioCLIP models.
 
+**Progress Tracking**: The pipeline supports progress callback via `set_progress_callback(callback)`:
+- `callback(processed_count, total_count)`: Called after each image is processed
+- Progress is emitted via WebSocket to the web UI in real-time
+- Total count is determined by `valid_entries` collection during scanning
+
+**Log Level Control**: The pipeline respects `web.log_level` configuration:
+- `info`: Shows only summary messages and errors (default)
+- `debug`: Shows per-image processing details including detection/recognition results
+
 **Region Filtering**: The `_select_candidate_labels()` method filters bird species based on `region_filter` config:
 - `china`: Only birds from China allowlist
 - `auto`: Detects foreign countries in folder names, switches to full list
@@ -89,7 +136,7 @@ The `WingScribePipeline` class orchestrates the entire ETL process:
 - `photos`: Index of processed images including `candidates_json` (Top-K AI results)
 - `scan_history`: Execution logs
 
-**ExifWriter**: Wrapper around `exiftool` CLI. Handles encoding issues (UTF-8/GBK) and safe writing of complex metadata including IPTC keywords, XMP fields, and UserComment.
+**ExifWriter**: Wrapper around `exiftool` CLI. Handles encoding issues (UTF-8/GBK) and safe writing of complex metadata including IPTC keywords, XMP fields, and UserComment. Logging is set to DEBUG level to avoid cluttering output when log_level is info.
 
 ### Recognition Engines (`src/recognition/`)
 
@@ -120,8 +167,10 @@ FastAPI application with:
 - Photo browsing with search, date filtering, and pagination
 - `/api/update_label`: Updates species, auto-renames files, writes EXIF to both processed and original files
 - `/api/pipeline/start`: Triggers background pipeline execution
-- WebSocket `/ws/progress`: Streams pipeline logs in real-time
+- WebSocket `/ws/progress`: Streams pipeline logs and progress in real-time
 - `/api/admin/reset`: Clears database and processed directory
+- Admin console with real-time log viewer (max 5000 lines, auto-scroll, clear button)
+- Progress bar showing processed/total count (e.g., 12/100)
 
 **Key Pattern - Label Updates**: When user corrects a species label:
 1. Fetches original photo details from DB
@@ -136,6 +185,7 @@ FastAPI application with:
 - `paths`: Sources, output, base_dir, reference data paths
 - `processing`: Device, YOLO model, thresholds, crop settings
 - `recognition`: Mode (local/api/dongniao), region_filter, thresholds
+- `web`: Host, port, log_level (info/debug)
 
 **`config/secrets.yaml`**: API keys (not in git)
 
@@ -147,6 +197,11 @@ The pipeline uses `ThreadPoolExecutor` for parallel detection/cropping. The `bat
 ### CUDA Fallback
 Both `BirdDetector` and `LocalBirdRecognizer` implement automatic fallback from CUDA to CPU on errors. This is essential for laptops with unstable GPU drivers or insufficient VRAM.
 
+**GPU Compatibility**: For RTX 50 series GPUs (sm_120), use PyTorch nightly with CUDA 12.8:
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+```
+
 ### Path Security
 Web UI only serves files from `base_dir` defined in config. All paths are validated to be under `base_dir`.
 
@@ -155,6 +210,12 @@ Web UI only serves files from `base_dir` defined in config. All paths are valida
 
 ### Date-Based Pruning
 `SmartScanner` uses `_is_in_range()` to skip entire directory branches when their date ranges don't overlap with the query range. This is critical for performance on large photo archives.
+
+### Log Level and Progress
+The pipeline supports two log levels controlled by `web.log_level` in settings.yaml:
+- `info` (default): Shows summary messages, pipeline progress, and errors only
+- `debug`: Shows detailed per-image results including detection boxes, crop paths, and recognition candidates
+Progress is tracked via callback pattern and streamed to web UI via WebSocket.
 
 ## File Organization
 
@@ -201,18 +262,19 @@ Key external libraries:
 
 ## Database
 
-The system uses MySQL/PostgreSQL instead of SQLite for remote access support.
-
-### Configuration
-
-Database connection is configured in `config/settings.yaml`:
+The system uses SQLite for local storage. Database file location is configured in `config/settings.yaml`:
 
 ```yaml
-database:
-  type: "mysql"  # or "postgresql"
-  host: "localhost"
-  port: 3306
-  username: "wingscribe"
-  password: "your_password"
-  database: "wingscribe"
+paths:
+  db_path: "data/db/wingscribe.db"  # Relative to project root
 ```
+
+### Tables
+
+- `taxonomy`: IOC World Bird List data (scientific_name, chinese_name, family_cn, order_cn)
+- `photos`: Index of processed images including `candidates_json` (Top-K AI results)
+- `scan_history`: Execution logs
+
+### Migrations
+
+`IOCManager._init_db()` handles schema migrations by checking for new columns and adding them with ALTER TABLE statements wrapped in try/except.

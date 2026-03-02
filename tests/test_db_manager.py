@@ -36,13 +36,13 @@ def test_add_and_search_photo(db_manager):
     assert row["primary_bird_cn"] == "麻雀"
 
 def test_taxonomy_search(db_manager):
-    # Manually insert taxonomy
-    db_manager.cursor.execute("INSERT INTO taxonomy (scientific_name, chinese_name) VALUES ('Passer montanus', '麻雀')")
+    # Manually insert taxonomy using conn directly
+    db_manager.conn.execute("INSERT INTO taxonomy (scientific_name, chinese_name) VALUES ('Passer montanus', '麻雀')")
     db_manager.conn.commit()
-    
+
     results = db_manager.search_species("Passer")
     assert len(results) == 1
     assert results[0]["chinese_name"] == "麻雀"
-    
+
     results_cn = db_manager.search_species("麻雀")
     assert len(results_cn) == 1

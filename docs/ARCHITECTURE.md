@@ -10,7 +10,7 @@ FeatherTrace is an automated pipeline for bird photography management. It bridge
     *   **Orchestrator**: Manages the ETL process.
     *   **Smart Scanning**: Uses `SmartScanner` to walk directories, applying date-based pruning to skip irrelevant folders.
     *   **Processing**:
-        *   **Detection**: Uses `src/core/detector.py` (YOLOv8) to find birds.
+        *   **Detection**: Uses `src/core/detector.py` (YOLOv11) to find birds.
         *   **Quality**: Uses `src/core/quality.py` (Laplacian Variance) to filter blur.
         *   **Cropping**: Uses `src/core/processor.py` to create standardized crops.
     *   **Recognition**: Delegates to `LocalBirdRecognizer` (BioCLIP), `DongniaoRecognizer`, or `APIBirdRecognizer`.
@@ -55,7 +55,7 @@ FeatherTrace is an automated pipeline for bird photography management. It bridge
 
 *   **Database**: SQLite (`wingscribe.db`).
 *   **AI Models**:
-    *   **Detection**: YOLOv8n (Local).
+    *   **Detection**: YOLOv11n (Local).
     *   **Classification**: BioCLIP (OpenCLIP ViT-B/16) or External APIs.
 *   **Storage**:
     *   **Local**: Direct file access.

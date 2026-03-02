@@ -14,5 +14,13 @@ data/models/
 config/secrets.yaml
 .claude/
 nul
+
+# Test generated files
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+tests/__pycache__/
+
 # YOLO model files (auto-downloaded by Ultralytics)
 *.pt

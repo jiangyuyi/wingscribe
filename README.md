@@ -3,7 +3,7 @@
 **版本:** 2.0.0
 **状态:** 新版发布
 
-WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它利用计算机视觉 (YOLOv8) 和多模态大模型 (BioCLIP) 技术，自动完成照片的**检测、筛选、物种识别、元数据注入**以及**层级归档**，并提供一个支持人工校对的本地 Web 界面。
+WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它利用计算机视觉 (YOLOv11) 和多模态大模型 (BioCLIP) 技术，自动完成照片的**检测、筛选、物种识别、元数据注入**以及**层级归档**，并提供一个支持人工校对的本地 Web 界面。
 
 本项目是我个人的第一个从零开始完全使用Vibe Coding的项目，使用了Gemini CLI 、Claude Code with MiniMax2.5，作为一个观鸟爱好者，图片库的识别和整理一直是我的一大痛点，这个项目也算是圆了几年前的一个小梦想。
 
@@ -37,6 +37,8 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
   * **对比预览**: 实时切换"裁切细节图"与"原始环境图"。
   * **分类树筛选**: 交互式物种分类导航，动态翻页保持一致体验。
   * **等宽网格**: CSS Grid 布局确保照片始终等宽显示，无论每行数量多少。
+  * **实时日志**: Admin 页面显示实时处理日志，支持日志等级切换 (info/debug)。
+  * **进度显示**: 实时显示已处理图片数量 / 总数量 (如 12/100)。
 
 ---
 
@@ -103,6 +105,7 @@ curl -fsSL https://raw.githubusercontent.com/jiangyuyi/wingscribe/master/deploy.
 | `cuda`    | 安装 CUDA (GPU 支持) |
 | `pytorch` | 重新安装 PyTorch     |
 | `web`     | 启动 Web 服务 (前台) |
+| `help`    | 显示帮助             |
 | `-d`      | 后台启动服务         |
 | `-s`      | 停止后台服务         |
 | `-t`      | 查看服务状态         |
@@ -312,6 +315,38 @@ python scripts/download_model.py
 ```
 
 > 模型默认缓存至 `~/.cache/huggingface/hub/`。
+
+#### 步骤 D: 运行测试 (可选)
+
+项目包含单元测试，覆盖核心模块。
+
+```bash
+# 安装测试依赖
+pip install pytest pytest-cov pytest-mock
+
+# 运行所有测试
+python -m pytest tests/ -v
+
+# 运行特定测试文件
+python -m pytest tests/test_path_parser.py -v
+python -m pytest tests/test_path_generator.py -v
+
+# 运行测试并生成覆盖率报告
+python -m pytest tests/ --cov=src --cov-report=html
+
+# 查看覆盖率报告（在浏览器中打开）
+# htmlcov/index.html
+```
+
+**测试文件说明：**
+- `test_path_parser.py` - 路径解析测试
+- `test_path_generator.py` - 路径生成测试
+- `test_quality.py` - 图像质量检测测试
+- `test_local_provider.py` - 本地文件提供者测试
+- `test_exif_writer.py` - 元数据写入测试
+- `test_detector.py` - YOLO 检测器测试
+- `test_db_manager.py` - 数据库管理测试
+- `test_config.py` - 配置加载测试
 
 ---
 

@@ -758,3 +758,37 @@ status_daemon() {
 # Linux
 ./scripts/backup_db.sh "data/db/wingscribe.db" "/mnt/nas/backup/wingscribe" 7
 ```
+
+---
+
+### 27. 地点信息包含多余年份前缀 [待修复]
+**状态**: 🔴 待修复
+
+**问题**:
+- 目前生成的地点信息格式为 `2025_北京柳荫公园`
+- 正确格式应该是 `北京柳荫公园`（去掉年份前缀）
+
+**分析**:
+- 地点信息从文件夹路径中提取
+- 需要检查 `path_parser.py` 中的地点解析逻辑
+
+**涉及文件**:
+- `src/core/io/path_parser.py`
+
+---
+
+### 28. CorrectID 后保存路径错误 [待修复]
+**状态**: 🔴 待修复
+
+**问题**:
+- 在 Web 界面修正物种 ID 后（Correct ID）
+- 裁切图的保存路径与原来不一致
+- 错误地保存到了当前代码运行目录下，而不是与原来的裁切图路径一致
+
+**预期行为**:
+- 修正物种后，裁切图应该移动到基于新物种的新路径
+- 新路径应该与原来的裁切图目录结构一致
+
+**涉及文件**:
+- `src/web/app.py` - `/api/update_label` 端点
+- `src/core/io/path_generator.py` - 路径生成逻辑

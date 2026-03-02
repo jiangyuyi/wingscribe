@@ -105,6 +105,7 @@ local:
 | :--- | :--- | :--- |
 | `host` | Web 服务器监听地址。`0.0.0.0` 表示监听所有网络接口。 | `0.0.0.0` |
 | `port` | Web 服务器端口。 | `8000` |
+| `log_level` | 日志等级。`info` 仅显示摘要信息，`debug` 显示每张图片的处理详情。 | `info` |
 
 ---
 
@@ -174,6 +175,7 @@ recognition:
 web:
   host: "0.0.0.0"
   port: 8000
+  log_level: "info"  # 日志等级: debug(详细) / info(简洁)
 ```
 
 ### Linux 示例

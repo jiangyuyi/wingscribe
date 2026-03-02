@@ -77,11 +77,11 @@ class ExifWriter:
         except subprocess.CalledProcessError as e:
             # Decode stderr safely
             try:
-                err_msg = e.stderr.decode('utf-8')
-            except UnicodeDecodeError:
+                err_msg = e.stderr.decode('utf-8') if e.stderr else "No stderr"
+            except (UnicodeDecodeError, AttributeError):
                 # Fallback to system encoding or ignore
-                err_msg = e.stderr.decode('mbcs', errors='replace') if os.name == 'nt' else e.stderr.decode('utf-8', errors='replace')
-                
+                err_msg = e.stderr.decode('mbcs', errors='replace') if e.stderr and os.name == 'nt' else "Failed to decode stderr"
+
             logging.error(f"Failed to write metadata: {err_msg}")
             return False
         except Exception as e:
@@ -94,14 +94,3 @@ class ExifWriter:
                     os.remove(arg_file)
                 except:
                     pass
-
-    def rename_photo(self, current_path: str, new_name: str) -> str:
-        """
-        Rename/move the photo to a new filename in the same directory.
-        Returns the new absolute path.
-        """
-        from pathlib import Path
-        p = Path(current_path)
-        new_path = p.parent / new_name
-        p.rename(new_path)
-        return str(new_path.absolute())

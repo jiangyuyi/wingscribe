@@ -71,7 +71,7 @@ class ExifWriter:
             # Use text=False (binary mode) to avoid UnicodeDecodeError in background reader thread
             # if output is not valid UTF-8 (e.g. system locale warning)
             subprocess.run(cmd, check=True, capture_output=True, text=False)
-            logging.info(f"Metadata written to {image_path}")
+            logging.debug(f"Metadata written to {image_path}")
             return True
             
         except subprocess.CalledProcessError as e:

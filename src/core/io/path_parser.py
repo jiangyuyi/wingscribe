@@ -87,12 +87,17 @@ class PathParser:
             # Standard Logic (Parents OR Last Folder if regex failed)
             if not matched_regex:
                 d_start, _, loc_part = self.parse_folder_name(folder)
-                
+
                 if d_start:
                     found_date = d_start
                     if loc_part: locations.append(loc_part)
                 else:
                     # No date found, entire folder is location
+                    # Skip pure numeric folders (likely year directories like "2025")
+                    if folder.isdigit() and len(folder) >= 4:
+                        # Skip year directories, but keep if it's a meaningful 8-digit date
+                        if len(folder) != 8:
+                            continue
                     locations.append(folder)
             
         if found_date:

@@ -73,10 +73,34 @@ class TestPathParserRecursive:
         # Simulating how Auto mode checks the string
         location_tag = "Japan_Tokyo"
         foreign_countries = ["Japan", "USA"]
-        
+
         is_foreign = False
         for country in foreign_countries:
             if country in location_tag:
                 is_foreign = True
                 break
         assert is_foreign is True
+
+    def test_year_directory_should_be_skipped(self):
+        # Bug 27: 年份目录（如 2025）不应被当作地点的一部分
+        # 结构: 2025/北京柳荫公园/bird.jpg
+        # 预期: location_tag = "北京柳荫公园" (不含年份)
+        path = f"{self.root}/2025/北京柳荫公园/bird.jpg"
+        meta = self.parser.parse(path)
+        assert meta['location_tag'] == '北京柳荫公园'
+        # 日期应该来自文件名或其他方式（当前没有日期信息）
+
+    def test_year_directory_with_date_subfolder(self):
+        # 结构: 2025/20260110_北京柳荫公园/bird.jpg
+        # 预期: location_tag = "北京柳荫公园", captured_date = "20260110"
+        path = f"{self.root}/2025/20260110_北京柳荫公园/bird.jpg"
+        meta = self.parser.parse(path)
+        assert meta['location_tag'] == '北京柳荫公园'
+        assert meta['captured_date'] == '20260110'
+
+    def test_multiple_year_directories(self):
+        # 结构: 2025/2026/北京柳荫公园/bird.jpg
+        # 预期: 跳过所有年份目录，location_tag = "北京柳荫公园"
+        path = f"{self.root}/2025/2026/北京柳荫公园/bird.jpg"
+        meta = self.parser.parse(path)
+        assert meta['location_tag'] == '北京柳荫公园'

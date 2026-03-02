@@ -974,9 +974,16 @@ def update_label(req: UpdateLabelRequest):
                 }
                 
                 # Re-instantiate generator
+                # FIX: Resolve output_root based on base_dir (same logic as line 225-232)
+                output_root_raw = out_conf.get('root_dir', 'data/processed')
+                if is_absolute_path(output_root_raw):
+                    output_root_resolved = Path(output_root_raw)
+                else:
+                    output_root_resolved = base_dir / output_root_raw
+
                 generator = PathGenerator(
                     template=template,
-                    output_root=out_conf.get('root_dir', 'data/processed')
+                    output_root=str(output_root_resolved)
                 )
                 
                 # FIX: Use ORIGINAL filename stem to avoid appending suffixes to already processed names

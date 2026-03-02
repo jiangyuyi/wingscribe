@@ -131,15 +131,6 @@ class FeatherTracePipeline:
         self.processed_count = 0
         self._progress_callback = None
 
-    def set_progress_callback(self, callback):
-        """设置进度回调函数"""
-        self._progress_callback = callback
-
-    def _emit_progress(self):
-        """发送进度更新"""
-        if self._progress_callback and self.total_files > 0:
-            self._progress_callback(self.processed_count, self.total_files)
-
         # Lazy load detector with timeout protection
         self._detector = None
         self._detector_loaded = False
@@ -195,6 +186,15 @@ class FeatherTracePipeline:
         self.foreign_countries = self._load_list(paths_config.get('foreign_list', 'config/dictionaries/foreign_countries.txt'))
         self.china_allowlist = self._load_list(paths_config.get('china_list', 'config/dictionaries/china_bird_list.txt'))
         self.all_labels = self._get_taxonomy_labels()
+
+    def set_progress_callback(self, callback):
+        """设置进度回调函数"""
+        self._progress_callback = callback
+
+    def _emit_progress(self):
+        """发送进度更新"""
+        if self._progress_callback and self.total_files > 0:
+            self._progress_callback(self.processed_count, self.total_files)
 
     @property
     def detector(self):
@@ -764,13 +764,13 @@ class FeatherTracePipeline:
                     if not entry_name.lower().endswith(('.jpg', '.jpeg')):
                         continue
 
-                    valid_entries.append((entry, entry_path, entry_name))
+                    valid_entries.append((entry, entry_path))
 
                 # 设置进度总数
                 self.total_files += len(valid_entries)
                 self._emit_progress()
 
-                for entry, entry_path, entry_name in valid_entries:
+                for entry, entry_path in valid_entries:
                     meta = parser.parse(entry_path)
                     
                     c_date = meta.get('captured_date')

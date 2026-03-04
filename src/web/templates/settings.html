@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>飞羽志 WingScribe - 系统配置</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .config-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin: 40px auto;
+            max-width: 900px;
+        }
+        .config-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .config-header h1 {
+            font-size: 1.8rem;
+            margin: 0;
+        }
+        .config-header .subtitle {
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        .config-header .subtitle {
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        .mode-toggle {
+            display: flex;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 4px;
+            margin: 20px 30px;
+        }
+        .mode-toggle .btn {
+            flex: 1;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 500;
+        }
+        .mode-toggle .btn.active {
+            background: #667eea;
+            color: white;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+        }
+        .config-section {
+            padding: 0 30px;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            padding: 20px 0 10px;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 15px;
+        }
+        .config-item {
+            margin-bottom: 20px;
+        }
+        .config-item label {
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .config-item .description {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 4px;
+        }
+        .path-input-group {
+            display: flex;
+            gap: 8px;
+        }
+        .path-input-group input {
+            flex: 1;
+        }
+        .path-status {
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+        .path-status.valid {
+            color: #28a745;
+        }
+        .path-status.invalid {
+            color: #dc3545;
+        }
+        .config-actions {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            border-radius: 0 0 12px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .advanced-section {
+            display: none;
+        }
+        .advanced-section.show {
+            display: block;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .config-item.required label::after {
+            content: " *";
+            color: #dc3545;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .loading-overlay.show {
+            display: flex;
+        }
+        .loading-content {
+            background: white;
+            padding: 30px 50px;
+            border-radius: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="config-container">
+            <div class="config-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1><i class="bi bi-gear-fill"></i> 系统配置</h1>
+                    <div class="subtitle">WingScribe 飞羽志 - 设置您的系统参数</div>
+                </div>
+                {% if not is_first_run %}
+                <a href="/" class="btn btn-light btn-sm">
+                    <i class="bi bi-arrow-left"></i> 返回画廊
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="mode-toggle">
+                <button class="btn active" id="basicModeBtn" onclick="switchMode('basic')">
+                    <i class="bi bi-sliders"></i> 基本配置
+                </button>
+                <button class="btn" id="advancedModeBtn" onclick="switchMode('advanced')">
+                    <i class="bi bi-gear"></i> 高级配置
+                </button>
+            </div>
+
+            <form id="configForm">
+                <div id="basicConfig" class="config-section"></div>
+                <div id="advancedConfig" class="config-section advanced-section"></div>
+            </form>
+
+            <div class="config-actions">
+                <div>
+                    <label class="form-check-label">
+                        <input class="form-check-input" type="checkbox" id="restartAfterSave">
+                        保存后重启服务
+                    </label>
+                </div>
+                <div>
+                    <button class="btn btn-light me-2" onclick="discardChanges()">
+                        <i class="bi bi-x-circle"></i> 放弃更改
+                    </button>
+                    <button class="btn btn-primary" onclick="saveConfig()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                        <i class="bi bi-check-circle"></i> 保存配置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+            <h5>保存中...</h5>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div class="toast" id="notificationToast" role="alert">
+            <div class="toast-header">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong class="me-auto" id="toastTitle">通知</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentConfig = {};
+        let configDefinition = {};
+        let isBasicMode = true;
+
+        // Load configuration on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadConfig();
+        });
+
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+
+                if (data.error && data.is_first_run) {
+                    // First run - show welcome message
+                    showWelcome();
+                    currentConfig = { paths: {}, processing: {}, recognition: {}, web: {} };
+                } else if (data.config) {
+                    currentConfig = data.config;
+                }
+
+                configDefinition = data.definition || get_default_definition();
+                renderConfig();
+            } catch (error) {
+                console.error('Failed to load config:', error);
+                showToast('加载配置失败', '无法连接到服务器', 'danger');
+            }
+        }
+
+        function get_default_definition() {
+            // Fallback definition in case API fails
+            return {
+                basic: {
+                    paths: [
+                        { key: 'base_dir', label: '照片基准目录', description: '包含照片的根目录', type: 'path', required: true },
+                        { key: 'output.root_dir', label: '输出目录', description: '处理后的照片保存位置', type: 'path', required: true }
+                    ],
+                    web: [
+                        { key: 'host', label: '监听地址', description: '0.0.0.0 = 允许局域网访问', type: 'string', default: '0.0.0.0' },
+                        { key: 'port', label: '端口号', description: 'Web 服务访问端口', type: 'int', default: 8000 }
+                    ]
+                },
+                advanced: {
+                    paths: [],
+                    processing: [],
+                    recognition: [],
+                    web: []
+                }
+            };
+        }
+
+        function renderConfig() {
+            const mode = isBasicMode ? 'basic' : 'advanced';
+            const basicContainer = document.getElementById('basicConfig');
+            const advancedContainer = document.getElementById('advancedConfig');
+
+            basicContainer.innerHTML = '';
+            advancedContainer.innerHTML = '';
+
+            // Render basic config
+            renderSection(configDefinition.basic, basicContainer, 'basic');
+
+            // Render advanced config
+            renderSection(configDefinition.advanced, advancedContainer, 'advanced');
+        }
+
+        function renderSection(definition, container, mode) {
+            for (const [sectionName, items] of Object.entries(definition)) {
+                if (items.length === 0) continue;
+
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'config-section-block';
+
+                const sectionTitle = document.createElement('h5');
+                sectionTitle.className = 'section-title';
+                sectionTitle.textContent = get_section_label(sectionName);
+                sectionDiv.appendChild(sectionTitle);
+
+                items.forEach(item => {
+                    const itemDiv = createConfigItem(item, sectionName);
+                    sectionDiv.appendChild(itemDiv);
+                });
+
+                container.appendChild(sectionDiv);
+            }
+        }
+
+        function createConfigItem(item, sectionName) {
+            const div = document.createElement('div');
+            div.className = 'config-item' + (item.required ? ' required' : '');
+
+            const value = get_nested_value(currentConfig, `${sectionName}.${item.key}`) ?? item.default ?? '';
+
+            // Label
+            const label = document.createElement('label');
+            label.className = 'form-label';
+            label.textContent = item.label;
+            div.appendChild(label);
+
+            // Input
+            if (item.type === 'path') {
+                const inputGroup = document.createElement('div');
+                inputGroup.className = 'path-input-group';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control';
+                input.value = value;
+                input.dataset.section = sectionName;
+                input.dataset.key = item.key;
+                input.dataset.type = item.type || 'string';
+                input.placeholder = item.placeholder || '';
+                input.addEventListener('blur', () => validatePath(input));
+                inputGroup.appendChild(input);
+
+                const browseBtn = document.createElement('button');
+                browseBtn.type = 'button';
+                browseBtn.className = 'btn btn-outline-secondary';
+                browseBtn.innerHTML = '<i class="bi bi-folder"></i>';
+                browseBtn.onclick = () => browsePath(input);
+                inputGroup.appendChild(browseBtn);
+
+                div.appendChild(inputGroup);
+
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'path-status';
+                statusDiv.id = `status-${sectionName}-${item.key.replace('.', '-')}`;
+                div.appendChild(statusDiv);
+
+                // Validate existing path
+                if (value) setTimeout(() => validatePath(input), 100);
+            } else if (item.type === 'select') {
+                const select = document.createElement('select');
+                select.className = 'form-select';
+                select.dataset.section = sectionName;
+                select.dataset.key = item.key;
+                select.dataset.type = item.type;
+
+                (item.options || []).forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = opt;
+                    if (opt === value) option.selected = true;
+                    select.appendChild(option);
+                });
+
+                div.appendChild(select);
+            } else if (item.type === 'bool') {
+                const select = document.createElement('select');
+                select.className = 'form-select';
+                select.dataset.section = sectionName;
+                select.dataset.key = item.key;
+                select.dataset.type = 'bool';
+
+                const yesOption = document.createElement('option');
+                yesOption.value = 'true';
+                yesOption.textContent = '是';
+                const noOption = document.createElement('option');
+                noOption.value = 'false';
+                noOption.textContent = '否';
+
+                if (value === true || value === 'true') yesOption.selected = true;
+                else noOption.selected = true;
+
+                select.appendChild(yesOption);
+                select.appendChild(noOption);
+                div.appendChild(select);
+            } else {
+                const input = document.createElement('input');
+                input.type = item.type === 'int' ? 'number' : item.type === 'float' ? 'number' : 'text';
+                input.className = 'form-control';
+                input.value = value;
+                input.dataset.section = sectionName;
+                input.dataset.key = item.key;
+                input.dataset.type = item.type || 'string';
+
+                if (item.min !== undefined) input.min = item.min;
+                if (item.max !== undefined) input.max = item.max;
+                if (item.step !== undefined) input.step = item.step;
+
+                div.appendChild(input);
+            }
+
+            // Description
+            if (item.description) {
+                const desc = document.createElement('div');
+                desc.className = 'description';
+                desc.textContent = item.description;
+                div.appendChild(desc);
+            }
+
+            return div;
+        }
+
+        function get_nested_value(obj, path) {
+            const keys = path.split('.');
+            let value = obj;
+            for (const key of keys) {
+                if (value && typeof value === 'object') {
+                    value = value[key];
+                } else {
+                    return undefined;
+                }
+            }
+            return value;
+        }
+
+        function get_section_label(sectionName) {
+            const labels = {
+                paths: '路径配置',
+                processing: '处理参数',
+                recognition: '识别设置',
+                web: 'Web 服务'
+            };
+            return labels[sectionName] || sectionName;
+        }
+
+        function switchMode(mode) {
+            isBasicMode = mode === 'basic';
+            document.getElementById('basicModeBtn').classList.toggle('active', isBasicMode);
+            document.getElementById('advancedModeBtn').classList.toggle('active', !isBasicMode);
+            document.getElementById('advancedConfig').classList.toggle('show', !isBasicMode);
+            renderConfig();
+        }
+
+        async function validatePath(input) {
+            const path = input.value;
+            if (!path) return;
+
+            const statusDiv = document.getElementById(`status-${input.dataset.section}-${input.dataset.key.replace('.', '-')}`);
+            statusDiv.textContent = '验证中...';
+
+            try {
+                const response = await fetch(`/api/config/validate?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+
+                if (data.exists && data.is_directory) {
+                    statusDiv.textContent = data.can_write ? '✓ 目录可访问' : '⚠ 目录只读';
+                    statusDiv.className = 'path-status ' + (data.can_write ? 'valid' : 'invalid');
+                } else if (data.exists) {
+                    statusDiv.textContent = '⚠ 路径是文件，不是目录';
+                    statusDiv.className = 'path-status invalid';
+                } else {
+                    statusDiv.textContent = '⚠ 目录不存在（保存时将创建）';
+                    statusDiv.className = 'path-status invalid';
+                }
+            } catch (error) {
+                statusDiv.textContent = '';
+            }
+        }
+
+        function browsePath(input) {
+            // This is a simplified version - in a real app, you'd use a file picker
+            // For now, just show a prompt
+            const path = prompt('输入目录路径:', input.value);
+            if (path !== null) {
+                input.value = path;
+                validatePath(input);
+            }
+        }
+
+        async function saveConfig() {
+            const configs = [];
+            const inputs = document.querySelectorAll('#configForm input, #configForm select');
+
+            for (const input of inputs) {
+                const section = input.dataset.section;
+                const key = input.dataset.key;
+                const type = input.dataset.type;
+
+                if (!section || !key) continue;
+
+                configs.push({
+                    section: section,
+                    key: key,
+                    value: input.value,
+                    type: type
+                });
+            }
+
+            const restart = document.getElementById('restartAfterSave').checked;
+
+            showLoading(true);
+
+            try {
+                const response = await fetch('/api/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ configs, restart })
+                });
+
+                const data = await response.json();
+
+                showLoading(false);
+
+                if (data.status === 'saved') {
+                    showToast('保存成功', '配置已保存', 'success');
+
+                    if (data.restart_required || restart) {
+                        setTimeout(() => {
+                            if (confirm('配置已保存。是否立即重启服务使更改生效？')) {
+                                window.location.href = '/';
+                            }
+                        }, 500);
+                    }
+                } else {
+                    showToast('保存失败', data.error || '未知错误', 'danger');
+                }
+            } catch (error) {
+                showLoading(false);
+                showToast('保存失败', error.message, 'danger');
+            }
+        }
+
+        function discardChanges() {
+            if (confirm('确定要放弃所有更改吗？')) {
+                loadConfig();
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('show', show);
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toast = document.getElementById('notificationToast');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastBody = document.getElementById('toastBody');
+
+            toastTitle.textContent = title;
+            toastBody.textContent = message;
+            toast.className = `toast bg-${type} text-white`;
+
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        }
+
+        function showWelcome() {
+            // Show first-run welcome message
+            const header = document.querySelector('.config-header .subtitle');
+            header.innerHTML = '欢迎使用 WingScribe！请完成基本配置以开始使用。';
+        }
+    </script>
+</body>
+</html>

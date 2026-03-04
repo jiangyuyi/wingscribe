@@ -1,0 +1,17 @@
+# Build output
+build/
+Output/
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.zip
+*.tmp

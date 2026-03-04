@@ -62,6 +62,69 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
 
 ## 🚀 部署指南
 
+### 📦 Windows 安装包 (推荐)
+
+WingScribe 提供 Windows 安装包，包含所有依赖，无需手动配置 Python 环境。
+
+#### 下载安装包
+
+从 [GitHub Releases](https://github.com/jiangyuyi/wingscribe/releases) 下载最新的 `WingScribe-Setup-x.x.x.exe`
+
+#### 安装步骤
+
+1. 双击运行安装包
+2. 选择安装位置（默认：`C:\Users\用户名\WingScribe`）
+3. 选择是否创建桌面快捷方式
+4. 等待安装完成（约 1-3 分钟）
+
+#### 首次运行配置
+
+安装完成后，首次启动时会自动运行配置向导：
+
+1. **配置照片目录** - 选择包含鸟类照片的文件夹
+2. **配置输出目录** - 选择处理后的照片保存位置
+3. **Web 服务配置** - 设置访问地址和端口（默认：http://localhost:8000）
+
+#### 启动服务
+
+安装完成后，有以下几种启动方式：
+
+**方式一：桌面快捷方式**
+- 双击桌面上的 "WingScribe" 图标
+
+**方式二：开始菜单**
+- 开始菜单 → WingScribe → WingScribe
+
+**方式三：命令行**
+```powershell
+cd "C:\Users\用户名\WingScribe"
+.\scripts\start_web.bat
+```
+
+#### 系统要求
+
+- **操作系统**: Windows 10 或更高版本
+- **内存**: 至少 2GB 可用内存
+- **硬盘**: 至少 2GB 可用空间（运行时需要更多空间存储照片和模型）
+- **网络**: 首次运行时需要网络连接下载 AI 模型（约 500MB）
+
+#### 安装包内容
+
+安装包包含以下组件：
+
+| 组件 | 说明 |
+|------|------|
+| Python 3.11 | Python 运行环境 |
+| PyTorch CPU | 深度学习框架（CPU 版本） |
+| YOLOv11 | 鸟类检测模型 |
+| BioCLIP | 鸟类识别模型（首次运行时下载） |
+| ExifTool | 元数据写入工具 |
+| WingScribe | 主程序和 Web 界面 |
+
+> **注意**: 安装包仅支持 CPU 模式，适合没有 NVIDIA 显卡的用户。如需 GPU 加速，请使用源码部署方式。
+
+---
+
 ### ⚡ 一行命令快速部署
 
 #### Windows 用户

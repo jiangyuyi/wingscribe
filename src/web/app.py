@@ -359,8 +359,18 @@ class StartPipelineByFoldersRequest(BaseModel):
 
 # --- Routes ---
 
+# First-run detection helper
+def is_first_run():
+    """Check if this is the first run (no config file)"""
+    config_path = BASE_DIR / "config" / "settings.yaml"
+    return not config_path.exists()
+
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, q: str = "", filter: str = "", date: str = "", limit: int = 50, offset: int = 0):
+def index(request: Request, q: str = "", filter: str = "", date: str = "", limit: int = 50, offset: int = 0, skip_first_check: bool = False):
+    # Check for first run - redirect to settings if no config
+    if not skip_first_check and is_first_run():
+        return templates.TemplateResponse("settings.html", {"request": request, "is_first_run": True})
+
     conn = get_db_conn()
     cursor = conn.cursor()
     
@@ -1052,6 +1062,313 @@ def update_label(req: UpdateLabelRequest):
         exif_writer.write_metadata(original_path, source_tags)
 
     return {"status": "success"}
+
+# --- Configuration Management ---
+class ConfigItem(BaseModel):
+    key: str
+    value: str
+    section: str
+    type: str = "string"  # string, int, float, bool
+
+class SaveConfigRequest(BaseModel):
+    configs: List[ConfigItem]
+    restart: bool = False
+
+def get_config_definition():
+    """Return the configuration schema for UI"""
+    return {
+        "basic": {
+            "paths": [
+                {
+                    "key": "base_dir",
+                    "label": "照片基准目录",
+                    "description": "包含照片的根目录（支持 NAS 路径）",
+                    "type": "path",
+                    "required": True
+                },
+                {
+                    "key": "output.root_dir",
+                    "label": "输出目录",
+                    "description": "处理后的照片保存位置",
+                    "type": "path",
+                    "required": True
+                }
+            ],
+            "web": [
+                {
+                    "key": "host",
+                    "label": "监听地址",
+                    "description": "0.0.0.0 = 允许局域网访问，127.0.0.1 = 仅本机",
+                    "type": "string",
+                    "default": "0.0.0.0"
+                },
+                {
+                    "key": "port",
+                    "label": "端口号",
+                    "description": "Web 服务访问端口",
+                    "type": "int",
+                    "default": 8000
+                }
+            ]
+        },
+        "advanced": {
+            "paths": [
+                {
+                    "key": "db_path",
+                    "label": "数据库路径",
+                    "description": "SQLite 数据库文件位置",
+                    "type": "path"
+                },
+                {
+                    "key": "references_path",
+                    "label": "参考数据目录",
+                    "description": "IOC 鸟类名录等参考文件",
+                    "type": "path"
+                },
+                {
+                    "key": "ioc_list_path",
+                    "label": "IOC 鸟类名录",
+                    "description": "Excel 格式的鸟类分类数据",
+                    "type": "path"
+                },
+                {
+                    "key": "model_cache_dir",
+                    "label": "模型缓存目录",
+                    "description": "BioCLIP 模型缓存位置",
+                    "type": "path"
+                },
+                {
+                    "key": "output.structure_template",
+                    "label": "输出路径模板",
+                    "description": "处理后的文件命名模板",
+                    "type": "string",
+                    "default": "{source_structure}/{filename}_{species_cn}_{confidence}"
+                },
+                {
+                    "key": "output.write_back_to_source",
+                    "label": "回写原图",
+                    "description": "是否将元数据写回原始照片",
+                    "type": "bool",
+                    "default": False
+                }
+            ],
+            "processing": [
+                {
+                    "key": "device",
+                    "label": "处理设备",
+                    "description": "auto/cuda/cpu",
+                    "type": "select",
+                    "options": ["auto", "cuda", "cpu"],
+                    "default": "auto"
+                },
+                {
+                    "key": "yolo_model",
+                    "label": "YOLO 模型",
+                    "description": "鸟类检测模型",
+                    "type": "string",
+                    "default": "yolov26n.pt"
+                },
+                {
+                    "key": "confidence_threshold",
+                    "label": "检测置信度",
+                    "description": "YOLO 检测阈值 (0-1)",
+                    "type": "float",
+                    "default": 0.5,
+                    "min": 0.0,
+                    "max": 1.0
+                },
+                {
+                    "key": "blur_threshold",
+                    "label": "模糊阈值",
+                    "description": "模糊照片检测阈值",
+                    "type": "float",
+                    "default": 40.0
+                },
+                {
+                    "key": "target_size",
+                    "label": "目标尺寸",
+                    "description": "图像处理目标尺寸",
+                    "type": "int",
+                    "default": 640
+                },
+                {
+                    "key": "crop_padding",
+                    "label": "裁剪边距",
+                    "description": "鸟类裁剪区域的扩展边距",
+                    "type": "int",
+                    "default": 200
+                }
+            ],
+            "recognition": [
+                {
+                    "key": "mode",
+                    "label": "识别模式",
+                    "description": "local/api/dongniao",
+                    "type": "select",
+                    "options": ["local", "api", "dongniao"],
+                    "default": "local"
+                },
+                {
+                    "key": "region_filter",
+                    "label": "区域过滤",
+                    "description": "china/auto/null",
+                    "type": "select",
+                    "options": ["china", "auto", "null"],
+                    "default": "auto"
+                },
+                {
+                    "key": "top_k",
+                    "label": "Top-K 候选",
+                    "description": "返回前 K 个候选物种",
+                    "type": "int",
+                    "default": 5
+                },
+                {
+                    "key": "alternatives_threshold",
+                    "label": "备选阈值",
+                    "description": "显示备选结果的置信度阈值",
+                    "type": "int",
+                    "default": 70
+                },
+                {
+                    "key": "low_confidence_threshold",
+                    "label": "低置信度阈值",
+                    "description": "标记为不确定的置信度阈值",
+                    "type": "int",
+                    "default": 60
+                }
+            ],
+            "web": [
+                {
+                    "key": "log_level",
+                    "label": "日志级别",
+                    "description": "info/debug",
+                    "type": "select",
+                    "options": ["info", "debug"],
+                    "default": "info"
+                }
+            ]
+        }
+    }
+
+def get_nested_value(obj, key_path):
+    """Get value from nested dict using dot notation"""
+    keys = key_path.split('.')
+    value = obj
+    for key in keys:
+        if isinstance(value, dict):
+            value = value.get(key)
+        else:
+            return None
+    return value
+
+def set_nested_value(obj, key_path, value):
+    """Set value in nested dict using dot notation"""
+    keys = key_path.split('.')
+    current = obj
+    for key in keys[:-1]:
+        if key not in current:
+            current[key] = {}
+        current = current[key]
+    current[keys[-1]] = value
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page():
+    """Configuration page"""
+    return templates.TemplateResponse("settings.html", {"request": {}})
+
+@app.get("/api/config")
+async def get_config():
+    """Get current configuration"""
+    config_path = BASE_DIR / "config" / "settings.yaml"
+
+    if not config_path.exists():
+        return {"error": "Configuration file not found", "is_first_run": True}
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        current_config = yaml.safe_load(f)
+
+    return {
+        "config": current_config,
+        "definition": get_config_definition(),
+        "is_first_run": False
+    }
+
+@app.post("/api/config/save")
+async def save_config(req: SaveConfigRequest):
+    """Save configuration to file"""
+    config_path = BASE_DIR / "config" / "settings.yaml"
+    config_dir = config_path.parent
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load existing config or create new
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            current_config = yaml.safe_load(f) or {}
+    else:
+        current_config = {
+            'paths': {},
+            'processing': {},
+            'recognition': {},
+            'web': {}
+        }
+
+    # Apply changes
+    for item in req.configs:
+        value = item.value
+
+        # Type conversion
+        if item.type == "int":
+            value = int(value)
+        elif item.type == "float":
+            value = float(value)
+        elif item.type == "bool":
+            value = value.lower() in ("true", "yes", "1", "on")
+
+        set_nested_value(current_config, f"{item.section}.{item.key}", value)
+
+    # Save to file
+    with open(config_path, 'w', encoding='utf-8') as f:
+        yaml.dump(current_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+    # Restart requested?
+    if req.restart:
+        return {"status": "saved", "restart_required": True}
+
+    return {"status": "saved"}
+
+@app.post("/api/config/restart")
+async def restart_server():
+    """Restart the server (by signaling)"""
+    # In a production setup, this would be handled by a process manager
+    # For now, we'll return success and let the frontend handle reload
+    return {"status": "restart_requested"}
+
+@app.get("/api/config/validate")
+async def validate_config_path(path: str):
+    """Validate if a path exists and is accessible"""
+    try:
+        p = Path(path)
+        exists = p.exists()
+        is_dir = p.is_dir() if exists else False
+        can_write = False
+
+        if exists and is_dir:
+            try:
+                test_file = p / ".wingscribe_write_test"
+                test_file.touch()
+                test_file.unlink()
+                can_write = True
+            except:
+                pass
+
+        return {
+            "exists": exists,
+            "is_directory": is_dir,
+            "can_write": can_write
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import argparse

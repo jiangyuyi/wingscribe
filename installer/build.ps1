@@ -1,0 +1,423 @@
+#!/usr/bin/env pwsh
+#===============================================================================
+# WingScribe Installer Build Script
+#===============================================================================
+# This script prepares all components for the Inno Setup installer
+
+param(
+    [switch]$SkipWheels = $false,
+    [switch]$SkipExifTool = $false,
+    [switch]$SkipPython = $false
+)
+
+$ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+
+$PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
+$INSTALLER_DIR = $PSScriptRoot
+$BUILD_DIR = Join-Path $INSTALLER_DIR "build"
+$WHEELS_DIR = Join-Path $INSTALLER_DIR "wheels"
+$TOOLS_DIR = Join-Path $INSTALLER_DIR "tools"
+$ASSETS_DIR = Join-Path $INSTALLER_DIR "assets"
+
+# Colors
+function Log-Info   { Write-Host "[INFO]   $($args[0])" -ForegroundColor Green }
+function Log-Warn   { Write-Host "[WARN]   $($args[0])" -ForegroundColor Yellow }
+function Log-Error  { Write-Host "[ERROR]  $($args[0])" -ForegroundColor Red }
+function Log-Step   { Write-Host "[STEP]   $($args[0])" -ForegroundColor Cyan }
+function Log-Success{ Write-Host "[OK]     $($args[0])" -ForegroundColor Green }
+
+#===============================================================================
+# Step 1: Download Python 3.11 Embedded
+#===============================================================================
+function Download-Python {
+    Log-Step "Downloading Python 3.11.8 embeddable package..."
+
+    $pythonUrl = "https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip"
+    $pythonZip = Join-Path $BUILD_DIR "python-3.11.8-embed-amd64.zip"
+    $pythonDir = Join-Path $BUILD_DIR "python"
+
+    if (-not (Test-Path $pythonDir)) {
+        if (-not (Test-Path $pythonZip)) {
+            Log-Info "Downloading from $pythonUrl..."
+            Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonZip -UseBasicParsing
+            Log-Success "Python downloaded"
+        }
+
+        Log-Info "Extracting Python..."
+        Expand-Archive -Path $pythonZip -DestinationPath $pythonDir -Force
+        Log-Success "Python extracted to $pythonDir"
+    } else {
+        Log-Info "Python already exists, skipping download"
+    }
+
+    # Modify python311._pth to include site-packages
+    $pthFile = Join-Path $pythonDir "python311._pth"
+    if (Test-Path $pthFile) {
+        $pthContent = Get-Content $pthFile
+        if ($pthContent -notmatch "site-packages") {
+            Log-Info "Modifying python311._pth to enable site-packages..."
+            $pthContent += "Lib/site-packages"
+            $pthContent += "import site"
+            $pthContent | Set-Content $pthFile -Encoding UTF8
+            Log-Success "Python configured for site-packages"
+        }
+    }
+}
+
+#===============================================================================
+# Step 2: Download PyTorch CPU wheels
+#===============================================================================
+function Download-PyTorchWheels {
+    Log-Step "Downloading PyTorch CPU wheels..."
+
+    $wheels = @(
+        "https://download.pytorch.org/whl/cpu/torch-2.1.0%2Bcpu-cp311-cp311-win_amd64.whl",
+        "https://download.pytorch.org/whl/cpu/torchvision-0.16.0%2Bcpu-cp311-cp311-win_amd64.whl",
+        "https://download.pytorch.org/whl/cpu/torchaudio-2.1.0%2Bcpu-cp311-cp311-win_amd64.whl"
+    )
+
+    Ensure-Directory $WHEELS_DIR
+
+    foreach ($wheel in $wheels) {
+        $fileName = Split-Path $wheel -Leaf
+        $filePath = Join-Path $WHEELS_DIR ($fileName -replace "%2B", "+")
+
+        if (-not (Test-Path $filePath)) {
+            Log-Info "Downloading $fileName..."
+            Invoke-WebRequest -Uri $wheel -OutFile $filePath -UseBasicParsing
+        } else {
+            Log-Info "$fileName already exists"
+        }
+    }
+
+    Log-Success "PyTorch wheels downloaded"
+}
+
+#===============================================================================
+# Step 3: Download ExifTool
+#===============================================================================
+function Download-ExifTool {
+    Log-Step "Downloading ExifTool..."
+
+    # ExifTool Windows 64-bit version from SourceForge
+    $exifVersion = "13.52"
+    $exifUrl = "https://sourceforge.net/projects/exiftool/files/exiftool-${exifVersion}_64.zip/download"
+    $exifZip = Join-Path $TOOLS_DIR "exiftool.zip"
+    $exifExe = Join-Path $TOOLS_DIR "exiftool.exe"
+
+    Ensure-Directory $TOOLS_DIR
+
+    if (-not (Test-Path $exifExe)) {
+        if (-not (Test-Path $exifZip)) {
+            Log-Info "Downloading ExifTool from $exifUrl..."
+            # Use MaximumRedirection to handle SourceForge redirects
+            $ProgressPreference = "SilentlyContinue"
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($exifUrl, $exifZip)
+        }
+
+        # Verify zip file is valid (check magic bytes)
+        $zipBytes = [System.IO.File]::ReadAllBytes($exifZip)
+        if ($zipBytes[0] -ne 0x50 -or $zipBytes[1] -ne 0x4B -or $zipBytes[2] -ne 0x03 -or $zipBytes[3] -ne 0x04) {
+            Log-Warn "Downloaded file is not a valid zip (SourceForge mirror issue). Deleting and retrying..."
+            Remove-Item $exifZip -Force
+            Log-Info "Please download ExifTool manually from: https://exiftool.org/"
+            Log-Info "Extract exiftool.exe and place in: $TOOLS_DIR"
+            return $false
+        }
+
+        Log-Info "Extracting ExifTool..."
+        $tempDir = Join-Path $env:TEMP "exiftool_extract"
+        if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
+        Expand-Archive -Path $exifZip -DestinationPath $tempDir -Force
+
+        # Find exiftool.exe (might be in a subdirectory or named exiftool(-k).exe)
+        $foundExe = Get-ChildItem -Path $tempDir -Filter "exiftool*.exe" -Recurse | Select-Object -First 1
+        if ($foundExe) {
+            Copy-Item $foundExe.FullName -Destination $exifExe -Force
+            Remove-Item $tempDir -Recurse -Force
+            Log-Success "ExifTool extracted to $exifExe"
+        } else {
+            Log-Error "exiftool.exe not found in downloaded archive"
+            return $false
+        }
+    } else {
+        Log-Info "ExifTool already exists"
+    }
+
+    return $true
+}
+
+#===============================================================================
+# Step 4: Prepare virtual environment with all dependencies
+#===============================================================================
+function Prepare-VirtualEnv {
+    Log-Step "Preparing virtual environment..."
+
+    $venvDir = Join-Path $BUILD_DIR "venv"
+
+    # Find system Python
+    $systemPython = $null
+    foreach ($cmd in @("python3.11", "python3", "python")) {
+        try {
+            $version = & $cmd --version 2>&1
+            if ($version -match "Python 3\.([0-9]+)") {
+                $minor = [int]$Matches[1]
+                if ($minor -ge 8) {
+                    $systemPython = $cmd
+                    Log-Info "Found system Python: $version"
+                    break
+                }
+            }
+        } catch { }
+    }
+
+    if (-not $systemPython) {
+        Log-Error "Python 3.8+ not found in system PATH"
+        Log-Info "Please install Python from: https://www.python.org/downloads/"
+        return $false
+    }
+
+    # Create virtual environment using system Python
+    if (-not (Test-Path $venvDir)) {
+        Log-Info "Creating virtual environment with system Python..."
+        & $systemPython -m venv $venvDir
+        if ($LASTEXITCODE -ne 0) {
+            Log-Error "Failed to create virtual environment"
+            return $false
+        }
+        Log-Success "Virtual environment created"
+    } else {
+        Log-Info "Virtual environment already exists"
+    }
+
+    return $true
+}
+
+function Install-Dependencies {
+    Log-Step "Installing Python dependencies..."
+
+    $venvPython = Join-Path $BUILD_DIR "venv\Scripts\python.exe"
+    $venvPip = Join-Path $BUILD_DIR "venv\Scripts\pip.exe"
+
+    if (-not (Test-Path $venvPip)) {
+        Log-Error "pip not found at $venvPip"
+        return $false
+    }
+
+    # First install PyTorch from local wheels
+    Log-Info "Installing PyTorch from local wheels..."
+    $torchWheels = Get-ChildItem (Join-Path $WHEELS_DIR "*.whl")
+    foreach ($wheel in $torchWheels) {
+        Log-Info "  Installing $($wheel.Name)..."
+        & $venvPip install --no-index --no-deps $wheel.FullName
+    }
+
+    # Then install other dependencies from PyPI
+    Log-Info "Installing other dependencies..."
+    $requirementsCpu = Join-Path $INSTALLER_DIR "requirements-cpu.txt"
+    & $venvPip install -r $requirementsCpu
+
+    if ($LASTEXITCODE -eq 0) {
+        Log-Success "Dependencies installed"
+        return $true
+    } else {
+        Log-Error "Failed to install dependencies"
+        return $false
+    }
+}
+
+#===============================================================================
+# Step 5: Copy WingScribe source code
+#===============================================================================
+function Copy-SourceCode {
+    Log-Step "Copying WingScribe source code..."
+
+    $sourceDir = Join-Path $BUILD_DIR "src"
+
+    # Remove existing if any
+    if (Test-Path $sourceDir) {
+        Remove-Item $sourceDir -Recurse -Force
+    }
+
+    # Copy from project root
+    $dirsToCopy = @("src", "config", "scripts", "tests")
+    foreach ($dir in $dirsToCopy) {
+        $source = Join-Path $PROJECT_ROOT $dir
+        if (Test-Path $source) {
+            Copy-Item -Path $source -Destination (Join-Path $BUILD_DIR $dir) -Recurse -Force
+            Log-Info "  Copied $dir/"
+        }
+    }
+
+    # Copy individual files
+    $filesToCopy = @("requirements.txt", "README.md", "CLAUDE.md")
+    foreach ($file in $filesToCopy) {
+        $source = Join-Path $PROJECT_ROOT $file
+        if (Test-Path $source) {
+            Copy-Item -Path $source -Destination (Join-Path $BUILD_DIR $file) -Force
+        }
+    }
+
+    Log-Success "Source code copied"
+}
+
+#===============================================================================
+# Step 6: Create startup scripts
+#===============================================================================
+function Create-StartupScripts {
+    Log-Step "Creating startup scripts..."
+
+    $scriptsDir = Join-Path $BUILD_DIR "scripts"
+    Ensure-Directory $scriptsDir
+
+    # start_web.bat
+    $batContent = @"
+@echo off
+REM WingScribe Web Server Launcher
+REM This script starts the WingScribe web interface
+
+setlocal
+
+REM Get the directory where this script is located
+set SCRIPT_DIR=%~dp0
+set APP_ROOT=%SCRIPT_ID%..
+
+REM Activate virtual environment
+call "%APP_ROOT%\venv\Scripts\activate.bat"
+
+REM Change to application directory
+cd /d "%APP_ROOT%"
+
+REM Start the web server
+echo Starting WingScribe Web Server...
+echo URL: http://localhost:8000
+echo Press Ctrl+C to stop
+echo.
+
+python "%APP_ROOT%\src\web\app.py"
+
+pause
+"@
+
+    $batContent | Out-File (Join-Path $scriptsDir "start_web.bat") -Encoding ASCII
+
+    # start_web.ps1
+    $psContent = @"
+# WingScribe Web Server Launcher (PowerShell)
+
+$ErrorActionPreference = "Stop"
+$ScriptRoot = Split-Path $MyInvocation.MyCommand.Path
+$AppRoot = Split-Path $ScriptRoot -Parent
+
+# Activate virtual environment
+$VenvActivate = Join-Path $AppRoot "venv\Scripts\Activate.ps1"
+if (Test-Path $VenvActivate) {
+    & $VenvActivate
+}
+
+# Change to application directory
+Set-Location $AppRoot
+
+# Start the web server
+Write-Host "Starting WingScribe Web Server..." -ForegroundColor Green
+Write-Host "URL: http://localhost:8000" -ForegroundColor Cyan
+Write-Host "Press Ctrl+C to stop" -ForegroundColor Gray
+Write-Host ""
+
+& python "$AppRoot\src\web\app.py"
+"@
+
+    $psContent | Out-File (Join-Path $scriptsDir "start_web.ps1") -Encoding UTF8
+
+    Log-Success "Startup scripts created"
+}
+
+#===============================================================================
+# Step 7: Prepare first-run wizard
+#===============================================================================
+function Prepare-FirstRunWizard {
+    Log-Step "Preparing first-run configuration wizard..."
+
+    $wizardScript = Join-Path $PROJECT_ROOT "scripts\config_wizard.py"
+    $wizardDest = Join-Path $BUILD_DIR "scripts\config_wizard.py"
+
+    if (-not (Test-Path $wizardScript)) {
+        # Create the wizard script if it doesn't exist
+        Log-Info "Creating config wizard script..."
+        # ... wizard creation will be in a separate task
+    }
+
+    if (Test-Path $wizardScript) {
+        Copy-Item $wizardScript -Destination $wizardDest -Force
+        Log-Success "Config wizard copied"
+    }
+}
+
+#===============================================================================
+# Helper Functions
+#===============================================================================
+function Ensure-Directory {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) {
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    }
+}
+
+#===============================================================================
+# Main Build Process
+#===============================================================================
+function Invoke-Build {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "  WingScribe Installer Build" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Create build directories
+    Ensure-Directory $BUILD_DIR
+    Ensure-Directory $WHEELS_DIR
+    Ensure-Directory $TOOLS_DIR
+    Ensure-Directory $ASSETS_DIR
+
+    # Execute build steps
+    # Note: We now use system Python instead of downloading embedded Python
+
+    if (-not $SkipWheels) {
+        Download-PyTorchWheels
+    }
+
+    if (-not $SkipExifTool) {
+        Download-ExifTool
+    }
+
+    Prepare-VirtualEnv
+    Install-Dependencies
+    Copy-SourceCode
+    Create-StartupScripts
+    Prepare-FirstRunWizard
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "  Build Complete!" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Build output:" -ForegroundColor White
+    Write-Host "    Virtual environment: $venvDir" -ForegroundColor Gray
+    Write-Host "    Source code: $BUILD_DIR\src" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Next steps:" -ForegroundColor White
+    Write-Host "    1. Download Inno Setup: https://jrsoftware.org/isdl.php" -ForegroundColor Gray
+    Write-Host "    2. Run: iscc installer\installer.iss" -ForegroundColor Gray
+    Write-Host "    3. Output: installer\Output\WingScribe-Setup.exe" -ForegroundColor Gray
+    Write-Host ""
+}
+
+# Run the build
+try {
+    Invoke-Build
+} catch {
+    Log-Error "Build failed: $_"
+    exit 1
+}

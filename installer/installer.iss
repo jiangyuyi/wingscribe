@@ -71,8 +71,8 @@ Name: "{group}\Uninstall WingScribe"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\WingScribe"; Filename: "{app}\scripts\start_web.bat"; Tasks: desktop
 
 [Run]
-; Launch configuration wizard on first run
-Filename: "{app}\venv\Scripts\python.exe"; Parameters: """{app}\scripts\config_wizard.py"""; Description: "Run configuration wizard"; StatusMsg: "Starting configuration wizard..."; Flags: runhidden waituntilterminated
+; Launch configuration wizard on first run (visible, wait for completion)
+Filename: "{app}\venv\Scripts\python.exe"; Parameters: """{app}\scripts\config_wizard.py"""; Description: "Run configuration wizard"; StatusMsg: "Starting configuration wizard..."; Flags: waituntilterminated
 
 ; Launch web server if user chooses
 Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Service"; StatusMsg: "Starting Web service..."; Flags: nowait postinstall skipifsilent

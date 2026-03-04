@@ -180,11 +180,14 @@ class ConfigWizard:
 
     def save_config(self, root_dir, port):
         """Save configuration to settings.yaml."""
-        # Get app root
-        if getattr(sys, 'frozen', False):
-            app_root = Path(sys.executable).parent
+        # Get app root - config_wizard.py is in {app_root}/scripts/
+        # For both normal Python and frozen (install) environments
+        script_path = Path(__file__).resolve()
+        if script_path.parent.name == "scripts":
+            app_root = script_path.parent.parent
         else:
-            app_root = Path(__file__).parent.parent
+            # Fallback: try to find app root by going up from script location
+            app_root = script_path.parent
 
         config_path = app_root / "config" / "settings.yaml"
         config_dir = config_path.parent

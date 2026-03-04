@@ -7,7 +7,7 @@ This helps users set up their photo directories and preferences.
 """
 
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog, messagebox
 import os
 import sys
 import yaml
@@ -20,10 +20,10 @@ class ConfigWizard:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("WingScribe 配置向导")
-        self.root.geometry("600x500")
+        self.root.geometry("700x600")
         self.root.resizable(False, False)
 
-        # Try to set icon if available
+        # Set window icon if available
         try:
             icon_path = Path(__file__).parent.parent / "assets" / "app-icon.ico"
             if icon_path.exists():
@@ -31,20 +31,16 @@ class ConfigWizard:
         except:
             pass
 
-        # Configuration values
-        self.config = {
-            'base_dir': os.path.expanduser("~/Pictures"),
-            'output_dir': "data/processed",
-            'web_host': "0.0.0.0",
-            'web_port': 8000,
-            'device': "cpu"
-        }
+        # Configuration values - simplified structure
+        # User selects one root directory, we'll create subdirectories inside
+        self.root_dir = os.path.expanduser("~/WingScribe")
+        self.web_port = 8000
 
         # Current page
         self.current_page = 0
 
-        # Pages
-        self.pages = []
+        # Page containers
+        self.page_container = None
 
         # Build UI
         self.setup_ui()
@@ -53,7 +49,7 @@ class ConfigWizard:
     def setup_ui(self):
         """Setup the wizard UI."""
         # Header
-        header = tk.Frame(self.root, bg="#667eea", height=80)
+        header = tk.Frame(self.root, bg="#667eea", height=70)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
 
@@ -67,54 +63,66 @@ class ConfigWizard:
         title_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
         # Content area
-        self.content_frame = tk.Frame(self.root, padx=40, pady=30)
-        self.content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Button area
-        button_frame = tk.Frame(self.root, pady=20)
-        button_frame.pack(fill=tk.X)
-
-        self.back_btn = ttk.Button(
-            button_frame,
-            text="<< 上一步",
-            command=self.go_back,
-            width=12
-        )
-        self.back_btn.pack(side=tk.LEFT, padx=10)
-        self.back_btn.state(['disabled'])
-
-        self.next_btn = ttk.Button(
-            button_frame,
-            text="下一步 >>",
-            command=self.go_next,
-            width=12
-        )
-        self.next_btn.pack(side=tk.RIGHT, padx=10)
+        self.page_container = tk.Frame(self.root, bg="white")
+        self.page_container.pack(fill=tk.BOTH, expand=True)
 
         # Create pages
         self.create_welcome_page()
-        self.create_photo_dir_page()
-        self.create_output_dir_page()
-        self.create_web_config_page()
+        self.create_directory_page()
         self.create_complete_page()
+
+        # Button area - using tk.Button for better control
+        button_frame = tk.Frame(self.root, bg="#f8f9fa", pady=20)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        self.back_btn = tk.Button(
+            button_frame,
+            text="< 上一步",
+            command=self.go_back,
+            font=("Microsoft YaHei UI", 10),
+            width=12,
+            height=2,
+            bg="white",
+            relief=tk.RAISED,
+            state=tk.DISABLED
+        )
+        self.back_btn.pack(side=tk.LEFT, padx=30, pady=10)
+
+        self.next_btn = tk.Button(
+            button_frame,
+            text="下一步 >",
+            command=self.go_next,
+            font=("Microsoft YaHei UI", 10),
+            width=12,
+            height=2,
+            bg="#667eea",
+            fg="white",
+            relief=tk.RAISED,
+            activebackground="#5568d3",
+            activeforeground="white"
+        )
+        self.next_btn.pack(side=tk.RIGHT, padx=30, pady=10)
 
     def show_page(self, page_num):
         """Show a specific page."""
-        # Hide all pages
-        for page in self.pages:
-            page.pack_forget()
+        # Clear current page
+        for widget in self.page_container.winfo_children():
+            widget.destroy()
 
         # Show requested page
-        self.pages[page_num].pack(fill=tk.BOTH, expand=True)
+        self.pages[page_num](self.page_container)
         self.current_page = page_num
 
         # Update button states
-        self.back_btn.state(['!disabled'] if page_num > 0 else ['disabled'])
+        num_pages = len(self.pages)
+        self.back_btn.config(state=tk.NORMAL if page_num > 0 else tk.DISABLED)
 
-        if page_num == len(self.pages) - 1:
-            self.next_btn.configure(text="完成", command=self.finish)
+        if page_num == num_pages - 1:
+            self.next_btn.config(text="完成", command=self.finish, bg="#28a745",
+                               activebackground="#218838")
         else:
-            self.next_btn.configure(text="下一步 >>", command=self.go_next)
+            self.next_btn.config(text="下一步 >", command=self.go_next, bg="#667eea",
+                               activebackground="#5568d3")
 
     def go_back(self):
         """Go to previous page."""
@@ -130,50 +138,38 @@ class ConfigWizard:
 
     def validate_page(self, page_num):
         """Validate the current page before proceeding."""
-        if page_num == 1:  # Photo directory page
-            photo_dir = self.photo_dir_var.get().strip()
-            if not photo_dir:
-                messagebox.showerror("错误", "请选择照片目录")
+        if page_num == 1:  # Directory page
+            root_dir = self.root_dir_var.get().strip()
+            if not root_dir:
+                messagebox.showerror("错误", "请选择 WingScribe 根目录")
                 return False
-            if not os.path.exists(photo_dir):
-                result = messagebox.askyesno(
-                    "目录不存在",
-                    f"目录不存在: {photo_dir}\n\n是否创建此目录？"
-                )
-                if result:
-                    try:
-                        os.makedirs(photo_dir, exist_ok=True)
-                    except Exception as e:
-                        messagebox.showerror("错误", f"无法创建目录: {e}")
-                        return False
-                else:
-                    return False
 
-        elif page_num == 2:  # Output directory page
-            output_dir = self.output_dir_var.get().strip()
-            if not output_dir:
-                messagebox.showerror("错误", "请选择输出目录")
-                return False
+            # Test if directory exists or can be created
+            if not os.path.exists(root_dir):
+                try:
+                    os.makedirs(root_dir, exist_ok=True)
+                except Exception as e:
+                    messagebox.showerror("错误", f"无法创建目录: {e}")
+                    return False
 
         return True
 
     def finish(self):
         """Finish the wizard and save configuration."""
         try:
-            # Update config from UI
-            self.config['base_dir'] = self.photo_dir_var.get().strip().replace('\\', '/')
-            self.config['output_dir'] = self.output_dir_var.get().strip().replace('\\', '/')
-            self.config['web_host'] = self.host_var.get()
-            self.config['web_port'] = int(self.port_var.get())
+            root_dir = self.root_dir_var.get().strip().replace('\\', '/')
+            port = self.port_var.get()
 
             # Save configuration
-            self.save_config()
+            self.save_config(root_dir, port)
 
             # Show success message
             messagebox.showinfo(
                 "配置完成",
                 "WingScribe 配置已完成！\n\n"
-                "您可以启动 Web 服务开始使用。"
+                f"根目录: {root_dir}\n"
+                f"访问地址: http://localhost:{port}\n\n"
+                "点击确定后，Web 服务将自动启动。"
             )
 
             self.root.quit()
@@ -182,7 +178,7 @@ class ConfigWizard:
         except Exception as e:
             messagebox.showerror("错误", f"保存配置失败: {e}")
 
-    def save_config(self):
+    def save_config(self, root_dir, port):
         """Save configuration to settings.yaml."""
         # Get app root
         if getattr(sys, 'frozen', False):
@@ -194,27 +190,33 @@ class ConfigWizard:
         config_dir = config_path.parent
         config_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate YAML content
+        # Simplified configuration structure
+        # root_dir is the base directory containing everything
         config_content = f"""# WingScribe config
 # Generated by configuration wizard
 
 paths:
-  base_dir: "{self.config['base_dir']}"
-  references_path: "data/references"
+  # Root directory for all data (photos input/output, database, models, etc.)
+  base_dir: "{root_dir}"
+
   sources:
-    - path: "."
+    # Source photos will be in: {root_dir}/原始照片/
+    - path: "原始照片"
       recursive: true
       enabled: true
+
   output:
-    root_dir: "{self.config['output_dir']}"
-    structure_template: "{{source_structure}}/{{filename}}_{{species_cn}}_{{confidence}}"
+    # Processed photos will be saved to: {root_dir}/处理结果/
+    root_dir: "处理结果"
+    structure_template: "{{{{source_structure}}}}/{{{{filename}}}}_{{{{species_cn}}}}_{{{{confidence}}}}"
     write_back_to_source: false
+
   db_path: "data/db/wingscribe.db"
   ioc_list_path: "data/references/Multiling IOC 15.1_d.xlsx"
   model_cache_dir: "data/models"
 
 processing:
-  device: "{self.config['device']}"
+  device: "cpu"
   yolo_model: "yolov26n.pt"
   confidence_threshold: 0.5
   blur_threshold: 40.0
@@ -234,324 +236,326 @@ recognition:
     inference_batch_size: 16
 
 web:
-  host: "{self.config['web_host']}"
-  port: {self.config['web_port']}
+  host: "0.0.0.0"
+  port: {port}
   log_level: "info"
 """
-
         config_path.write_text(config_content, encoding='utf-8')
 
-        # Create secrets template if it doesn't exist
-        secrets_path = app_root / "config" / "secrets.yaml"
-        if not secrets_path.exists():
-            secrets_content = """# WingScribe secrets
-# 请填入您的 API 密钥
-
-# 顶层 API 密钥
-hf_api_key: ""
-dongniao_api_key: ""
-
-# 云端识别配置
-cloud:
-  huggingface:
-    api_token: ""
-    model_id: "imageomics/bioclip-2"
-  modelscope:
-    api_token: ""
-  baidu:
-    api_key: ""
-    secret_key: ""
-  aliyun:
-    access_key_id: ""
-    access_key_secret: ""
-"""
-            secrets_path.write_text(secrets_content, encoding='utf-8')
+        # Create subdirectories
+        (Path(root_dir) / "原始照片").mkdir(parents=True, exist_ok=True)
+        (Path(root_dir) / "处理结果").mkdir(parents=True, exist_ok=True)
+        (Path(root_dir) / "data").mkdir(parents=True, exist_ok=True)
+        (Path(root_dir) / "data" / "db").mkdir(parents=True, exist_ok=True)
+        (Path(root_dir) / "data" / "models").mkdir(parents=True, exist_ok=True)
+        (Path(root_dir) / "data" / "references").mkdir(parents=True, exist_ok=True)
+        (Path(root_dir) / "data" / "processed").mkdir(parents=True, exist_ok=True)
 
     def create_welcome_page(self):
-        """Create welcome page."""
-        page = tk.Frame(self.content_frame)
+        """Create welcome page function."""
+        def render(container):
+            container.config(bg="white")
 
-        tk.Label(
-            page,
-            text="欢迎使用 WingScribe",
-            font=("Microsoft YaHei UI", 18, "bold")
-        ).pack(pady=(0, 20))
+            # Main content frame
+            content = tk.Frame(container, bg="white", padx=50, pady=40)
+            content.pack(expand=True, fill=tk.BOTH)
 
-        tk.Label(
-            page,
-            text="🕊️ 飞羽志 | AI 鸟类照片管理系统",
-            font=("Microsoft YaHei UI", 12),
-            fg="#667eea"
-        ).pack(pady=(0, 30))
-
-        info_text = """本向导将帮助您配置 WingScribe。
-
-配置内容包括：
-• 照片源目录（包含待处理的鸟类照片）
-• 输出目录（处理后的照片保存位置）
-• Web 服务配置（访问地址和端口）
-
-预计用时：2 分钟"""
-
-        tk.Label(
-            page,
-            text=info_text,
-            font=("Microsoft YaHei UI", 10),
-            justify=tk.LEFT
-        ).pack(pady=20)
-
-        self.pages.append(page)
-
-    def create_photo_dir_page(self):
-        """Create photo directory selection page."""
-        page = tk.Frame(self.content_frame)
-
-        tk.Label(
-            page,
-            text="步骤 1/3: 选择照片目录",
-            font=("Microsoft YaHei UI", 14, "bold")
-        ).pack(pady=(0, 10))
-
-        tk.Label(
-            page,
-            text="选择包含鸟类照片的目录",
-            font=("Microsoft YaHei UI", 10),
-            fg="gray"
-        ).pack(pady=(0, 30))
-
-        # Directory selection
-        dir_frame = tk.Frame(page)
-        dir_frame.pack(fill=tk.X, pady=20)
-
-        self.photo_dir_var = tk.StringVar(value=self.config['base_dir'])
-
-        tk.Entry(
-            dir_frame,
-            textvariable=self.photo_dir_var,
-            width=50,
-            font=("Microsoft YaHei UI", 10)
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        ttk.Button(
-            dir_frame,
-            text="浏览...",
-            command=lambda: self.browse_directory(self.photo_dir_var)
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        # Instructions
-        help_text = """建议的目录结构：
-  年份/日期_地点/照片.jpg
-
-例如：
-  2024/20240101_北京天坛/IMG_001.jpg
-  2024/20240102_颐和园/IMG_002.jpg"""
-
-        tk.Label(
-            page,
-            text=help_text,
-            font=("Microsoft YaHei UI", 9),
-            justify=tk.LEFT,
-            bg="#f5f5f5",
-            padx=15,
-            pady=15
-        ).pack(fill=tk.X, pady=20)
-
-        self.pages.append(page)
-
-    def create_output_dir_page(self):
-        """Create output directory selection page."""
-        page = tk.Frame(self.content_frame)
-
-        tk.Label(
-            page,
-            text="步骤 2/3: 选择输出目录",
-            font=("Microsoft YaHei UI", 14, "bold")
-        ).pack(pady=(0, 10))
-
-        tk.Label(
-            page,
-            text="处理后的照片将保存到此目录",
-            font=("Microsoft YaHei UI", 10),
-            fg="gray"
-        ).pack(pady=(0, 30))
-
-        # Directory selection
-        dir_frame = tk.Frame(page)
-        dir_frame.pack(fill=tk.X, pady=20)
-
-        self.output_dir_var = tk.StringVar(value=self.config['output_dir'])
-
-        tk.Entry(
-            dir_frame,
-            textvariable=self.output_dir_var,
-            width=50,
-            font=("Microsoft YaHei UI", 10)
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        ttk.Button(
-            dir_frame,
-            text="浏览...",
-            command=lambda: self.browse_directory(self.output_dir_var)
-        ).pack(side=tk.LEFT, padx=(10, 0))
-
-        # Tip
-        tk.Label(
-            page,
-            text="💡 提示：可以设置为与照片目录相同的位置",
-            font=("Microsoft YaHei UI", 9),
-            fg="#667eea"
-        ).pack(pady=20)
-
-        self.pages.append(page)
-
-    def create_web_config_page(self):
-        """Create web service configuration page."""
-        page = tk.Frame(self.content_frame)
-
-        tk.Label(
-            page,
-            text="步骤 3/3: Web 服务配置",
-            font=("Microsoft YaHei UI", 14, "bold")
-        ).pack(pady=(0, 10))
-
-        tk.Label(
-            page,
-            text="配置 Web 管理界面",
-            font=("Microsoft YaHei UI", 10),
-            fg="gray"
-        ).pack(pady=(0, 30))
-
-        # Host configuration
-        host_frame = tk.Frame(page)
-        host_frame.pack(fill=tk.X, pady=10)
-
-        tk.Label(
-            host_frame,
-            text="监听地址：",
-            font=("Microsoft YaHei UI", 10),
-            width=15,
-            anchor=tk.W
-        ).pack(side=tk.LEFT)
-
-        self.host_var = tk.StringVar(value=self.config['web_host'])
-        host_combo = ttk.Combobox(
-            host_frame,
-            textvariable=self.host_var,
-            values=["0.0.0.0", "127.0.0.1", "localhost"],
-            width=30,
-            font=("Microsoft YaHei UI", 10)
-        )
-        host_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Port configuration
-        port_frame = tk.Frame(page)
-        port_frame.pack(fill=tk.X, pady=10)
-
-        tk.Label(
-            port_frame,
-            text="端口号：",
-            font=("Microsoft YaHei UI", 10),
-            width=15,
-            anchor=tk.W
-        ).pack(side=tk.LEFT)
-
-        self.port_var = tk.StringVar(value=str(self.config['web_port']))
-        tk.Spinbox(
-            port_frame,
-            from_=1024,
-            to=65535,
-            textvariable=self.port_var,
-            width=28,
-            font=("Microsoft YaHei UI", 10)
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Info
-        info_frame = tk.Frame(page, bg="#e8f4fd", padx=15, pady=15)
-        info_frame.pack(fill=tk.X, pady=20)
-
-        tk.Label(
-            info_frame,
-            text="📌 默认配置说明",
-            font=("Microsoft YaHei UI", 10, "bold"),
-            bg="#e8f4fd"
-        ).pack(anchor=tk.W)
-
-        tk.Label(
-            info_frame,
-            text="""• 0.0.0.0 = 允许局域网访问
-• 127.0.0.1 = 仅本机访问
-• 端口 8000 = 常用端口，一般无需修改""",
-            font=("Microsoft YaHei UI", 9),
-            justify=tk.LEFT,
-            bg="#e8f4fd"
-        ).pack(anchor=tk.W, pady=(5, 0))
-
-        self.pages.append(page)
-
-    def create_complete_page(self):
-        """Create completion page."""
-        page = tk.Frame(self.content_frame)
-
-        tk.Label(
-            page,
-            text="🎉 配置完成！",
-            font=("Microsoft YaHei UI", 16, "bold"),
-            fg="#28a745"
-        ).pack(pady=(0, 30))
-
-        # Summary
-        summary_frame = tk.Frame(page, bg="#f5f5f5", padx=20, pady=20)
-        summary_frame.pack(fill=tk.X, pady=20)
-
-        tk.Label(
-            summary_frame,
-            text="配置摘要",
-            font=("Microsoft YaHei UI", 11, "bold"),
-            bg="#f5f5f5"
-        ).pack(anchor=tk.W, pady=(0, 10))
-
-        summary_labels = [
-            ("照片目录", self.photo_dir_var),
-            ("输出目录", self.output_dir_var),
-            ("访问地址", self.host_var),
-            ("端口号", self.port_var),
-        ]
-
-        for label, var in summary_labels:
-            row = tk.Frame(summary_frame, bg="#f5f5f5")
-            row.pack(fill=tk.X, pady=5)
+            # Title
             tk.Label(
-                row,
-                text=label + "：",
-                font=("Microsoft YaHei UI", 9),
-                bg="#f5f5f5",
-                width=15,
-                anchor=tk.W
-            ).pack(side=tk.LEFT)
-            tk.Label(
-                row,
-                text=var.get(),
-                font=("Microsoft YaHei UI", 9),
-                bg="#f5f5f5",
+                content,
+                text="欢迎使用 WingScribe",
+                font=("Microsoft YaHei UI", 20, "bold"),
+                bg="white",
                 fg="#333"
+            ).pack(pady=(0, 10))
+
+            tk.Label(
+                content,
+                text="🕊️ 飞羽志 | AI 鸟类照片管理系统",
+                font=("Microsoft YaHei UI", 12),
+                bg="white",
+                fg="#667eea"
+            ).pack(pady=(0, 40))
+
+            # Info box
+            info_frame = tk.Frame(content, bg="#f8f9fa", padx=30, pady=25)
+            info_frame.pack(fill=tk.X, pady=20)
+
+            tk.Label(
+                info_frame,
+                text="配置向导说明",
+                font=("Microsoft YaHei UI", 12, "bold"),
+                bg="#f8f9fa",
+                fg="#333"
+            ).pack(anchor=tk.W, pady=(0, 15))
+
+            steps = [
+                "• 选择 WingScribe 根目录（所有数据存放在此目录下）",
+                "• 系统会自动创建以下子目录：",
+                "  - 原始照片/    （放入待处理的照片）",
+                "  - 处理结果/   （AI 识别后的照片）",
+                "  - data/        （数据库和模型缓存）",
+                "• 配置 Web 服务访问端口",
+                "• 首次运行时，AI 模型将自动下载（约 500MB）"
+            ]
+
+            for step in steps:
+                tk.Label(
+                    info_frame,
+                    text=step,
+                    font=("Microsoft YaHei UI", 10),
+                    bg="#f8f9fa",
+                    fg="#555",
+                    justify=tk.LEFT
+                ).pack(anchor=tk.W, pady=3)
+
+            # Tip
+            tip_frame = tk.Frame(content, bg="#e8f4fd", padx=20, pady=15)
+            tip_frame.pack(fill=tk.X, pady=20)
+
+            tk.Label(
+                tip_frame,
+                text="💡 提示：建议选择有足够空间的磁盘（至少 10GB）",
+                font=("Microsoft YaHei UI", 9),
+                bg="#e8f4fd",
+                fg="#0969da"
+            ).pack(anchor=tk.W)
+
+        self.pages.append(render)
+
+    def create_directory_page(self):
+        """Create directory selection page function."""
+        def render(container):
+            container.config(bg="white")
+
+            # Main content frame
+            content = tk.Frame(container, bg="white", padx=50, pady=40)
+            content.pack(expand=True, fill=tk.BOTH)
+
+            # Title
+            tk.Label(
+                content,
+                text="步骤 1/1: 设置目录和端口",
+                font=("Microsoft YaHei UI", 16, "bold"),
+                bg="white",
+                fg="#333"
+            ).pack(pady=(0, 10))
+
+            tk.Label(
+                content,
+                text="配置 WingScribe 的根目录",
+                font=("Microsoft YaHei UI", 10),
+                bg="white",
+                fg="gray"
+            ).pack(pady=(0, 30))
+
+            # Root directory selection
+            dir_frame = tk.Frame(content, bg="white")
+            dir_frame.pack(fill=tk.X, pady=20)
+
+            tk.Label(
+                dir_frame,
+                text="WingScribe 根目录：",
+                font=("Microsoft YaHei UI", 10, "bold"),
+                bg="white",
+                fg="#333",
+                width=120,
+                anchor=tk.W
+            ).pack(side=tk.LEFT, padx=(0, 10))
+
+            self.root_dir_var = tk.StringVar(value=self.root_dir)
+
+            entry_frame = tk.Frame(dir_frame, bg="white")
+            entry_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+            tk.Entry(
+                entry_frame,
+                textvariable=self.root_dir_var,
+                font=("Microsoft YaHei UI", 10),
+                width=40
             ).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Next steps
-        next_steps = """下一步：
-  1. 点击"完成"保存配置
-  2. 启动 WingScribe Web 服务
-  3. 在浏览器中访问管理界面
-  4. 首次使用时，AI 模型将自动下载"""
+            tk.Button(
+                entry_frame,
+                text="浏览...",
+                command=lambda: self.browse_directory(self.root_dir_var),
+                font=("Microsoft YaHei UI", 9),
+                bg="white",
+                relief=tk.RAISED
+            ).pack(side=tk.LEFT, padx=(10, 0))
 
-        tk.Label(
-            page,
-            text=next_steps,
-            font=("Microsoft YaHei UI", 10),
-            justify=tk.LEFT,
-            fg="#667eea"
-        ).pack(pady=20)
+            # Port configuration
+            port_frame = tk.Frame(content, bg="white")
+            port_frame.pack(fill=tk.X, pady=20)
 
-        self.pages.append(page)
+            tk.Label(
+                port_frame,
+                text="Web 服务端口：",
+                font=("Microsoft YaHei UI", 10, "bold"),
+                bg="white",
+                fg="#333",
+                width=120,
+                anchor=tk.W
+            ).pack(side=tk.LEFT, padx=(0, 10))
+
+            self.port_var = tk.StringVar(value=str(self.web_port))
+
+            port_spinbox = tk.Spinbox(
+                port_frame,
+                from_=1024,
+                to=65535,
+                textvariable=self.port_var,
+                font=("Microsoft YaHei UI", 10),
+                width=10,
+                bg="white",
+                relief=tk.SUNKEN,
+                bd=1
+            )
+            port_spinbox.pack(side=tk.LEFT)
+
+            # Info box
+            info_frame = tk.Frame(content, bg="#f8f9fa", padx=20, pady=15)
+            info_frame.pack(fill=tk.X, pady=30)
+
+            tk.Label(
+                info_frame,
+                text="目录结构说明",
+                font=("Microsoft YaHei UI", 11, "bold"),
+                bg="#f8f9fa",
+                fg="#333"
+            ).pack(anchor=tk.W, pady=(0, 10))
+
+            structure_text = """WingScribe 根目录/
+├── 原始照片/           ← 将待处理的鸟类照片放入此文件夹
+│   └── 20240101_北京天坛/
+│       └── IMG_001.jpg
+├── 处理结果/           ← AI 识别后的照片自动保存到这里
+│   └── 2024/
+│       └── 北京天坛/
+│           └── IMG_001_麻雀_85.jpg
+└── data/              ← 数据库和模型缓存（自动管理）
+    ├── db/
+    ├── models/
+    └── references/"""
+
+            tk.Label(
+                info_frame,
+                text=structure_text,
+                font=("Consolas", 9),
+                bg="#f8f9fa",
+                fg="#555",
+                justify=tk.LEFT,
+                anchor=tk.W
+            ).pack(anchor=tk.W)
+
+        self.pages.append(render)
+
+    def create_complete_page(self):
+        """Create completion page function."""
+        def render(container):
+            container.config(bg="white")
+
+            # Main content frame
+            content = tk.Frame(container, bg="white", padx=50, pady=40)
+            content.pack(expand=True, fill=tk.BOTH)
+
+            # Success icon
+            tk.Label(
+                content,
+                text="✓",
+                font=("Microsoft YaHei UI", 48),
+                bg="white",
+                fg="#28a745"
+            ).pack(pady=(0, 20))
+
+            tk.Label(
+                content,
+                text="配置完成！",
+                font=("Microsoft YaHei UI", 18, "bold"),
+                bg="white",
+                fg="#333"
+            ).pack(pady=(0, 30))
+
+            # Summary frame
+            summary_frame = tk.Frame(content, bg="#f8f9fa", padx=25, pady=20)
+            summary_frame.pack(fill=tk.X, pady=20)
+
+            tk.Label(
+                summary_frame,
+                text="配置摘要",
+                font=("Microsoft YaHei UI", 11, "bold"),
+                bg="#f8f9fa",
+                fg="#333"
+            ).pack(anchor=tk.W, pady=(0, 15))
+
+            # Dynamic summary (will be updated before showing)
+            self.summary_labels = {}
+            summary_items = [
+                ("root_dir", "根目录："),
+                ("port", "Web 服务端口：")
+            ]
+
+            for key, label in summary_items:
+                row = tk.Frame(summary_frame, bg="#f8f9fa")
+                row.pack(fill=tk.X, pady=5)
+
+                tk.Label(
+                    row,
+                    text=label,
+                    font=("Microsoft YaHei UI", 10),
+                    bg="#f8f9fa",
+                    fg="#555",
+                    width=120,
+                    anchor=tk.W
+                ).pack(side=tk.LEFT)
+
+                value_label = tk.Label(
+                    row,
+                    text="",
+                    font=("Microsoft YaHei UI", 10, "bold"),
+                    bg="#f8f9fa",
+                    fg="#333",
+                    anchor=tk.W
+                )
+                value_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                self.summary_labels[key] = value_label
+
+            # Next steps
+            steps_frame = tk.Frame(content, bg="#e8f4fd", padx=20, pady=20)
+            steps_frame.pack(fill=tk.X, pady=30)
+
+            tk.Label(
+                steps_frame,
+                text="下一步操作",
+                font=("Microsoft YaHei UI", 11, "bold"),
+                bg="#e8f4fd",
+                fg="#0969da"
+            ).pack(anchor=tk.W, pady=(0, 10))
+
+            steps = [
+                "1. 将您的鸟类照片放入「原始照片」文件夹",
+                "2. 点击「完成」启动 Web 服务",
+                "3. 在浏览器中访问管理界面触发处理",
+                "4. 首次运行时，AI 模型会自动下载（约 500MB）"
+            ]
+
+            for step in steps:
+                tk.Label(
+                    steps_frame,
+                    text=step,
+                    font=("Microsoft YaHei UI", 9),
+                    bg="#e8f4fd",
+                    fg="#333",
+                    justify=tk.LEFT
+                ).pack(anchor=tk.W, pady=3)
+
+        self.pages.append(render)
+
+    def update_summary(self):
+        """Update the summary on the completion page."""
+        if hasattr(self, 'summary_labels'):
+            self.summary_labels['root_dir'].config(text=self.root_dir_var.get())
+            self.summary_labels['port'].config(text=self.port_var.get())
 
     def browse_directory(self, variable):
         """Open directory browser dialog."""
@@ -564,6 +568,16 @@ cloud:
 
     def run(self):
         """Run the wizard."""
+        # Override show_page to update summary when showing completion page
+        original_show_page = self.show_page
+
+        def enhanced_show_page(page_num):
+            original_show_page(page_num)
+            if page_num == len(self.pages) - 1:
+                self.update_summary()
+
+        self.show_page = enhanced_show_page
+
         self.root.mainloop()
 
 

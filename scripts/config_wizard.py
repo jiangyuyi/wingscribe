@@ -20,7 +20,8 @@ class ConfigWizard:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("WingScribe 配置向导")
-        self.root.geometry("700x600")
+        # Make window resizable to avoid layout issues
+        self.root.geometry("700x650")
         self.root.resizable(False, False)
 
         # Set window icon if available
@@ -32,18 +33,17 @@ class ConfigWizard:
             pass
 
         # Configuration values - simplified structure
-        # User selects one root directory, we'll create subdirectories inside
         self.root_dir = os.path.expanduser("~/WingScribe")
         self.web_port = 8000
 
         # Current page
         self.current_page = 0
 
-        # Page containers
-        self.page_container = None
-
-        # Pages list - MUST be initialized before setup_ui()
+        # Page containers - create BEFORE setting up UI
         self.pages = []
+        self.main_frame = None
+        self.btn_back = None
+        self.btn_next = None
 
         # Build UI
         self.setup_ui()
@@ -51,8 +51,12 @@ class ConfigWizard:
 
     def setup_ui(self):
         """Setup the wizard UI."""
-        # Header
-        header = tk.Frame(self.root, bg="#667eea", height=70)
+        # Create main container frame that fills the entire window
+        main_container = tk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True)
+
+        # Header - fixed at top
+        header = tk.Frame(main_container, bg="#667eea", height=70)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
 
@@ -65,50 +69,54 @@ class ConfigWizard:
         )
         title_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-        # Content area
-        self.page_container = tk.Frame(self.root, bg="white")
-        self.page_container.pack(fill=tk.BOTH, expand=True)
+        # Page content - expands in middle
+        self.page_container = tk.Frame(main_container, bg="white")
+        self.page_container.pack(fill=tk.BOTH, expand=True, padx=40, pady=30)
+
+        # Button area - fixed at bottom
+        button_frame = tk.Frame(main_container, bg="#f8f9fa", height=80)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        button_frame.pack_propagate(False)
+
+        # Create buttons
+        self.btn_back = tk.Button(
+            button_frame,
+            text="< 上一步",
+            command=self.go_back,
+            font=("Microsoft YaHei UI", 10, "bold"),
+            width=15,
+            height=2,
+            bg="white",
+            relief=tk.RAISED,
+            state=tk.DISABLED,
+            cursor="hand2"
+        )
+        self.btn_back.pack(side=tk.LEFT, padx=30, pady=20)
+
+        self.btn_next = tk.Button(
+            button_frame,
+            text="下一步 >",
+            command=self.go_next,
+            font=("Microsoft YaHei UI", 10, "bold"),
+            width=15,
+            height=2,
+            bg="#667eea",
+            fg="white",
+            relief=tk.RAISED,
+            activebackground="#5568d3",
+            activeforeground="white",
+            cursor="hand2"
+        )
+        self.btn_next.pack(side=tk.RIGHT, padx=30, pady=20)
 
         # Create pages
         self.create_welcome_page()
         self.create_directory_page()
         self.create_complete_page()
 
-        # Button area - using tk.Button for better control
-        button_frame = tk.Frame(self.root, bg="#f8f9fa", pady=20)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
-
-        self.back_btn = tk.Button(
-            button_frame,
-            text="< 上一步",
-            command=self.go_back,
-            font=("Microsoft YaHei UI", 10),
-            width=12,
-            height=2,
-            bg="white",
-            relief=tk.RAISED,
-            state=tk.DISABLED
-        )
-        self.back_btn.pack(side=tk.LEFT, padx=30, pady=10)
-
-        self.next_btn = tk.Button(
-            button_frame,
-            text="下一步 >",
-            command=self.go_next,
-            font=("Microsoft YaHei UI", 10),
-            width=12,
-            height=2,
-            bg="#667eea",
-            fg="white",
-            relief=tk.RAISED,
-            activebackground="#5568d3",
-            activeforeground="white"
-        )
-        self.next_btn.pack(side=tk.RIGHT, padx=30, pady=10)
-
     def show_page(self, page_num):
         """Show a specific page."""
-        # Clear current page
+        # Clear current page content
         for widget in self.page_container.winfo_children():
             widget.destroy()
 
@@ -118,14 +126,17 @@ class ConfigWizard:
 
         # Update button states
         num_pages = len(self.pages)
-        self.back_btn.config(state=tk.NORMAL if page_num > 0 else tk.DISABLED)
+        self.btn_back.config(state=tk.NORMAL if page_num > 0 else tk.DISABLED)
 
         if page_num == num_pages - 1:
-            self.next_btn.config(text="完成", command=self.finish, bg="#28a745",
+            self.btn_next.config(text="完成", command=self.finish, bg="#28a745",
                                activebackground="#218838")
         else:
-            self.next_btn.config(text="下一步 >", command=self.go_next, bg="#667eea",
+            self.btn_next.config(text="下一步 >", command=self.go_next, bg="#667eea",
                                activebackground="#5568d3")
+
+        # Force update display
+        self.root.update_idletasks()
 
     def go_back(self):
         """Go to previous page."""
@@ -184,20 +195,18 @@ class ConfigWizard:
     def save_config(self, root_dir, port):
         """Save configuration to settings.yaml."""
         # Get app root - config_wizard.py is in {app_root}/scripts/
-        # For both normal Python and frozen (install) environments
         script_path = Path(__file__).resolve()
         if script_path.parent.name == "scripts":
-            app_root = script_path.parent.parent
+            app_root = script_path.parent.parent.resolve()
         else:
-            # Fallback: try to find app root by going up from script location
-            app_root = script_path.parent
+            # Fallback
+            app_root = script_path.resolve().parent
 
         config_path = app_root / "config" / "settings.yaml"
         config_dir = config_path.parent
         config_dir.mkdir(parents=True, exist_ok=True)
 
         # Simplified configuration structure
-        # root_dir is the base directory containing everything
         config_content = f"""# WingScribe config
 # Generated by configuration wizard
 
@@ -249,26 +258,23 @@ web:
         config_path.write_text(config_content, encoding='utf-8')
 
         # Create subdirectories
-        (Path(root_dir) / "原始照片").mkdir(parents=True, exist_ok=True)
-        (Path(root_dir) / "处理结果").mkdir(parents=True, exist_ok=True)
-        (Path(root_dir) / "data").mkdir(parents=True, exist_ok=True)
-        (Path(root_dir) / "data" / "db").mkdir(parents=True, exist_ok=True)
-        (Path(root_dir) / "data" / "models").mkdir(parents=True, exist_ok=True)
-        (Path(root_dir) / "data" / "references").mkdir(parents=True, exist_ok=True)
-        (Path(root_dir) / "data" / "processed").mkdir(parents=True, exist_ok=True)
+        root_path = Path(root_dir)
+        (root_path / "原始照片").mkdir(parents=True, exist_ok=True)
+        (root_path / "处理结果").mkdir(parents=True, exist_ok=True)
+        (root_path / "data").mkdir(parents=True, exist_ok=True)
+        (root_path / "data" / "db").mkdir(parents=True, exist_ok=True)
+        (root_path / "data" / "models").mkdir(parents=True, exist_ok=True)
+        (root_path / "data" / "references").mkdir(parents=True, exist_ok=True)
+        (root_path / "data" / "processed").mkdir(parents=True, exist_ok=True)
 
     def create_welcome_page(self):
         """Create welcome page function."""
         def render(container):
             container.config(bg="white")
 
-            # Main content frame
-            content = tk.Frame(container, bg="white", padx=50, pady=40)
-            content.pack(expand=True, fill=tk.BOTH)
-
-            # Title
+            # Main content
             tk.Label(
-                content,
+                container,
                 text="欢迎使用 WingScribe",
                 font=("Microsoft YaHei UI", 20, "bold"),
                 bg="white",
@@ -276,7 +282,7 @@ web:
             ).pack(pady=(0, 10))
 
             tk.Label(
-                content,
+                container,
                 text="🕊️ 飞羽志 | AI 鸟类照片管理系统",
                 font=("Microsoft YaHei UI", 12),
                 bg="white",
@@ -284,7 +290,7 @@ web:
             ).pack(pady=(0, 40))
 
             # Info box
-            info_frame = tk.Frame(content, bg="#f8f9fa", padx=30, pady=25)
+            info_frame = tk.Frame(container, bg="#f8f9fa", padx=30, pady=25)
             info_frame.pack(fill=tk.X, pady=20)
 
             tk.Label(
@@ -316,7 +322,7 @@ web:
                 ).pack(anchor=tk.W, pady=3)
 
             # Tip
-            tip_frame = tk.Frame(content, bg="#e8f4fd", padx=20, pady=15)
+            tip_frame = tk.Frame(container, bg="#e8f4fd", padx=20, pady=15)
             tip_frame.pack(fill=tk.X, pady=20)
 
             tk.Label(
@@ -334,13 +340,9 @@ web:
         def render(container):
             container.config(bg="white")
 
-            # Main content frame
-            content = tk.Frame(container, bg="white", padx=50, pady=40)
-            content.pack(expand=True, fill=tk.BOTH)
-
             # Title
             tk.Label(
-                content,
+                container,
                 text="步骤 1/1: 设置目录和端口",
                 font=("Microsoft YaHei UI", 16, "bold"),
                 bg="white",
@@ -348,7 +350,7 @@ web:
             ).pack(pady=(0, 10))
 
             tk.Label(
-                content,
+                container,
                 text="配置 WingScribe 的根目录",
                 font=("Microsoft YaHei UI", 10),
                 bg="white",
@@ -356,7 +358,7 @@ web:
             ).pack(pady=(0, 30))
 
             # Root directory selection
-            dir_frame = tk.Frame(content, bg="white")
+            dir_frame = tk.Frame(container, bg="white")
             dir_frame.pack(fill=tk.X, pady=20)
 
             tk.Label(
@@ -391,7 +393,7 @@ web:
             ).pack(side=tk.LEFT, padx=(10, 0))
 
             # Port configuration
-            port_frame = tk.Frame(content, bg="white")
+            port_frame = tk.Frame(container, bg="white")
             port_frame.pack(fill=tk.X, pady=20)
 
             tk.Label(
@@ -420,7 +422,7 @@ web:
             port_spinbox.pack(side=tk.LEFT)
 
             # Info box
-            info_frame = tk.Frame(content, bg="#f8f9fa", padx=20, pady=15)
+            info_frame = tk.Frame(container, bg="#f8f9fa", padx=20, py=15)
             info_frame.pack(fill=tk.X, pady=30)
 
             tk.Label(
@@ -461,13 +463,9 @@ web:
         def render(container):
             container.config(bg="white")
 
-            # Main content frame
-            content = tk.Frame(container, bg="white", padx=50, pady=40)
-            content.pack(expand=True, fill=tk.BOTH)
-
             # Success icon
             tk.Label(
-                content,
+                container,
                 text="✓",
                 font=("Microsoft YaHei UI", 48),
                 bg="white",
@@ -475,7 +473,7 @@ web:
             ).pack(pady=(0, 20))
 
             tk.Label(
-                content,
+                container,
                 text="配置完成！",
                 font=("Microsoft YaHei UI", 18, "bold"),
                 bg="white",
@@ -483,7 +481,7 @@ web:
             ).pack(pady=(0, 30))
 
             # Summary frame
-            summary_frame = tk.Frame(content, bg="#f8f9fa", padx=25, pady=20)
+            summary_frame = tk.Frame(container, bg="#f8f9fa", padx=25, py=20)
             summary_frame.pack(fill=tk.X, pady=20)
 
             tk.Label(
@@ -527,7 +525,7 @@ web:
                 self.summary_labels[key] = value_label
 
             # Next steps
-            steps_frame = tk.Frame(content, bg="#e8f4fd", padx=20, pady=20)
+            steps_frame = tk.Frame(container, bg="#e8f4fd", padx=20, py=20)
             steps_frame.pack(fill=tk.X, pady=30)
 
             tk.Label(

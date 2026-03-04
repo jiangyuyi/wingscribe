@@ -42,6 +42,9 @@ class ConfigWizard:
         # Page containers
         self.page_container = None
 
+        # Pages list - MUST be initialized before setup_ui()
+        self.pages = []
+
         # Build UI
         self.setup_ui()
         self.show_page(0)

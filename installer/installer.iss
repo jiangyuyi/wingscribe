@@ -64,17 +64,15 @@ Name: "{app}\data\references"
 [Icons]
 ; Start menu
 Name: "{group}\WingScribe"; Filename: "{app}\scripts\start_web.bat"
-Name: "{group}\Config Wizard"; Filename: "{app}\venv\Scripts\python.exe"; Parameters: """{app}\scripts\config_wizard.py"""
+Name: "{group}\Configuration Guide"; Filename: "{app}\scripts\start_web.bat"; Parameters: "--config-guide"
 Name: "{group}\Uninstall WingScribe"; Filename: "{uninstallexe}"
 
 ; Desktop shortcut
 Name: "{autodesktop}\WingScribe"; Filename: "{app}\scripts\start_web.bat"; Tasks: desktop
 
 [Run]
-; Launch configuration wizard on first run (visible, wait for completion)
-Filename: "{app}\venv\Scripts\python.exe"; Parameters: """{app}\scripts\config_wizard.py"""; Description: "Run configuration wizard"; StatusMsg: "Starting configuration wizard..."; Flags: waituntilterminated
-
-; Launch web server if user chooses
+; Launch web server after installation
+; User will be directed to the web-based configuration page on first visit
 Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Service"; StatusMsg: "Starting Web service..."; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]

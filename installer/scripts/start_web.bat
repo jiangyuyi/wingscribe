@@ -23,6 +23,27 @@ popd
 
 REM Now APP_ROOT is the absolute path to the installation directory
 
+REM Check for --config-guide flag
+if "%1"=="--config-guide" (
+    echo.
+    echo ========================================
+    echo   WingScribe - 配置指南
+    echo ========================================
+    echo.
+    echo 安装完成后，您需要完成以下配置步骤：
+    echo.
+    echo 1. Web 服务即将启动...
+    echo 2. 在浏览器中打开: http://localhost:8000
+    echo 3. 首次访问将自动进入配置页面
+    echo 4. 在配置页面中设置：
+    echo    - 照片根目录（存放照片的位置）
+    echo    - Web 服务端口（默认 8000）
+    echo 5. 点击"保存配置"完成设置
+    echo.
+    echo 按任意键启动 Web 服务...
+    pause > nul
+)
+
 REM Check if virtual environment exists
 if not exist "%APP_ROOT%\venv\Scripts\python.exe" (
     echo Error: Virtual environment not found at: %APP_ROOT%\venv\
@@ -32,22 +53,6 @@ if not exist "%APP_ROOT%\venv\Scripts\python.exe" (
     echo APP_ROOT: %APP_ROOT%
     pause
     exit /b 1
-)
-
-REM Check if config exists, if not run configuration wizard
-if not exist "%APP_ROOT%\config\settings.yaml" (
-    echo Configuration not found. Starting configuration wizard...
-    echo.
-    cd /d "%APP_ROOT%"
-    "%APP_ROOT%\venv\Scripts\python.exe" "%APP_ROOT%\scripts\config_wizard.py"
-    if errorlevel 1 (
-        echo.
-        echo Configuration failed. Please run the wizard manually.
-        pause
-        exit /b 1
-    )
-    echo Configuration completed successfully!
-    echo.
 )
 
 REM IMPORTANT: Change to APP_ROOT BEFORE starting Python

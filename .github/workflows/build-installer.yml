@@ -33,12 +33,6 @@ jobs:
           Write-Output "version=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Building version: $version"
 
-      - name: Create tag for manual dispatch
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git tag "v${{ steps.get_version.outputs.version }}"
-          git push origin "v${{ steps.get_version.outputs.version }}"
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -115,6 +109,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.get_version.outputs.version }}
           files: installer/Output/WingScribe-Setup-*.exe
           draft: false
           prerelease: false

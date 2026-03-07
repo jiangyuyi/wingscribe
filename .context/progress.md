@@ -809,3 +809,131 @@ status_daemon() {
 
 **测试结果**:
 - 76 个测试用例全部通过
+
+---
+
+### 29. 配置文件路径统一基准重构 [已完成]
+**目标**: 简化路径配置，统一使用绝对路径，解决路径混乱问题，便于图形化配置
+
+**需求**:
+1. 移除 `base_dir` 配置项
+2. `references_path` 相对于安装路径（即相对于项目根目录）
+3. `sources` 的 `path` 使用绝对路径
+4. `output.root_dir` 使用绝对路径
+5. 其他缓存路径（`ioc_list_path`, `model_cache_dir`）均相对于安装路径
+6. 同步修改 example、readme 和 configuration.md 的说明
+7. Web 配置页面改为：
+   - 照片基准目录 → 对应 `sources[0].path`
+   - 输出目录 → 对应 `output.root_dir`
+
+**修改文件**:
+- `config/settings.yaml` - 移除 base_dir，调整配置格式
+- `config/settings.example.yaml` - 更新示例
+- `src/utils/config_loader.py` - 移除 base_dir 相关逻辑
+- `src/web/app.py` - 修改路径解析逻辑，修改配置页面映射
+- `src/pipeline_runner.py` - 移除 base_dir 依赖
+- `src/core/io/fs_manager.py` - 简化路径验证逻辑
+- `src/core/io/local.py` - 简化路径验证逻辑
+- `docs/CONFIGURATION.md` - 更新文档说明
+- `README.md` - 更新配置说明
+
+**当前配置 vs 重构后配置**:
+
+| 配置项 | 当前 | 重构后 |
+|--------|------|--------|
+| base_dir | D:/Data/WingScribe/ | **移除** |
+| sources.path | `1按年份/` (相对) | **必填绝对路径**，如 `D:/照片/2026` |
+| output.root_dir | `''` (相对) | **必填绝对路径**，如 `D:/输出/2026` |
+| references_path | 相对于 base_dir | **相对项目根目录**，如 `data/references` |
+| ioc_list_path | 相对于 base_dir | **相对项目根目录** |
+| model_cache_dir | 相对于 base_dir | **相对项目根目录** |
+| db_path | 相对运行目录 | 保持不变 |
+
+**相对路径基准统一为"项目根目录"**:
+- start_web.bat 运行时会切换到项目根目录
+- 所有相对路径都以此为基准
+- 包括：references_path, ioc_list_path, model_cache_dir, db_path
+
+**优点**:
+1. 所有路径配置都使用绝对路径，清晰直观
+2. 照片基准目录和输出目录直接在配置页面设置对应的 sources.path 和 output.root_dir
+3. 避免相对路径在不同工作目录下解析出不同结果的问题
+4. 统一相对路径的基准为项目根目录
+
+**用户确认**:
+1. ✅ sources 只需要1个路径
+2. ✅ output.root_dir 设为必填项
+3. ✅ 不需要迁移数据库（重置后生效）
+4. ✅ 相对路径基准统一为项目根目录
+
+**待开始**: ✅
+
+---
+
+### 30. 配置页面读取/写入配置错误 [已完成]
+**状态**: ✅ 完成
+
+**问题描述**:
+- 配置页面上照片基准目录无法正常显示
+- 设置目录会写入到错误的配置位置
+
+**问题原因**:
+1. **读取问题**: `get_nested_value()` 函数使用字符串索引访问数组
+   - `sources[0].path` 被拆分为 `['sources', '0', 'path']`
+   - 第二次循环时 `value['0']` 用字符串 `'0'` 访问数组，但数组应该用数字 `0` 访问
+   - 导致 `sources[0].path` 的值无法正确读取，返回 `undefined`
+
+2. **Fallback 问题**: `get_default_definition()` 使用了旧的 `base_dir` 字段
+   - 应该使用 `sources[0].path`
+
+**修复方案**:
+1. 修复 `src/web/templates/settings.html` 中的 `get_nested_value()` 函数
+   - 将数组索引字符串转换为数字再访问
+2. 更新 `get_default_definition()` 函数使用正确的字段名
+3. 修复后端 `app.py` 中的 `set_nested_value()` 函数，支持数组索引
+
+**修改文件**:
+- [X] `src/web/templates/settings.html` - 修复 get_nested_value 和 get_default_definition
+- [X] `src/web/app.py` - 修复 set_nested_value 支持数组索引
+
+---
+
+### 31. 配置保存后重启功能无效 [已完成]
+**状态**: ✅ 完成
+
+**问题描述**:
+- 配置页面的"保存后重启服务"勾选框不起作用
+- 保存配置后只是刷新了前端页面，没有真正重启后端服务
+
+**修复方案**:
+1. 后端添加真正的重启功能：
+   - 保存启动参数（host, port, python 路径）
+   - restart_server API 启动新的服务进程
+   - 使用后台线程延迟退出旧进程
+2. 前端修改保存逻辑：
+   - 保存配置后调用 /api/config/restart 接口
+   - 等待服务重启后刷新页面
+
+**修改文件**:
+- [X] `src/web/app.py` - 添加启动参数变量，修改 restart_server 实现真正的重启
+- [X] `src/web/templates/settings保存逻辑调用重启.html` - 修改 API
+
+---
+
+### 32. 数据库路径配置错误处理 [已完成]
+**状态**: ✅ 完成
+
+**问题描述**:
+- 配置数据库路径后出现 `sqlite3.OperationalError: unable to open database file`
+- 需要处理两种情况：
+  1. 路径有数据库文件 → 直接加载
+  2. 路径没有数据库文件 → 自动创建并重启
+
+**解决方案**:
+1. 保存配置时验证 db_path 目录是否可写
+2. 强制重启服务（数据库路径变更时不需要用户确认）
+3. 重启后 IOCManager 会自动创建新数据库（如果不存在）
+
+**修改文件**:
+- [X] `src/web/app.py` - save_config API 添加 db_path 验证逻辑
+- [X] `src/web/templates/settings.html` - 保存 db_path 时直接重启

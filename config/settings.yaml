@@ -1,6 +1,6 @@
 paths:
   sources:
-  - path: D:/Photos/Birds/Output/
+  - path: D:/Photos/Birds/2026/
     recursive: true
     enabled: true
   output:

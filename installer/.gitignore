@@ -1,7 +1,6 @@
 # Build output
 build/
 Output/
-*.exe
 
 # Python
 __pycache__/
@@ -13,5 +12,4 @@ __pycache__/
 Thumbs.db
 
 # Temporary files
-*.zip
 *.tmp

@@ -45,7 +45,7 @@ processing:
   # YOLO 检测模型 (用于找鸟)
   # 推荐: yolo26n.pt (精度最高、推理最快)
   # 可选: yolo11n.pt, yolov8n.pt
-  yolo_model: "yolo26n.pt"
+  yolo_model: "data/models/yolo26n.pt"
 
   # 检测置信度阈值 (0-1): 只有高于此值的鸟类目标才会被处理
   confidence_threshold: 0.5
@@ -93,3 +93,7 @@ web:
 
   # Web 服务器端口
   port: 8000
+
+  # 日志级别: info (仅显示关键信息), debug (显示详细处理过程)
+  # 推荐: 调试时用 debug，正常运行时用 info
+  log_level: "info"

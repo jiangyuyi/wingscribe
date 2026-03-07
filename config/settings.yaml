@@ -1,22 +1,19 @@
-﻿paths:
-  # 照片源目录（必填，使用绝对路径）
+paths:
   sources:
-  - path: D:/Photos/Birds/
+  - path: D:/Photos/Birds/Output/
     recursive: true
     enabled: true
-  # 裁切输出目录（必填，使用绝对路径）
   output:
-    root_dir: D:/Photos/Birds/Output/
+    root_dir: D:/Photos/Birds/Output
     structure_template: '{source_structure}/{filename}_{species_cn}_{confidence}'
     write_back_to_source: false
-  # 以下路径相对于项目根目录
   references_path: data/references
   ioc_list_path: data/references/Multiling IOC 15.1_d.xlsx
   model_cache_dir: data/models
-  db_path: ''
+  db_path: data/db/wingscribe.db
 processing:
   device: auto
-  yolo_model: yolov26n.pt
+  yolo_model: data/models/yolo26n.pt
   confidence_threshold: 0.5
   blur_threshold: 40.0
   target_size: 640
@@ -35,4 +32,4 @@ recognition:
 web:
   host: 0.0.0.0
   port: 8000
-  log_level: info
+  log_level: debug

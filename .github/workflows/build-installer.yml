@@ -1,0 +1,167 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            $version = "${{ github.ref_name }}" -replace "v", ""
+          }
+          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version: $version"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Python downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            installer/wheels
+            installer/build/python-*.zip
+          key: ${{ runner.os }}-python-${{ steps.get_version.outputs.version }}
+          restore-keys: |
+            ${{ runner.os }}-python-
+
+      - name: Cache ExifTool
+        uses: actions/cache@v4
+        with:
+          path: installer/tools
+          key: ${{ runner.os }}-exiftool
+          restore-keys: |
+            ${{ runner.os }}-exiftool-
+
+      - name: Download Inno Setup
+        shell: pwsh
+        run: |
+          # Download Inno Setup 6
+          $isUrl = "https://files.jrsoftware.org/is/6/isetup-6.3.3.exe"
+          $isPath = "C:\innosetup.exe"
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            Write-Host "Downloading Inno Setup..."
+            Invoke-WebRequest -Uri $isUrl -OutFile $isPath -UseBasicParsing
+            Write-Host "Installing Inno Setup..."
+            Start-Process $isPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\InnoSetup" -Wait
+            Remove-Item $isPath
+          } else {
+            Write-Host "Inno Setup already installed"
+          }
+
+      - name: Run build script
+        shell: pwsh
+        run: |
+          Write-Host "Running build script..."
+          & .\installer\build.ps1
+
+      - name: Create UI assets (placeholder)
+        shell: pwsh
+        run: |
+          # Create placeholder icons and images
+          $assetsDir = "installer\assets"
+          if (-not (Test-Path $assetsDir)) {
+            New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
+          }
+          # Create placeholder files if they don't exist
+          # In production, these should be actual image files
+          # For now, the installer will use default images
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
+          }
+          $version = "${{ steps.get_version.outputs.version }}"
+          & $iscc /DAppVersion=$version ".\installer\installer.iss"
+
+      - name: Get installer size
+        shell: pwsh
+        run: |
+          $installer = Get-Item "installer\Output\WingScribe-Setup-*.exe"
+          $sizeInMB = [math]::Round($installer.Length / 1MB, 2)
+          Write-Host "Installer size: $sizeInMB MB"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingScribe-Installer-${{ steps.get_version.outputs.version }}
+          path: installer\Output\WingScribe-Setup-*.exe
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: installer\Output\WingScribe-Setup-*.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## WingScribe ${{ steps.get_version.outputs.version }}
+
+            ### 下载安装包
+
+            下载 `WingScribe-Setup-${{ steps.get_version.outputs.version }}.exe` 并运行安装程序。
+
+            ### 系统要求
+
+            - Windows 10 或更高版本
+            - 至少 2GB 可用内存
+            - 至少 2GB 硬盘空间（运行时需要更多空间存储照片和模型）
+
+            ### 安装说明
+
+            1. 双击安装包开始安装
+            2. 按照配置向导设置照片目录和输出目录
+            3. 安装完成后启动 Web 服务
+            4. 在浏览器中访问 http://localhost:8000
+
+            ### 首次使用
+
+            首次运行时，AI 模型会自动下载（约 500MB），请耐心等待。
+
+            ### 更新说明
+
+            此版本包含以下改进：
+            - 完整的 Windows 安装包
+            - 图形化配置向导
+            - CPU 模式支持（无需 GPU）
+            - 一键启动 Web 服务
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "## Build Summary" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "- **Version**: ${{ steps.get_version.outputs.version }}" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "- **Status**: ${{ job.status }}" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "- **Installer**: installer\Output\WingScribe-Setup-${{ steps.get_version.outputs.version }}.exe" >> $env:GITHUB_STEP_SUMMARY

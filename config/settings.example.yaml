@@ -2,29 +2,17 @@
 # 请根据您的实际环境修改后保存为 settings.yaml
 
 paths:
-  # 基础目录：驱动器根目录（如 Y:/ 或 Z:/）
-  # 所有源文件、输出文件和数据库都以此为基准进行相对路径存储
-  # 例如: base_dir = "Y:/"，源文件在 "Y:/1按年份/2026"，输出在 "Y:/输出/2026"
-  base_dir: "Y:/"
-
-  # 参考数据目录：用于存储 IOC 鸟类分类数据等参考文件
-  # 相对于 base_dir
-  references_path: "data/references"
-
-  # 扫描源：程序会从这些位置寻找新照片
-  # path 是相对于 base_dir 的路径
+  # 照片源目录（必填，使用绝对路径）
+  # 程序会从这些位置寻找新照片
   sources:
-    - path: "1按年份/2026"        # 源照片目录，相对于 base_dir
-      recursive: true            # 是否递归扫描子目录
-      enabled: true              # 是否启用此源
-      # 文件夹解析模式 (可选)：用于从文件夹名提取日期和地点
-      # 默认逻辑匹配 "YYYYMMDD_地点"
-      # structure_pattern: "(?P<date>\\d{8})_(?P<location>.*)"
+    - path: "D:/Photos/Birds/2026"  # 源照片目录（绝对路径）
+      recursive: true                 # 是否递归扫描子目录
+      enabled: true                  # 是否启用此源
 
   # 输出设置
   output:
-    # 处理后的照片存放目录，相对于 base_dir
-    root_dir: "输出/2026"
+    # 处理后的照片存放目录（必填，使用绝对路径）
+    root_dir: "D:/Photos/Birds/Output"
 
     # 目录结构模板
     # 可选变量: {year}, {month}, {day}, {date}, {location}, {species_cn}, {species_sci}, {confidence}, {filename}, {source_structure}
@@ -34,17 +22,20 @@ paths:
     # 是否将元数据写回原始照片 (慎用！这会修改您的原始素材)
     write_back_to_source: false
 
-  # 数据库路径：独立于 base_dir
+  # 参考数据目录（相对于项目根目录）
+  references_path: "data/references"
+
+  # 数据库路径
   # - 不写此配置时，默认使用相对于运行目录的 "data/db/wingscribe.db"
   # - 支持绝对路径，如 "C:/Users/jiang/data/wingscribe.db"（推荐：放本地以提升性能）
-  # - 支持相对路径，相对于运行目录
+  # - 支持相对路径，相对于项目根目录
   # db_path: "data/db/wingscribe.db"
 
-  # IOC 鸟类分类数据 Excel 文件路径：相对于 base_dir
+  # IOC 鸟类分类数据 Excel 文件路径（相对于项目根目录）
   ioc_list_path: "data/references/Multiling IOC 15.1_d.xlsx"
 
-  # 模型缓存目录：存放下载的 YOLO、BioCLIP 等模型文件
-  # 相对于 base_dir
+  # 模型缓存目录（相对于项目根目录）
+  # 存放下载的 YOLO、BioCLIP 等模型文件
   model_cache_dir: "data/models"
 
 processing:
@@ -54,7 +45,7 @@ processing:
   # YOLO 检测模型 (用于找鸟)
   # 推荐: yolo26n.pt (精度最高、推理最快)
   # 可选: yolo11n.pt, yolov8n.pt
-  yolo_model: "yolo26n.pt"
+  yolo_model: "data/models/yolo26n.pt"
 
   # 检测置信度阈值 (0-1): 只有高于此值的鸟类目标才会被处理
   confidence_threshold: 0.5
@@ -102,3 +93,7 @@ web:
 
   # Web 服务器端口
   port: 8000
+
+  # 日志级别: info (仅显示关键信息), debug (显示详细处理过程)
+  # 推荐: 调试时用 debug，正常运行时用 info
+  log_level: "info"

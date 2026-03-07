@@ -6,18 +6,19 @@ from .local import LocalProvider
 class FileSystemManager:
     _instance = None
 
-    def __init__(self, base_dir: str):
+    def __init__(self, source_dir: str):
         self.providers: Dict[str, StorageProvider] = {}
 
-        # Initialize Local Provider with base_dir as the only allowed root
-        self.local_provider = LocalProvider(base_dir=base_dir)
+        # Initialize Local Provider with source_dir (photo source directory)
+        # source_dir corresponds to sources[0].path in configuration
+        self.local_provider = LocalProvider(base_dir=source_dir)
 
     @classmethod
-    def get_instance(cls, base_dir: str = None):
+    def get_instance(cls, source_dir: str = None):
         if cls._instance is None:
-            if base_dir is None:
+            if source_dir is None:
                 raise ValueError("FileSystemManager not initialized")
-            cls._instance = cls(base_dir)
+            cls._instance = cls(source_dir)
         return cls._instance
 
     @classmethod

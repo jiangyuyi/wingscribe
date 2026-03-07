@@ -199,6 +199,11 @@ if sources and len(sources) > 0:
 if source_dir:
     source_dir = Path(source_dir)
 
+# Server startup parameters (used for restart)
+_startup_host = None
+_startup_port = None
+_startup_python = sys.executable
+
 # Helper function to check if path is absolute (handles both Windows and Unix formats)
 def is_absolute_path(p: str) -> bool:
     """Check if path is absolute, including Windows drive letter format like 'Y:/path'"""
@@ -247,6 +252,11 @@ app.include_router(recognition_router)
 # Mount source directory for "Original View" - use follow_symlink=True for Unicode path support
 if source_dir and source_dir.exists():
     app.mount("/static", StaticFiles(directory=str(source_dir), follow_symlink=True), name="static")
+
+# Mount library static files (Bootstrap, icons, etc.) - does not depend on source_dir
+lib_static_dir = BASE_DIR / "src" / "web" / "static"
+if lib_static_dir.exists():
+    app.mount("/lib", StaticFiles(directory=str(lib_static_dir), follow_symlink=True), name="lib")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "src" / "web" / "templates"))
 
@@ -1115,25 +1125,25 @@ def get_config_definition():
                     "key": "db_path",
                     "label": "数据库路径",
                     "description": "SQLite 数据库文件位置",
-                    "type": "path"
+                    "type": "file"
                 },
                 {
                     "key": "references_path",
                     "label": "参考数据目录",
                     "description": "IOC 鸟类名录等参考文件",
-                    "type": "path"
+                    "type": "directory"
                 },
                 {
                     "key": "ioc_list_path",
                     "label": "IOC 鸟类名录",
                     "description": "Excel 格式的鸟类分类数据",
-                    "type": "path"
+                    "type": "file"
                 },
                 {
                     "key": "model_cache_dir",
                     "label": "模型缓存目录",
                     "description": "BioCLIP 模型缓存位置",
-                    "type": "path"
+                    "type": "directory"
                 },
                 {
                     "key": "output.structure_template",
@@ -1261,14 +1271,43 @@ def get_nested_value(obj, key_path):
     return value
 
 def set_nested_value(obj, key_path, value):
-    """Set value in nested dict using dot notation"""
-    keys = key_path.split('.')
+    """Set value in nested dict using dot notation, supports array indices like sources[0].path"""
+    import re
+    # Split by '.' but preserve array indices like [0]
+    keys = re.split(r'\.(?!\d)', key_path)
     current = obj
+
     for key in keys[:-1]:
-        if key not in current:
-            current[key] = {}
-        current = current[key]
-    current[keys[-1]] = value
+        # Handle array index like "sources[0]"
+        array_match = re.match(r'^(\w+)\[(\d+)\]$', key)
+        if array_match:
+            array_key = array_match.group(1)
+            index = int(array_match.group(2))
+
+            if array_key not in current:
+                current[array_key] = []
+            # Ensure the array is long enough
+            while len(current[array_key]) <= index:
+                current[array_key].append({})
+            current = current[array_key][index]
+        else:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+
+    # Set the final value
+    final_key = keys[-1]
+    array_match = re.match(r'^(\w+)\[(\d+)\]$', final_key)
+    if array_match:
+        array_key = array_match.group(1)
+        index = int(array_match.group(2))
+        if array_key not in current:
+            current[array_key] = []
+        while len(current[array_key]) <= index:
+            current[array_key].append({})
+        current[array_key][index] = value
+    else:
+        current[final_key] = value
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page():
@@ -1311,9 +1350,18 @@ async def save_config(req: SaveConfigRequest):
             'web': {}
         }
 
+    # Check if db_path was changed
+    db_path_changed = False
+    old_db_path = current_config.get('paths', {}).get('db_path', '')
+
     # Apply changes
     for item in req.configs:
         value = item.value
+
+        # Check if this is db_path
+        if item.section == 'paths' and item.key == 'db_path':
+            if value != old_db_path:
+                db_path_changed = True
 
         # Type conversion
         if item.type == "int":
@@ -1325,11 +1373,33 @@ async def save_config(req: SaveConfigRequest):
 
         set_nested_value(current_config, f"{item.section}.{item.key}", value)
 
+    # Validate db_path if changed
+    if db_path_changed:
+        new_db_path = current_config.get('paths', {}).get('db_path', '')
+        if new_db_path:
+            db_path_obj = Path(new_db_path)
+            # Check if parent directory exists and is writable
+            if not db_path_obj.parent.exists():
+                try:
+                    db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    return {"status": "error", "error": f"无法创建数据库目录: {e}"}
+            # Test write permission
+            try:
+                test_file = db_path_obj.parent / ".wingscribe_db_test"
+                test_file.touch()
+                test_file.unlink()
+            except Exception as e:
+                return {"status": "error", "error": f"数据库目录不可写: {e}"}
+
     # Save to file
     with open(config_path, 'w', encoding='utf-8') as f:
         yaml.dump(current_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
-    # Restart requested?
+    # Force restart if db_path changed, otherwise respect user's choice
+    if db_path_changed:
+        return {"status": "saved", "restart_required": True, "db_path_changed": True}
+
     if req.restart:
         return {"status": "saved", "restart_required": True}
 
@@ -1337,25 +1407,83 @@ async def save_config(req: SaveConfigRequest):
 
 @app.post("/api/config/restart")
 async def restart_server():
-    """Restart the server (by signaling)"""
-    # In a production setup, this would be handled by a process manager
-    # For now, we'll return success and let the frontend handle reload
-    return {"status": "restart_requested"}
+    """Restart the server by spawning a new process and exiting current one"""
+    import subprocess
+    import time
+    import threading
+
+    global _startup_host, _startup_port, _startup_python
+
+    # Get startup parameters
+    host = _startup_host or config['web']['host']
+    port = _startup_port or config['web']['port']
+
+    # Build the command to restart
+    app_path = str(BASE_DIR / "src" / "web" / "app.py")
+    cmd = [_startup_python, app_path, "--host", str(host), "--port", str(port)]
+
+    logger.info(f"Restarting server with command: {' '.join(cmd)}")
+
+    def _delayed_exit():
+        """Wait and then exit the current process"""
+        time.sleep(3)
+        logger.info("Exiting old server process")
+        os._exit(0)
+
+    try:
+        # Start new process in background (detached on Windows)
+        subprocess.Popen(cmd, cwd=str(BASE_DIR), creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0)
+
+        # Start a background thread to exit the current process after a delay
+        exit_thread = threading.Thread(target=_delayed_exit, daemon=True)
+        exit_thread.start()
+
+        # Return success - frontend will reload the page
+        return {"status": "restarting", "message": "Server restarting..."}
+    except Exception as e:
+        logger.error(f"Failed to restart server: {e}")
+        return {"error": str(e)}
 
 @app.get("/api/config/validate")
-async def validate_config_path(path: str):
-    """Validate if a path exists and is accessible"""
+async def validate_config_path(path: str, path_type: str = "directory"):
+    """Validate if a path exists and is accessible
+
+    Args:
+        path: The path to validate
+        path_type: Expected type - "directory" or "file"
+    """
     try:
         p = Path(path)
         exists = p.exists()
         is_dir = p.is_dir() if exists else False
+        is_file = p.is_file() if exists else False
         can_write = False
+        can_read = False
 
-        if exists and is_dir:
+        if exists:
+            # Check read permission
             try:
-                test_file = p / ".wingscribe_write_test"
-                test_file.touch()
-                test_file.unlink()
+                if is_file:
+                    with open(p, 'rb') as f:
+                        f.read(1)
+                    can_read = True
+                elif is_dir:
+                    list(p)
+                    can_read = True
+            except:
+                pass
+
+            # Check write permission
+            try:
+                if is_dir:
+                    test_file = p / ".wingscribe_write_test"
+                    test_file.touch()
+                    test_file.unlink()
+                elif is_file:
+                    # Test parent directory write permission
+                    test_file = p.parent / ".wingscribe_write_test"
+                    test_file.touch()
+                    test_file.unlink()
                 can_write = True
             except:
                 pass
@@ -1363,7 +1491,9 @@ async def validate_config_path(path: str):
         return {
             "exists": exists,
             "is_directory": is_dir,
-            "can_write": can_write
+            "is_file": is_file,
+            "can_write": can_write,
+            "can_read": can_read
         }
     except Exception as e:
         return {"error": str(e)}
@@ -1395,6 +1525,43 @@ def open_folder_dialog(title: str, initial_dir: str = "") -> str:
         raise Exception(result["error"])
     return result["path"]
 
+def open_file_dialog(title: str, initial_file: str = "", file_types: str = "") -> str:
+    """Open a file selection dialog using tkinter (runs in separate thread)"""
+    result = {"path": None, "error": None}
+
+    def _run_dialog():
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+
+            # Parse file types
+            filetypes = []
+            if file_types:
+                for ft in file_types.split('|'):
+                    if ft:
+                        filetypes.append((ft, f"*.{ft}"))
+
+            file = filedialog.askopenfilename(
+                title=title,
+                initialfile=initial_file or None,
+                filetypes=filetypes if filetypes else [("All Files", "*.*")]
+            )
+            root.destroy()
+            result["path"] = file
+        except Exception as e:
+            result["error"] = str(e)
+
+    thread = threading.Thread(target=_run_dialog)
+    thread.start()
+    thread.join()
+
+    if result["error"]:
+        raise Exception(result["error"])
+    return result["path"]
+
 @app.post("/api/config/browse_folder")
 async def browse_folder_api(title: str = "选择文件夹", initial_path: str = ""):
     """API endpoint to open folder selection dialog"""
@@ -1404,9 +1571,20 @@ async def browse_folder_api(title: str = "选择文件夹", initial_path: str = 
     except Exception as e:
         return {"error": str(e), "path": None}
 
+@app.post("/api/config/browse_file")
+async def browse_file_api(title: str = "选择文件", initial_path: str = "", file_types: str = "xlsx|xls"):
+    """API endpoint to open file selection dialog"""
+    try:
+        file_path = await asyncio.to_thread(open_file_dialog, title, initial_path, file_types)
+        return {"path": file_path}
+    except Exception as e:
+        return {"error": str(e), "path": None}
+
 if __name__ == "__main__":
     import argparse
     import uvicorn
+    import subprocess
+    import time
 
     parser = argparse.ArgumentParser(description='WingScribe Web Server')
     parser.add_argument('--host', type=str, default=None, help='Host to bind to')
@@ -1416,5 +1594,9 @@ if __name__ == "__main__":
     # Use command line args if provided, otherwise fall back to config
     host = args.host if args.host else config['web']['host']
     port = args.port if args.port else config['web']['port']
+
+    # Save startup parameters for restart (globals already declared at module level)
+    _startup_host = host
+    _startup_port = port
 
     uvicorn.run(app, host=host, port=port)

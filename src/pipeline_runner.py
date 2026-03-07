@@ -507,33 +507,11 @@ class WingScribePipeline:
                 'UserComment': user_comment
             })
             
-            # Convert absolute paths to relative paths for database storage
-            # source_dir is the base directory for photos
-            rel_original_path = entry.path
-            rel_file_path = str(final_path)
-
-            if self.source_dir:
-                norm_source_dir = os.path.normpath(self.source_dir)
-                source_dir_obj = Path(norm_source_dir)
-
-                # 直接使用 relative_to 转换
-                try:
-                    norm_entry_path = os.path.normpath(entry.path)
-                    rel_original_path = str(Path(norm_entry_path).relative_to(source_dir_obj))
-                except ValueError:
-                    logging.warning(f"Failed to convert original_path: {entry.path}, keeping original")
-
-                # Same for final_path (processed file)
-                try:
-                    norm_final_path = os.path.normpath(str(final_path))
-                    rel_file_path = str(Path(norm_final_path).relative_to(source_dir_obj))
-                except ValueError:
-                    logging.warning(f"Failed to convert file_path: {final_path}, keeping original")
-
+            # Store absolute paths for database
             self.db.add_photo_record({
-                'file_path': rel_file_path,
+                'file_path': str(final_path),
                 'filename': Path(final_path).name,
-                'original_path': rel_original_path,
+                'original_path': entry.path,
                 'file_hash': file_hash,
                 'captured_date': meta.get('captured_date'),
                 'location_tag': meta.get('location_tag'),

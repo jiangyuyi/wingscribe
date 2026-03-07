@@ -71,8 +71,6 @@ class BirdDetector:
         logging.info(f"Device selected: {self.device}")
         # Model will be loaded lazily when first used
 
-    def _load_model(self):
-        """Load or reload the YOLO model."""
     @property
     def model(self):
         """Lazy load the model on first access."""

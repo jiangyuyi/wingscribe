@@ -96,57 +96,39 @@ function Download-PyTorchWheels {
 }
 
 #===============================================================================
-# Step 3: Download ExifTool
+# Step 3: Prepare ExifTool
 #===============================================================================
-function Download-ExifTool {
-    Log-Step "Downloading ExifTool..."
+function Prepare-ExifTool {
+    Log-Step "Preparing ExifTool..."
 
-    # ExifTool Windows 64-bit version from SourceForge
-    $exifVersion = "13.52"
-    $exifUrl = "https://sourceforge.net/projects/exiftool/files/exiftool-${exifVersion}_64.zip/download"
-    $exifZip = Join-Path $TOOLS_DIR "exiftool.zip"
     $exifExe = Join-Path $TOOLS_DIR "exiftool.exe"
-
     Ensure-Directory $TOOLS_DIR
 
-    if (-not (Test-Path $exifExe)) {
-        if (-not (Test-Path $exifZip)) {
-            Log-Info "Downloading ExifTool from $exifUrl..."
-            # Use MaximumRedirection to handle SourceForge redirects
-            $ProgressPreference = "SilentlyContinue"
-            $webClient = New-Object System.Net.WebClient
-            $webClient.DownloadFile($exifUrl, $exifZip)
-        }
-
-        # Verify zip file is valid (check magic bytes)
-        $zipBytes = [System.IO.File]::ReadAllBytes($exifZip)
-        if ($zipBytes[0] -ne 0x50 -or $zipBytes[1] -ne 0x4B -or $zipBytes[2] -ne 0x03 -or $zipBytes[3] -ne 0x04) {
-            Log-Warn "Downloaded file is not a valid zip (SourceForge mirror issue). Deleting and retrying..."
-            Remove-Item $exifZip -Force
-            Log-Info "Please download ExifTool manually from: https://exiftool.org/"
-            Log-Info "Extract exiftool.exe and place in: $TOOLS_DIR"
-            return $false
-        }
-
-        Log-Info "Extracting ExifTool..."
-        $tempDir = Join-Path $env:TEMP "exiftool_extract"
-        if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
-        Expand-Archive -Path $exifZip -DestinationPath $tempDir -Force
-
-        # Find exiftool.exe (might be in a subdirectory or named exiftool(-k).exe)
-        $foundExe = Get-ChildItem -Path $tempDir -Filter "exiftool*.exe" -Recurse | Select-Object -First 1
-        if ($foundExe) {
-            Copy-Item $foundExe.FullName -Destination $exifExe -Force
-            Remove-Item $tempDir -Recurse -Force
-            Log-Success "ExifTool extracted to $exifExe"
-        } else {
-            Log-Error "exiftool.exe not found in downloaded archive"
-            return $false
-        }
-    } else {
-        Log-Info "ExifTool already exists"
+    # Check if already exists in installer/tools
+    if (Test-Path $exifExe) {
+        Log-Info "ExifTool already exists at $exifExe"
+        return $true
     }
 
+    # If not, try to download from GitHub
+    Log-Info "ExifTool not found, downloading..."
+    $exifVersion = "13.10"
+    $exifUrl = "https://github.com/exiftool/exiftool/releases/download/${exifVersion}/exiftool-${exifVersion}-win64.zip"
+    $exifZip = Join-Path $TOOLS_DIR "exiftool.zip"
+
+    try {
+        Invoke-WebRequest -Uri $exifUrl -OutFile $exifZip -UseBasicParsing
+        Expand-Archive -Path $exifZip -DestinationPath $TOOLS_DIR -Force
+        $foundExe = Get-ChildItem -Path $TOOLS_DIR -Filter "exiftool*.exe" -Recurse | Select-Object -First 1
+        if ($foundExe) {
+            Copy-Item $foundExe.FullName -Destination $exifExe -Force
+            Remove-Item $exifZip -Force
+            Log-Success "ExifTool downloaded"
+        }
+    } catch {
+        Log-Warn "Failed to download ExifTool: $_"
+        return $false
+    }
     return $true
 }
 
@@ -461,7 +443,7 @@ function Invoke-Build {
     }
 
     if (-not $SkipExifTool) {
-        Download-ExifTool
+        Prepare-ExifTool
     }
 
     Prepare-VirtualEnv

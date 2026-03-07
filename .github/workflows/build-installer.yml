@@ -48,19 +48,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-python-
 
-      - name: Cache ExifTool
-        uses: actions/cache@v4
-        with:
-          path: installer/tools
-          key: ${{ runner.os }}-exiftool
-          restore-keys: |
-            ${{ runner.os }}-exiftool-
-
       - name: Download Inno Setup
         shell: pwsh
         run: |
           # Download Inno Setup 6
-          $isUrl = "https://files.jrsoftware.org/is/6/isetup-6.3.3.exe"
+          $isUrl = "https://files.jrsoftware.org/is/6/isetup-6.4.1.exe"
           $isPath = "C:\innosetup.exe"
           if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
             Write-Host "Downloading Inno Setup..."

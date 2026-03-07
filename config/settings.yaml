@@ -1,13 +1,16 @@
 paths:
-  sources: []
+  sources:
+  - path: D:/Photos/Birds/2026/
+    recursive: true
+    enabled: true
   output:
-    root_dir: ''
+    root_dir: D:/Photos/Birds/Output
     structure_template: '{source_structure}/{filename}_{species_cn}_{confidence}'
     write_back_to_source: false
   references_path: data/references
   ioc_list_path: data/references/Multiling IOC 15.1_d.xlsx
   model_cache_dir: data/models
-  db_path: ''
+  db_path: data/db/wingscribe.db
 processing:
   device: auto
   yolo_model: data/models/yolo26n.pt

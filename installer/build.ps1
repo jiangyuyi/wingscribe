@@ -274,6 +274,78 @@ function Copy-SourceCode {
 }
 
 #===============================================================================
+# Step 5.5: Download YOLO model
+#===============================================================================
+function Download-YoloModel {
+    Log-Step "Downloading YOLO model..."
+
+    $modelDir = Join-Path $BUILD_DIR "data\models"
+    Ensure-Directory $modelDir
+
+    # Get YOLO model name from config
+    $yoloModelFull = "data/models/yolo26n.pt"
+    $configFile = Join-Path $PROJECT_ROOT "config\settings.yaml"
+    if (Test-Path $configFile) {
+        $configContent = Get-Content $configFile -Raw
+        if ($configContent -match 'yolo_model:\s*(\S+\.pt)') {
+            $yoloModelFull = $Matches[1]
+        }
+    }
+
+    # Extract just the filename from the full path
+    $yoloModel = [System.IO.Path]::GetFileName($yoloModelFull)
+    $modelPath = Join-Path $modelDir $yoloModel
+
+    if (Test-Path $modelPath) {
+        Log-Info "  YOLO model already exists: $yoloModel"
+    } else {
+        Log-Info "  Checking for YOLO model..."
+
+        # 1. First check if there's a pre-downloaded model in installer/models
+        $localModel = Join-Path $INSTALLER_DIR "models\$yoloModel"
+        if (Test-Path $localModel) {
+            Copy-Item $localModel -Destination $modelPath -Force
+            Log-Success "  Copied YOLO model from installer/models"
+            return
+        }
+
+        # 2. Try to find in user's cache
+        try {
+            $cacheDir = Join-Path $env:USERPROFILE ".cache\ultralytics"
+            if (Test-Path $cacheDir) {
+                $cachedModel = Get-ChildItem -Path $cacheDir -Filter $yoloModel -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($cachedModel) {
+                    Copy-Item $cachedModel.FullName -Destination $modelPath -Force
+                    Log-Success "  Copied YOLO model from cache"
+                    return
+                }
+            }
+        } catch { }
+
+        # 3. Try to download directly from GitHub
+        Log-Info "  Downloading $yoloModel..."
+        try {
+            if ($yoloModel -match "^yolo26") {
+                $githubUrl = "https://github.com/ultralytics/assets/releases/download/v8.4.0/$yoloModel"
+            } elseif ($yoloModel -match "^yolo11") {
+                $githubUrl = "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt"
+            } else {
+                $githubUrl = "https://github.com/ultralytics/assets/releases/download/v8.4.0/$yoloModel"
+            }
+
+            Log-Info "  Trying: $githubUrl"
+            Invoke-WebRequest -Uri $githubUrl -OutFile $modelPath -UseBasicParsing
+            Log-Success "  YOLO model downloaded to $modelPath"
+        } catch {
+            Log-Warn "  Failed to download YOLO model: $_"
+            Log-Info "  Please manually download from: https://github.com/ultralytics/assets/releases"
+            Log-Info "  Place the file as: $localModel"
+            Log-Info "  Model will be downloaded on first run"
+        }
+    }
+}
+
+#===============================================================================
 # Step 6: Copy startup scripts
 #===============================================================================
 function Copy-StartupScripts {
@@ -322,6 +394,13 @@ pause
     if (Test-Path $sourcePs) {
         Copy-Item $sourcePs -Destination (Join-Path $scriptsDir "start_web.ps1") -Force
         Log-Info "  Copied start_web.ps1"
+    }
+
+    # Copy init_env.py for environment initialization
+    $sourceInitEnv = Join-Path $installerScriptsDir "init_env.py"
+    if (Test-Path $sourceInitEnv) {
+        Copy-Item $sourceInitEnv -Destination (Join-Path $scriptsDir "init_env.py") -Force
+        Log-Info "  Copied init_env.py"
     }
 
     Log-Success "Startup scripts copied"
@@ -388,6 +467,7 @@ function Invoke-Build {
     Prepare-VirtualEnv
     Install-Dependencies
     Copy-SourceCode
+    Download-YoloModel
     Copy-StartupScripts
     Prepare-FirstRunWizard
 

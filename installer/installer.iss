@@ -56,6 +56,10 @@ Source: "build\README.md"; DestDir: "{app}"; Flags: ignoreversion; Components: m
 Source: "build\CLAUDE.md"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 
+[Files]
+; YOLO model files
+Source: "build\data\models\*"; DestDir: "{app}\data\models"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 [Dirs]
 ; Create data directories
 Name: "{app}\data"

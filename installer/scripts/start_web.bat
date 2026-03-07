@@ -25,9 +25,23 @@ if not exist "src\web\app.py" (
 REM Set Python path
 set "VENV_PYTHON=%APP_ROOT%\venv\Scripts\python.exe"
 
-REM Check for venv Python
+REM Check for venv Python, if not found try to create it
 if not exist "%VENV_PYTHON%" (
-    echo Error: Virtual environment not found
+    echo Virtual environment not found, creating...
+    if exist "%APP_ROOT%\python\python.exe" (
+        echo Using embedded Python to create virtual environment...
+        "%APP_ROOT%\python\python.exe" -m venv "%APP_ROOT%\venv"
+    ) else (
+        echo Error: Virtual environment not found and embedded Python not available
+        echo Expected: %VENV_PYTHON%
+        pause
+        exit /b 1
+    )
+)
+
+REM Check again after creation attempt
+if not exist "%VENV_PYTHON%" (
+    echo Error: Failed to create virtual environment
     echo Expected: %VENV_PYTHON%
     pause
     exit /b 1

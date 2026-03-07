@@ -40,6 +40,9 @@ Name: "desktop"; Description: "Create desktop shortcut"; GroupDescription: "Addi
 ; Virtual environment with pre-installed packages (CPU version)
 Source: "build-cpu\venv\*"; DestDir: "{app}\venv"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
+; Embedded Python for venv creation on target machines
+Source: "build-cpu\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
+
 ; WingScribe source code
 Source: "build-cpu\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 Source: "build-cpu\config\*"; DestDir: "{app}\config"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main

@@ -209,6 +209,40 @@ function Prepare-VirtualEnv {
     return $true
 }
 
+#===============================================================================
+# Step 4.5: Fix venv pyvenv.cfg for portable use
+#===============================================================================
+function Fix-VenvConfig {
+    Log-Step "Fixing virtual environment configuration..."
+
+    $venvDir = Join-Path $BUILD_DIR "venv"
+    $pyvenvCfg = Join-Path $venvDir "pyvenv.cfg"
+
+    if (Test-Path $pyvenvCfg) {
+        # Replace hardcoded paths with relative paths
+        # This allows venv to work on any machine
+        $content = Get-Content $pyvenvCfg -Encoding UTF8
+        $newContent = @()
+        foreach ($line in $content) {
+            if ($line -match "^home\s*=\s*(.+)") {
+                # Replace with Scripts relative path
+                $newContent += "home = Scripts"
+            } elseif ($line -match "^executable\s*=\s*(.+)") {
+                $newContent += "executable = Scripts\python.exe"
+            } elseif ($line -match "^command\s*=\s*(.+)") {
+                $newContent += "command = Scripts\python.exe -m venv"
+            } else {
+                $newContent += $line
+            }
+        }
+
+        $newContent | Set-Content $pyvenvCfg -Encoding UTF8
+        Log-Info "Fixed pyvenv.cfg - using relative Python paths"
+    } else {
+        Log-Warn "pyvenv.cfg not found - venv may not be properly created"
+    }
+}
+
 function Install-Dependencies {
     Log-Step "Installing Python dependencies..."
 
@@ -480,6 +514,11 @@ function Invoke-Build {
 
     if (-not $SkipExifTool) {
         Prepare-ExifTool
+    }
+
+    # Download embeddable Python for venv creation on target machines
+    if (-not $SkipPython) {
+        Download-Python
     }
 
     Prepare-VirtualEnv

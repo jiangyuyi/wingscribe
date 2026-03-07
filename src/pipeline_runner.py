@@ -108,10 +108,13 @@ class WingScribePipeline:
                 logging.error(f"  - {err}")
             raise ValueError(f"Invalid paths configuration: {errors}")
 
-        # Get base_dir for relative path storage
-        base_dir = self.config.get('paths', {}).get('base_dir', '')
+        # Get source directory (photo base directory)
+        sources = self.config.get('paths', {}).get('sources', [])
+        source_dir = ''
+        if sources and len(sources) > 0:
+            source_dir = sources[0].get('path', '')
 
-        # Resolve db_path - independent of base_dir (relative to cwd if not set)
+        # Resolve db_path - relative to cwd if not set
         db_path_config = self.config['paths'].get('db_path')
         if db_path_config is None:
             # Default: relative to current working directory
@@ -121,7 +124,7 @@ class WingScribePipeline:
         else:
             db_path = Path(db_path_config)
 
-        self.db = IOCManager(str(db_path), base_dir)
+        self.db = IOCManager(str(db_path), source_dir)
         self.device = self.config['processing'].get('device', 'cpu')
 
         # 日志等级配置
@@ -152,15 +155,13 @@ class WingScribePipeline:
                 return True
             return False
 
-        # Path Generator - resolve relative paths using base_dir
+        # Path Generator - output.root_dir is now always absolute (required)
         paths_conf = self.config['paths']
-        base_dir = paths_conf.get('base_dir', '')
 
         out_conf = paths_conf.get('output', {})
-        output_root = out_conf.get('root_dir', 'data/processed')
-        # Resolve relative path to absolute
-        if base_dir and not is_absolute_path(output_root):
-            output_root = str(Path(base_dir) / output_root)
+        output_root = out_conf.get('root_dir', '')
+        if not output_root:
+            raise ValueError("output.root_dir is required (must be absolute path)")
 
         self.path_generator = PathGenerator(
             template=out_conf.get('structure_template', "{year}/{location}/{species_cn}/{filename}"),
@@ -168,8 +169,8 @@ class WingScribePipeline:
         )
         self.write_back_raw = out_conf.get('write_back_to_source', False)
 
-        # Store base_dir and output_root for relative path conversion and exclusion
-        self.base_dir = base_dir
+        # Store source_dir and output_root for relative path conversion and exclusion
+        self.source_dir = source_dir
         self.output_root = output_root  # Absolute path for exclusion
         
         # Batch Buffer
@@ -507,25 +508,25 @@ class WingScribePipeline:
             })
             
             # Convert absolute paths to relative paths for database storage
-            # base_dir 已经是规范化路径 (如 Y:/)，不再有 UNC 问题
+            # source_dir is the base directory for photos
             rel_original_path = entry.path
             rel_file_path = str(final_path)
 
-            if self.base_dir:
-                norm_base_dir = os.path.normpath(self.base_dir)
-                base_dir_obj = Path(norm_base_dir)
+            if self.source_dir:
+                norm_source_dir = os.path.normpath(self.source_dir)
+                source_dir_obj = Path(norm_source_dir)
 
                 # 直接使用 relative_to 转换
                 try:
                     norm_entry_path = os.path.normpath(entry.path)
-                    rel_original_path = str(Path(norm_entry_path).relative_to(base_dir_obj))
+                    rel_original_path = str(Path(norm_entry_path).relative_to(source_dir_obj))
                 except ValueError:
                     logging.warning(f"Failed to convert original_path: {entry.path}, keeping original")
 
                 # Same for final_path (processed file)
                 try:
                     norm_final_path = os.path.normpath(str(final_path))
-                    rel_file_path = str(Path(norm_final_path).relative_to(base_dir_obj))
+                    rel_file_path = str(Path(norm_final_path).relative_to(source_dir_obj))
                 except ValueError:
                     logging.warning(f"Failed to convert file_path: {final_path}, keeping original")
 
@@ -691,19 +692,13 @@ class WingScribePipeline:
 
         if start_date:
             logging.info(f"Pipeline Filter: Range [{start_date} - {end_date or 'Max'}]")
-        
+
         sources = self.config['paths'].get('sources', [])
         # Fallback for old config
         if not sources and 'raw_dir' in self.config['paths']:
              sources = [{'path': self.config['paths']['raw_dir'], 'recursive': False}]
 
-        # Resolve source paths (relative to base_dir)
-        base_dir = self.base_dir
-        for source in sources:
-            path_str = source['path']
-            # Resolve relative path to absolute
-            if base_dir and path_str and not Path(path_str).is_absolute():
-                source['path'] = str(Path(base_dir) / path_str)
+        # source.path is now always absolute (required), no conversion needed
 
         # Use ThreadPool for detection/cropping
         # 4 workers is a good start for IO/CPU bound mix
@@ -717,11 +712,11 @@ class WingScribePipeline:
                 path_str = source['path']
                 recursive = source.get('recursive', True)
                 structure_pattern = source.get('structure_pattern', None)
-                
+
                 logging.info(f"Scanning source: {path_str} (Recursive: {recursive})")
 
                 # 使用 LocalProvider 替代 fs_manager
-                provider = LocalProvider(base_dir=self.base_dir)
+                provider = LocalProvider(base_dir=self.source_dir)
                 if not provider.exists(path_str):
                     logging.warning(f"Source path not found: {path_str}")
                     continue
@@ -824,7 +819,7 @@ class WingScribePipeline:
         Run pipeline for specific folders only, ignoring date range filters.
 
         Args:
-            folder_paths: List of folder paths (relative to base_dir or absolute)
+            folder_paths: List of folder paths (now always absolute)
             recursive: If True, scan subdirectories recursively
         """
         t_start = time.time()
@@ -846,34 +841,22 @@ class WingScribePipeline:
         for source in sources:
             if not source.get('enabled', True):
                 continue
-            path_str = source.get('path', '.')
-            # Resolve relative path to absolute
-            if self.base_dir and path_str and not Path(path_str).is_absolute():
-                resolved = str(Path(self.base_dir) / path_str)
-            else:
-                resolved = path_str
-            source_roots[resolved] = resolved  # Use source root itself as source_root for PathParser
+            path_str = source.get('path', '')
+            if path_str:
+                source_roots[path_str] = path_str  # Use source root itself as source_root for PathParser
 
-        # If no sources configured, fall back to base_dir
+        # If no sources configured, fall back to source_dir
         if not source_roots:
-            source_roots = {self.base_dir: self.base_dir}
+            source_roots = {self.source_dir: self.source_dir}
 
-        # Resolve folder paths to absolute
-        base_dir = self.base_dir
-        resolved_paths = []
-        for path_str in folder_paths:
-            if Path(path_str).is_absolute():
-                resolved_paths.append(path_str)
-            elif base_dir:
-                resolved_paths.append(str(Path(base_dir) / path_str))
-            else:
-                resolved_paths.append(path_str)
+        # folder_paths are now always absolute, no resolution needed
+        resolved_paths = list(folder_paths)
 
         # Use ThreadPool for detection/cropping
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = []
 
-            provider = LocalProvider(base_dir=self.base_dir)
+            provider = LocalProvider(base_dir=self.source_dir)
 
             for path_str in resolved_paths:
                 if not provider.exists(path_str):
@@ -889,8 +872,8 @@ class WingScribePipeline:
                         break
 
                 if source_root_abs is None:
-                    # Fallback: use base_dir or path_str itself
-                    source_root_abs = Path(self.base_dir) if self.base_dir else Path(path_str)
+                    # Fallback: use source_dir or path_str itself
+                    source_root_abs = Path(self.source_dir) if self.source_dir else Path(path_str)
 
                 parser = PathParser(source_root_abs, None)
 

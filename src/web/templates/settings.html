@@ -465,13 +465,40 @@
             }
         }
 
-        function browsePath(input) {
-            // This is a simplified version - in a real app, you'd use a file picker
-            // For now, just show a prompt
-            const path = prompt('输入目录路径:', input.value);
-            if (path !== null) {
-                input.value = path;
-                validatePath(input);
+        async function browsePath(input) {
+            // Call backend API to open folder selection dialog
+            try {
+                const currentPath = input.value || "";
+                const response = await fetch('/api/config/browse_folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: '选择文件夹',
+                        initial_path: currentPath
+                    })
+                });
+                const data = await response.json();
+
+                if (data.path) {
+                    input.value = data.path;
+                    validatePath(input);
+                } else if (data.error) {
+                    console.error('Failed to open folder dialog:', data.error);
+                    // Fallback to prompt
+                    const path = prompt('请输入文件夹路径:', input.value);
+                    if (path !== null) {
+                        input.value = path;
+                        validatePath(input);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to open folder dialog:', error);
+                // Fallback to prompt
+                const path = prompt('请输入文件夹路径:', input.value);
+                if (path !== null) {
+                    input.value = path;
+                    validatePath(input);
+                }
             }
         }
 

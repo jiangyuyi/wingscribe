@@ -12,9 +12,10 @@ Pillow>=10.0.0
 transformers>=4.30.0
 
 # Note: PyTorch is installed from local wheels in build.ps1
-# torch==2.1.0+cpu
-# torchvision==0.16.0+cpu
-# torchaudio==2.1.0+cpu
+# Lock torch version to prevent ultralytics from upgrading it
+torch==2.4.0
+torchvision==0.19.0
+torchaudio==2.4.0
 
 # HTTP and networking
 requests>=2.31.0

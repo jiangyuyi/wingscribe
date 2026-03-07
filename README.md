@@ -466,26 +466,32 @@ WingScribe 使用 YAML 进行配置。
 
 ---
 
-### 3. 相对路径配置
+### 3. 路径配置
 
-WingScribe 支持使用相对路径存储照片路径，便于分离部署和文件迁移。
+WingScribe 使用**绝对路径**配置照片源目录和输出目录。
 
 **配置示例:**
 
 ```yaml
 paths:
-  # 相对路径的根目录（所有路径以此为基准）
-  base_dir: "Y:/我的照片/2026"
-
+  # 照片源目录（必填，使用绝对路径）
   sources:
-    - path: "."        # 相对于 base_dir，等同于 Y:/我的照片/2026
+    - path: "D:/Photos/Birds/2026"
       recursive: true
+      enabled: true
 
+  # 输出目录（必填，使用绝对路径）
   output:
-    root_dir: "clip"  # 相对于 base_dir，等同于 Y:/我的照片/2026/clip
+    root_dir: "D:/Photos/Birds/Output"
+
+  # 以下路径相对于项目根目录
+  references_path: data/references
+  db_path: data/db/wingscribe.db
+  ioc_list_path: data/references/Multiling IOC 15.1_d.xlsx
+  model_cache_dir: data/models
 ```
 
-> **注意**: 启用相对路径后，需要**重置数据库**才能生效，因为现有数据存储的是绝对路径。
+> **注意**: 修改路径配置后，需要**重置数据库**才能生效。
 
 ---
 
@@ -495,17 +501,14 @@ WingScribe 使用 SQLite 数据库，默认存储在运行目录下。建议将�
 
 #### 4.1 数据库路径配置
 
-数据库路径 (`db_path`) 独立于 `base_dir`，支持以下配置方式：
+数据库路径 (`db_path`) 相对于项目根目录，支持以下配置方式：
 
 ```yaml
 paths:
-  # 照片基准目录
-  base_dir: "Y:/我的照片/2026"
-
   # 数据库路径（可选，不写则默认使用运行目录下的 data/db/wingscribe.db）
   # 推荐配置为本地路径以提升性能
   # db_path: "C:/Users/jiang/data/wingscribe.db"  # 绝对路径（推荐放本地）
-  # db_path: "data/db/wingscribe.db"              # 相对路径（相对于运行目录）
+  # db_path: "data/db/wingscribe.db"              # 相对路径（相对于项目根目录）
 ```
 
 #### 4.2 定时备份
@@ -577,12 +580,12 @@ http://localhost:8000/settings
 
 **基本模式**（默认）：
 
-| 配置项 | 说明 |
-|--------|------|
-| 照片基准目录 | 存放照片的根目录（支持 NAS 路径） |
-| 输出目录 | 处理后的照片保存位置 |
-| Web 服务地址 | 监听地址（0.0.0.0 = 允许局域网访问） |
-| Web 服务端口 | 访问端口（默认 8000） |
+| 配置项 | 说明 | 配置文件项 |
+|--------|------|-----------|
+| 照片基准目录 | 照片源目录（必填，使用绝对路径） | `paths.sources[0].path` |
+| 输出目录 | 裁切输出目录（必填，使用绝对路径） | `paths.output.root_dir` |
+| Web 服务地址 | 监听地址（0.0.0.0 = 允许局域网访问） | `web.host` |
+| Web 服务端口 | 访问端口（默认 8000） | `web.port` |
 
 **高级模式**（点击"高级配置"切换）：
 
@@ -620,12 +623,13 @@ python src/web/app.py
 * 访问地址: `http://localhost:8000`
 * **提示**: 进入 "Admin (管理)" 页面来触发您的第一次扫描。
 
-**首次启动`)检查清单:**
+**首次启动检查清单:**
 
 - [ ] `exiftool` 命令可正常执行
 - [ ] `config/settings.yaml` 中的路径已正确配置
-- [ ] `base_dir` 指向包含源照片的目录
-- [ ] 照片源目录中有符合命名格式的文件夹 (`YYYYMMDD_地点`)`)
+- [ ] `sources[0].path` 配置为包含源照片的目录（绝对路径）
+- [ ] `output.root_dir` 配置为输出目录（绝对路径）
+- [ ] 照片源目录中有符合命名格式的文件夹 (`YYYYMMDD_地点`)
 
 #### B. 命令行接口 (高级)
 

@@ -191,10 +191,13 @@ if not is_valid:
         logger.error(f"  - {err}")
     raise ValueError(f"Invalid paths configuration: {errors}")
 
-# Get base_dir for relative path resolution
-base_dir = config['paths'].get('base_dir', '')
-if base_dir:
-    base_dir = Path(base_dir)
+# Get source directory (photo base directory) for path resolution
+sources = config['paths'].get('sources', [])
+source_dir = ''
+if sources and len(sources) > 0:
+    source_dir = sources[0].get('path', '')
+if source_dir:
+    source_dir = Path(source_dir)
 
 # Helper function to check if path is absolute (handles both Windows and Unix formats)
 def is_absolute_path(p: str) -> bool:
@@ -212,9 +215,9 @@ def is_absolute_path(p: str) -> bool:
         return True
     return False
 
-# Resolve db_path - independent of base_dir (relative to current working directory if not set)
+# Resolve db_path - relative to current working directory if not set or empty
 db_path_config = config['paths'].get('db_path')
-if db_path_config is None:
+if not db_path_config:
     # Default: relative to current working directory
     db_path = Path('data/db/wingscribe.db')
 elif is_absolute_path(db_path_config):
@@ -222,17 +225,15 @@ elif is_absolute_path(db_path_config):
 else:
     db_path = Path(db_path_config)
 
-# Handle output.root_dir - based on base_dir
-output_root = config['paths']['output']['root_dir']
-if is_absolute_path(output_root):
-    processed_dir = Path(output_root)
-elif base_dir:
-    processed_dir = base_dir / output_root
-else:
-    processed_dir = BASE_DIR / output_root
+# Ensure database directory exists
+db_path.parent.mkdir(parents=True, exist_ok=True)
+
+# Handle output.root_dir - allow empty for first-run setup
+output_root = config['paths']['output'].get('root_dir', '')
+processed_dir = Path(output_root) if output_root else None
 
 logger.info(f"Project Base Directory: {BASE_DIR}")
-logger.info(f"Data Base Directory (base_dir): {base_dir}")
+logger.info(f"Photo Source Directory: {source_dir}")
 logger.info(f"Database Path: {db_path}")
 logger.info(f"Processed Images Directory: {processed_dir}")
 
@@ -243,9 +244,9 @@ if not processed_dir.exists():
 # Note: Using custom route for /processed (see serve_processed_file above)
 app.include_router(recognition_router)
 
-# Mount base_dir for "Original View" - use follow_symlink=True for Unicode path support
-if base_dir and base_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(base_dir), follow_symlink=True), name="static")
+# Mount source directory for "Original View" - use follow_symlink=True for Unicode path support
+if source_dir and source_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(source_dir), follow_symlink=True), name="static")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "src" / "web" / "templates"))
 
@@ -275,20 +276,20 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
         # Normalize path separators to avoid escape sequence issues
         normalized = original_path_str.replace('\\', '/')
 
-        # Handle relative paths - convert to absolute using base_dir
+        # Handle relative paths - convert to absolute using source_dir
         # 不使用 resolve()，避免UNC路径问题（与pipeline_runner.py一致）
-        if base_dir and not is_absolute_path(normalized):
-            abs_path = base_dir / normalized
+        if source_dir and not is_absolute_path(normalized):
+            abs_path = source_dir / normalized
         else:
             abs_path = Path(normalized)
 
         # 使用规范化路径比较，不使用resolve()
         norm_abs = os.path.normpath(str(abs_path))
-        norm_base = os.path.normpath(str(base_dir)) if base_dir else None
+        norm_base = os.path.normpath(str(source_dir)) if source_dir else None
 
         logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', norm_base={norm_base}")
 
-        # 基于 base_dir 计算相对路径
+        # 基于 source_dir 计算相对路径
         if norm_base and norm_abs.startswith(norm_base):
             # 提取相对路径部分
             rel_part = norm_abs[len(norm_base):].lstrip('/')
@@ -296,7 +297,7 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
             logger.debug(f"resolve_web_path: rel_part={rel_part}, result={result}")
             return result
 
-        logger.warning(f"resolve_web_path: path '{abs_path}' is not under base_dir {base_dir}")
+        logger.warning(f"resolve_web_path: path '{abs_path}' is not under source_dir {source_dir}")
     except Exception as e:
         logger.warning(f"resolve_web_path failed for '{original_path_str}': {e}")
     return None
@@ -304,8 +305,8 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
 @app.get("/processed/{path:path}")
 def serve_processed_file(path: str):
     """Custom static file handler for processed images (Unicode-safe on Windows)"""
-    # 直接用 base_dir 解析，因为 file_path 是相对于 base_dir 存储的
-    full_path = base_dir / path.replace('/', os.sep) if base_dir else None
+    # 直接用 source_dir 解析
+    full_path = source_dir / path.replace('/', os.sep) if source_dir else None
 
     if full_path and full_path.exists() and full_path.is_file():
         return FileResponse(full_path)
@@ -319,10 +320,10 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
         # Normalize path separators
         normalized = file_path_str.replace('\\', '/')
 
-        # file_path is stored relative to base_dir, so use base_dir to resolve
+        # file_path is stored relative to source_dir, so use source_dir to resolve
         # 不使用 resolve()，避免UNC路径问题
-        if base_dir and not is_absolute_path(normalized):
-            abs_path = base_dir / normalized
+        if source_dir and not is_absolute_path(normalized):
+            abs_path = source_dir / normalized
         elif not is_absolute_path(normalized):
             abs_path = BASE_DIR / normalized
         else:
@@ -330,14 +331,14 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
 
         # 使用规范化路径比较
         norm_abs = os.path.normpath(str(abs_path))
-        norm_base = os.path.normpath(str(base_dir)) if base_dir else None
+        norm_base = os.path.normpath(str(source_dir)) if source_dir else None
 
-        # Check if it's under base_dir, then generate the URL
+        # Check if it's under source_dir, then generate the URL
         if norm_base and norm_abs.startswith(norm_base):
             rel_part = norm_abs[len(norm_base):].lstrip('/')
             return f"/processed/{rel_part.replace(os.sep, '/')}"
 
-        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under base_dir {base_dir}")
+        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under source_dir {source_dir}")
         return None
     except Exception as e:
         logger.warning(f"Failed to resolve processed path '{file_path_str}': {e}")
@@ -365,11 +366,17 @@ def is_first_run():
     config_path = BASE_DIR / "config" / "settings.yaml"
     return not config_path.exists()
 
+def is_paths_configured():
+    """Check if source and output paths are configured (not empty)"""
+    global source_dir
+    global output_root
+    return bool(source_dir) and bool(output_root)
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, q: str = "", filter: str = "", date: str = "", limit: int = 50, offset: int = 0, skip_first_check: bool = False):
-    # Check for first run - redirect to settings if no config
-    if not skip_first_check and is_first_run():
-        return templates.TemplateResponse("settings.html", {"request": request, "is_first_run": True})
+    # Check for first run or empty paths - redirect to settings if not configured
+    if not skip_first_check and (is_first_run() or not is_paths_configured()):
+        return templates.TemplateResponse("settings.html", {"request": request, "is_first_run": is_first_run()})
 
     conn = get_db_conn()
     cursor = conn.cursor()
@@ -438,6 +445,9 @@ def index(request: Request, q: str = "", filter: str = "", date: str = "", limit
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
+    # Check if paths are configured - redirect to settings if not
+    if not is_paths_configured():
+        return templates.TemplateResponse("settings.html", {"request": request, "is_first_run": False})
     stats = get_stats()
     return templates.TemplateResponse("admin.html", {"request": request, "stats": stats})
 
@@ -498,19 +508,17 @@ def get_folder_tree():
         if not sources:
             return {"tree": []}
 
-        base_dir = config.get('paths', {}).get('base_dir', '')
-
         tree = []
         for source in sources:
             if not source.get('enabled', True):
                 continue
 
-            path_str = source.get('path', '.')
-            # Resolve relative path
-            if base_dir and not Path(path_str).is_absolute():
-                full_path = Path(base_dir) / path_str
-            else:
-                full_path = Path(path_str)
+            path_str = source.get('path', '')
+            if not path_str:
+                continue
+
+            # sources.path now uses absolute path
+            full_path = Path(path_str)
 
             if not full_path.exists():
                 continue
@@ -529,13 +537,8 @@ def get_folder_tree():
 def get_folder_children(full_path: str):
     """获取指定路径的子目录（懒加载）"""
     try:
-        base_dir = config.get('paths', {}).get('base_dir', '')
-
-        # Resolve full_path relative to base_dir
-        if base_dir and not Path(full_path).is_absolute():
-            current_path = Path(base_dir) / full_path
-        else:
-            current_path = Path(full_path)
+        # full_path is now absolute, no need to resolve relative to base_dir
+        current_path = Path(full_path)
 
         if not current_path.exists() or not current_path.is_dir():
             return {"children": []}
@@ -554,7 +557,7 @@ def _build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = ""
     Args:
         root_path: 绝对路径的根目录
         recursive: 是否递归扫描子目录
-        base_rel_path: 相对于 base_dir 的基础路径（如 "1按年份/2026"）
+        base_rel_path: 相对于 source_dir 的基础路径
     """
     if current_depth >= max_depth:
         return []
@@ -571,7 +574,7 @@ def _build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = ""
             if item.name in IGNORED_DIRS or any(item.name.startswith(p.replace('-', '')) for p in IGNORED_DIRS if '-'):
                 continue
 
-            # Calculate relative path from base_dir
+            # Calculate relative path from source_dir
             if base_rel_path:
                 rel_path = f"{base_rel_path}/{item.name}"
             else:
@@ -649,12 +652,8 @@ def reset_system():
         for src in sources_config:
             src_path = src.get('path', '')
             if src_path:
-                if Path(src_path).is_absolute():
-                    source_paths.append(Path(src_path).absolute())
-                elif base_dir:
-                    source_paths.append((base_dir / src_path).absolute())
-                else:
-                    source_paths.append((BASE_DIR / src_path).absolute())
+                # sources.path is now always absolute
+                source_paths.append(Path(src_path).absolute())
 
         # 如果 output 目录也是源目录，禁止删除（防止配置错误导致的灾难）
         protected_paths = set(source_paths)
@@ -864,12 +863,12 @@ def update_label(req: UpdateLabelRequest):
 
     photo = dict(photo)
 
-    # Convert relative paths to absolute using base_dir
-    if base_dir:
-        if photo.get('file_path'):
-            photo['file_path'] = str(base_dir / photo['file_path'])
-        if photo.get('original_path'):
-            photo['original_path'] = str(base_dir / photo['original_path'])
+    # Convert relative paths to absolute using source_dir
+    if source_dir:
+        if photo.get('file_path') and not is_absolute_path(photo['file_path']):
+            photo['file_path'] = str(source_dir / photo['file_path'])
+        if photo.get('original_path') and not is_absolute_path(photo['original_path']):
+            photo['original_path'] = str(source_dir / photo['original_path'])
     
     # 2. Get extra bird info (Family) for tags
     bird_info = manager.get_bird_info(req.scientific_name)
@@ -984,12 +983,11 @@ def update_label(req: UpdateLabelRequest):
                 }
                 
                 # Re-instantiate generator
-                # FIX: Resolve output_root based on base_dir (same logic as line 225-232)
-                output_root_raw = out_conf.get('root_dir', 'data/processed')
-                if is_absolute_path(output_root_raw):
-                    output_root_resolved = Path(output_root_raw)
-                else:
-                    output_root_resolved = base_dir / output_root_raw
+                # output.root_dir is now always absolute path (required)
+                output_root_raw = out_conf.get('root_dir', '')
+                if not output_root_raw:
+                    output_root_raw = processed_dir  # Fallback to configured processed_dir
+                output_root_resolved = Path(output_root_raw)
 
                 generator = PathGenerator(
                     template=template,
@@ -1024,14 +1022,14 @@ def update_label(req: UpdateLabelRequest):
                     
                     shutil.move(processed_path, final_path)
                     
-                    # Update DB (convert absolute path to relative)
+                    # Update DB (convert absolute path to relative if under source_dir)
                     conn = get_db_conn()
                     rel_path = str(final_path)
-                    if base_dir:
+                    if source_dir:
                         try:
-                            rel_path = str(Path(final_path).relative_to(base_dir))
+                            rel_path = str(Path(final_path).relative_to(source_dir))
                         except ValueError:
-                            pass  # Keep absolute path if not under base_dir
+                            pass  # Keep absolute path if not under source_dir
                     conn.execute("UPDATE photos SET file_path = ?, filename = ? WHERE id = ?",
                                  (rel_path, final_path.name, req.photo_id))
                     conn.commit()
@@ -1080,16 +1078,16 @@ def get_config_definition():
         "basic": {
             "paths": [
                 {
-                    "key": "base_dir",
+                    "key": "sources[0].path",
                     "label": "照片基准目录",
-                    "description": "包含照片的根目录（支持 NAS 路径）",
+                    "description": "照片源目录（必填，使用绝对路径）",
                     "type": "path",
                     "required": True
                 },
                 {
                     "key": "output.root_dir",
                     "label": "输出目录",
-                    "description": "处理后的照片保存位置",
+                    "description": "裁切输出目录（必填，使用绝对路径）",
                     "type": "path",
                     "required": True
                 }
@@ -1369,6 +1367,42 @@ async def validate_config_path(path: str):
         }
     except Exception as e:
         return {"error": str(e)}
+
+import threading
+
+def open_folder_dialog(title: str, initial_dir: str = "") -> str:
+    """Open a folder selection dialog using tkinter (runs in separate thread)"""
+    result = {"path": None, "error": None}
+
+    def _run_dialog():
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            folder = filedialog.askdirectory(title=title, initialdir=initial_dir or None)
+            root.destroy()
+            result["path"] = folder
+        except Exception as e:
+            result["error"] = str(e)
+
+    thread = threading.Thread(target=_run_dialog)
+    thread.start()
+    thread.join()
+
+    if result["error"]:
+        raise Exception(result["error"])
+    return result["path"]
+
+@app.post("/api/config/browse_folder")
+async def browse_folder_api(title: str = "选择文件夹", initial_path: str = ""):
+    """API endpoint to open folder selection dialog"""
+    try:
+        folder_path = await asyncio.to_thread(open_folder_dialog, title, initial_path)
+        return {"path": folder_path}
+    except Exception as e:
+        return {"error": str(e), "path": None}
 
 if __name__ == "__main__":
     import argparse

@@ -71,10 +71,11 @@ function Download-Python {
 function Download-PyTorchWheels {
     Log-Step "Downloading PyTorch CPU wheels..."
 
+    # PyTorch 2.4.0+ is required (>= 2.4)
     $wheels = @(
-        "https://download.pytorch.org/whl/cpu/torch-2.1.0%2Bcpu-cp311-cp311-win_amd64.whl",
-        "https://download.pytorch.org/whl/cpu/torchvision-0.16.0%2Bcpu-cp311-cp311-win_amd64.whl",
-        "https://download.pytorch.org/whl/cpu/torchaudio-2.1.0%2Bcpu-cp311-cp311-win_amd64.whl"
+        "https://download.pytorch.org/whl/cpu/torch-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl",
+        "https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp311-cp311-win_amd64.whl",
+        "https://download.pytorch.org/whl/cpu/torchaudio-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl"
     )
 
     Ensure-Directory $WHEELS_DIR
@@ -251,6 +252,15 @@ function Copy-SourceCode {
         }
     }
 
+    # Copy only necessary data subdirectories (references for IOC bird data)
+    $dataRefsSource = Join-Path $PROJECT_ROOT "data\references"
+    $dataRefsDest = Join-Path $BUILD_DIR "data\references"
+    if (Test-Path $dataRefsSource) {
+        Ensure-Directory $dataRefsDest
+        Copy-Item -Path "$dataRefsSource\*" -Destination $dataRefsDest -Recurse -Force
+        Log-Info "  Copied data/references/"
+    }
+
     # Copy individual files
     $filesToCopy = @("requirements.txt", "README.md", "CLAUDE.md")
     foreach ($file in $filesToCopy) {
@@ -264,74 +274,57 @@ function Copy-SourceCode {
 }
 
 #===============================================================================
-# Step 6: Create startup scripts
+# Step 6: Copy startup scripts
 #===============================================================================
-function Create-StartupScripts {
-    Log-Step "Creating startup scripts..."
+function Copy-StartupScripts {
+    Log-Step "Copying startup scripts..."
 
     $scriptsDir = Join-Path $BUILD_DIR "scripts"
+    $installerScriptsDir = Join-Path $INSTALLER_DIR "scripts"
     Ensure-Directory $scriptsDir
 
-    # start_web.bat
-    $batContent = @"
+    # Copy start_web.bat from installer/scripts directory
+    $sourceBat = Join-Path $installerScriptsDir "start_web.bat"
+    if (Test-Path $sourceBat) {
+        Copy-Item $sourceBat -Destination (Join-Path $scriptsDir "start_web.bat") -Force
+        Log-Info "  Copied start_web.bat"
+    } else {
+        Log-Warn "  start_web.bat not found in installer/scripts/, creating minimal version..."
+        # Fallback to creating the file if it doesn't exist
+        $batContent = @"
 @echo off
-REM WingScribe Web Server Launcher
-REM This script starts the WingScribe web interface
-
 setlocal
-
-REM Get the directory where this script is located
-set SCRIPT_DIR=%~dp0
-set APP_ROOT=%SCRIPT_ID%..
-
-REM Activate virtual environment
-call "%APP_ROOT%\venv\Scripts\activate.bat"
-
-REM Change to application directory
+set "SCRIPT_DIR=%~dp0"
+set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+pushd "%SCRIPT_DIR%\.."
+set "APP_ROOT=%CD%"
+popd
 cd /d "%APP_ROOT%"
-
-REM Start the web server
-echo Starting WingScribe Web Server...
-echo URL: http://localhost:8000
-echo Press Ctrl+C to stop
-echo.
-
-python "%APP_ROOT%\src\web\app.py"
-
+if not exist "src\web\app.py" (
+    echo Error: Cannot find src\web\app.py
+    echo Current directory: %CD%
+    pause
+    exit /b 1
+)
+if not exist "%APP_ROOT%\venv\Scripts\python.exe" (
+    echo Error: Virtual environment not found
+    pause
+    exit /b 1
+)
+"%APP_ROOT%\venv\Scripts\python.exe" "%APP_ROOT%\src\web\app.py"
 pause
 "@
+        $batContent | Out-File (Join-Path $scriptsDir "start_web.bat") -Encoding ASCII
+    }
 
-    $batContent | Out-File (Join-Path $scriptsDir "start_web.bat") -Encoding ASCII
+    # Copy start_web.ps1 from installer/scripts directory if it exists
+    $sourcePs = Join-Path $installerScriptsDir "start_web.ps1"
+    if (Test-Path $sourcePs) {
+        Copy-Item $sourcePs -Destination (Join-Path $scriptsDir "start_web.ps1") -Force
+        Log-Info "  Copied start_web.ps1"
+    }
 
-    # start_web.ps1
-    $psContent = @"
-# WingScribe Web Server Launcher (PowerShell)
-
-$ErrorActionPreference = "Stop"
-$ScriptRoot = Split-Path $MyInvocation.MyCommand.Path
-$AppRoot = Split-Path $ScriptRoot -Parent
-
-# Activate virtual environment
-$VenvActivate = Join-Path $AppRoot "venv\Scripts\Activate.ps1"
-if (Test-Path $VenvActivate) {
-    & $VenvActivate
-}
-
-# Change to application directory
-Set-Location $AppRoot
-
-# Start the web server
-Write-Host "Starting WingScribe Web Server..." -ForegroundColor Green
-Write-Host "URL: http://localhost:8000" -ForegroundColor Cyan
-Write-Host "Press Ctrl+C to stop" -ForegroundColor Gray
-Write-Host ""
-
-& python "$AppRoot\src\web\app.py"
-"@
-
-    $psContent | Out-File (Join-Path $scriptsDir "start_web.ps1") -Encoding UTF8
-
-    Log-Success "Startup scripts created"
+    Log-Success "Startup scripts copied"
 }
 
 #===============================================================================
@@ -395,7 +388,7 @@ function Invoke-Build {
     Prepare-VirtualEnv
     Install-Dependencies
     Copy-SourceCode
-    Create-StartupScripts
+    Copy-StartupScripts
     Prepare-FirstRunWizard
 
     Write-Host ""

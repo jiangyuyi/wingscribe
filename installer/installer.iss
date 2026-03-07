@@ -45,6 +45,9 @@ Source: "build\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs
 Source: "build\config\*"; DestDir: "{app}\config"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 Source: "build\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
+; IOC bird reference data (required for species recognition)
+Source: "build\data\references\*"; DestDir: "{app}\data\references"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
+
 ; Tools
 Source: "tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Components: main
 
@@ -63,12 +66,12 @@ Name: "{app}\data\references"
 
 [Icons]
 ; Start menu
-Name: "{group}\WingScribe"; Filename: "{app}\scripts\start_web.bat"
-Name: "{group}\Configuration Guide"; Filename: "{app}\scripts\start_web.bat"; Parameters: "--config-guide"
+Name: "{group}\WingScribe"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}
+Name: "{group}\Configuration Guide"; Filename: "{app}\scripts\start_web.bat"; Parameters: "--config-guide"; WorkingDir: {app}
 Name: "{group}\Uninstall WingScribe"; Filename: "{uninstallexe}"
 
 ; Desktop shortcut
-Name: "{autodesktop}\WingScribe"; Filename: "{app}\scripts\start_web.bat"; Tasks: desktop
+Name: "{autodesktop}\WingScribe"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}; Tasks: desktop
 
 [Run]
 ; Launch web server after installation

@@ -7,7 +7,9 @@
 param(
     [switch]$SkipWheels = $false,
     [switch]$SkipExifTool = $false,
-    [switch]$SkipPython = $false
+    [switch]$SkipPython = $false,
+    [ValidateSet("cpu", "gpu")]
+    [string]$Mode = "cpu"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,8 +17,12 @@ $ProgressPreference = "SilentlyContinue"
 
 $PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
 $INSTALLER_DIR = $PSScriptRoot
-$BUILD_DIR = Join-Path $INSTALLER_DIR "build"
-$WHEELS_DIR = Join-Path $INSTALLER_DIR "wheels"
+
+# Build output directory depends on mode
+$modeLower = $Mode.ToLower()
+$BUILD_MODE_DIR = "build-$modeLower"
+$BUILD_DIR = Join-Path $INSTALLER_DIR $BUILD_MODE_DIR
+$WHEELS_DIR = Join-Path $INSTALLER_DIR "wheels-$modeLower"
 $TOOLS_DIR = Join-Path $INSTALLER_DIR "tools"
 $ASSETS_DIR = Join-Path $INSTALLER_DIR "assets"
 
@@ -66,27 +72,52 @@ function Download-Python {
 }
 
 #===============================================================================
-# Step 2: Download PyTorch CPU wheels
+# Step 2: Download PyTorch wheels (CPU or GPU)
 #===============================================================================
 function Download-PyTorchWheels {
-    Log-Step "Downloading PyTorch CPU wheels..."
+    Log-Step "Downloading PyTorch $Mode wheels..."
 
     # PyTorch 2.4.0+ is required (>= 2.4)
-    $wheels = @(
-        "https://download.pytorch.org/whl/cpu/torch-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl",
-        "https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp311-cp311-win_amd64.whl",
-        "https://download.pytorch.org/whl/cpu/torchaudio-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl"
-    )
+    # CPU: cu118 (CUDA 11.8) or cu121 (CUDA 12.1)
+    $cudaVersion = "cu118"
+    if ($Mode -eq "gpu") {
+        $wheels = @(
+            "https://download.pytorch.org/whl/$cudaVersion/torch-2.4.0%2B$cudaVersion-cp311-cp311-win_amd64.whl",
+            "https://download.pytorch.org/whl/$cudaVersion/torchvision-0.19.0%2B$cudaVersion-cp311-cp311-win_amd64.whl",
+            "https://download.pytorch.org/whl/$cudaVersion/torchaudio-2.4.0%2B$cudaVersion-cp311-cp311-win_amd64.whl"
+        )
+    } else {
+        $wheels = @(
+            "https://download.pytorch.org/whl/cpu/torch-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl",
+            "https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp311-cp311-win_amd64.whl",
+            "https://download.pytorch.org/whl/cpu/torchaudio-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl"
+        )
+    }
 
     Ensure-Directory $WHEELS_DIR
+
+    # Also check common wheels directory as fallback
+    $commonWheelsDir = Join-Path $INSTALLER_DIR "wheels"
 
     foreach ($wheel in $wheels) {
         $fileName = Split-Path $wheel -Leaf
         $filePath = Join-Path $WHEELS_DIR ($fileName -replace "%2B", "+")
 
+        # Check in mode-specific directory first, then common directory
         if (-not (Test-Path $filePath)) {
-            Log-Info "Downloading $fileName..."
-            Invoke-WebRequest -Uri $wheel -OutFile $filePath -UseBasicParsing
+            $commonPath = Join-Path $commonWheelsDir ($fileName -replace "%2B", "+")
+            if (Test-Path $commonPath) {
+                Copy-Item $commonPath -Destination $filePath -Force
+                Log-Info "$fileName copied from common wheels directory"
+            } else {
+                Log-Info "Downloading $fileName..."
+                try {
+                    Invoke-WebRequest -Uri $wheel -OutFile $filePath -UseBasicParsing
+                } catch {
+                    $errMsg = $_.Exception.Message
+                    Log-Warn "Failed to download $fileName - $($errMsg)"
+                }
+            }
         } else {
             Log-Info "$fileName already exists"
         }
@@ -199,8 +230,12 @@ function Install-Dependencies {
 
     # Then install other dependencies from PyPI
     Log-Info "Installing other dependencies..."
-    $requirementsCpu = Join-Path $INSTALLER_DIR "requirements-cpu.txt"
-    & $venvPip install -r $requirementsCpu
+    if ($Mode -eq "gpu") {
+        $requirementsFile = Join-Path $INSTALLER_DIR "requirements-gpu.txt"
+    } else {
+        $requirementsFile = Join-Path $INSTALLER_DIR "requirements-cpu.txt"
+    }
+    & $venvPip install -r $requirementsFile
 
     if ($LASTEXITCODE -eq 0) {
         Log-Success "Dependencies installed"
@@ -423,9 +458,10 @@ function Ensure-Directory {
 # Main Build Process
 #===============================================================================
 function Invoke-Build {
+    $modeUpper = $Mode.ToUpper()
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "  WingScribe Installer Build" -ForegroundColor Cyan
+    Write-Host "  WingScribe $modeUpper Installer Build" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -455,17 +491,17 @@ function Invoke-Build {
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
-    Write-Host "  Build Complete!" -ForegroundColor Green
+    Write-Host "  $modeUpper Build Complete!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Build output:" -ForegroundColor White
-    Write-Host "    Virtual environment: $venvDir" -ForegroundColor Gray
+    Write-Host "    Virtual environment: $BUILD_DIR\venv" -ForegroundColor Gray
     Write-Host "    Source code: $BUILD_DIR\src" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  Next steps:" -ForegroundColor White
     Write-Host "    1. Download Inno Setup: https://jrsoftware.org/isdl.php" -ForegroundColor Gray
-    Write-Host "    2. Run: iscc installer\installer.iss" -ForegroundColor Gray
-    Write-Host "    3. Output: installer\Output\WingScribe-Setup.exe" -ForegroundColor Gray
+    Write-Host "    2. Run: iscc installer\installer-$Mode.iss" -ForegroundColor Gray
+    Write-Host "    3. Output: installer\Output\WingScribe-Setup-$modeUpper.exe" -ForegroundColor Gray
     Write-Host ""
 }
 

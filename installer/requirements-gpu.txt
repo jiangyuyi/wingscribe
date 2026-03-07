@@ -1,0 +1,49 @@
+# WingScribe GPU Dependencies
+# This file is for NVIDIA GPU systems with CUDA support
+# Requires NVIDIA GPU with CUDA driver installed
+
+# NumPy compatibility: Pin to 1.x for PyTorch compatibility
+numpy<2.0.0
+
+# Core ML/CV libraries
+ultralytics>=8.4.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+transformers>=4.30.0
+
+# PyTorch with CUDA support
+# Note: torch is installed separately from wheels in build.ps1
+torch>=2.5.0
+torchvision>=0.20.0
+torchaudio>=2.5.0
+
+# HTTP and networking
+requests>=2.31.0
+httpx>=0.24.0
+
+# Metadata handling
+PyExifTool>=0.5.0
+
+# Web framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+jinja2>=3.1.0
+python-multipart>=0.0.6
+websockets>=11.0.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# Data processing
+pandas>=2.0.0
+pyyaml>=6.0
+openpyxl>=3.1.0
+
+# AI/ML models
+open-clip-torch>=2.23.0
+
+# Validation
+pydantic>=2.0.0
+
+# Excluded from installer:
+# - pytest, pytest-cov, pytest-mock (testing only)

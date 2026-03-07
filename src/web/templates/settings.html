@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>飞羽志 WingScribe - 系统配置</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/lib/favicon.ico">
+    <link href="/lib/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
     <style>
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -173,12 +174,7 @@
             </form>
 
             <div class="config-actions">
-                <div>
-                    <label class="form-check-label">
-                        <input class="form-check-input" type="checkbox" id="restartAfterSave">
-                        保存后重启服务
-                    </label>
-                </div>
+                <div></div>
                 <div>
                     <button class="btn btn-light me-2" onclick="discardChanges()">
                         <i class="bi bi-x-circle"></i> 放弃更改
@@ -211,7 +207,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/lib/js/bootstrap.bundle.min.js"></script>
     <script>
         let currentConfig = {};
         let configDefinition = {};
@@ -248,8 +244,8 @@
             return {
                 basic: {
                     paths: [
-                        { key: 'base_dir', label: '照片基准目录', description: '包含照片的根目录', type: 'path', required: true },
-                        { key: 'output.root_dir', label: '输出目录', description: '处理后的照片保存位置', type: 'path', required: true }
+                        { key: 'sources[0].path', label: '照片基准目录', description: '照片源目录（必填，使用绝对路径）', type: 'path', required: true },
+                        { key: 'output.root_dir', label: '输出目录', description: '裁切输出目录（必填，使用绝对路径）', type: 'path', required: true }
                     ],
                     web: [
                         { key: 'host', label: '监听地址', description: '0.0.0.0 = 允许局域网访问', type: 'string', default: '0.0.0.0' },
@@ -314,7 +310,7 @@
             div.appendChild(label);
 
             // Input
-            if (item.type === 'path') {
+            if (item.type === 'path' || item.type === 'directory' || item.type === 'file') {
                 const inputGroup = document.createElement('div');
                 inputGroup.className = 'path-input-group';
 
@@ -324,7 +320,7 @@
                 input.value = value;
                 input.dataset.section = sectionName;
                 input.dataset.key = item.key;
-                input.dataset.type = item.type || 'string';
+                input.dataset.type = item.type; // 'directory', 'file', or 'path'
                 input.placeholder = item.placeholder || '';
                 input.addEventListener('blur', () => validatePath(input));
                 inputGroup.appendChild(input);
@@ -332,7 +328,7 @@
                 const browseBtn = document.createElement('button');
                 browseBtn.type = 'button';
                 browseBtn.className = 'btn btn-outline-secondary';
-                browseBtn.innerHTML = '<i class="bi bi-folder"></i>';
+                browseBtn.innerHTML = item.type === 'file' ? '<i class="bi bi-file-earmark"></i>' : '<i class="bi bi-folder"></i>';
                 browseBtn.onclick = () => browsePath(input);
                 inputGroup.appendChild(browseBtn);
 
@@ -413,7 +409,20 @@
             let value = obj;
             for (const key of keys) {
                 if (value && typeof value === 'object') {
-                    value = value[key];
+                    // Handle array index in path like "sources[0].path"
+                    const arrayMatch = key.match(/^(\w+)\[(\d+)\]$/);
+                    if (arrayMatch) {
+                        // For "sources[0]", convert to array index
+                        const arrayKey = arrayMatch[1];
+                        const index = parseInt(arrayMatch[2], 10);
+                        value = value[arrayKey]?.[index];
+                    } else if (Array.isArray(value)) {
+                        // For numeric string index like "0" on an array
+                        const index = parseInt(key, 10);
+                        value = value[index];
+                    } else {
+                        value = value[key];
+                    }
                 } else {
                     return undefined;
                 }
@@ -443,22 +452,38 @@
             const path = input.value;
             if (!path) return;
 
+            const pathType = input.dataset.type || 'directory';
             const statusDiv = document.getElementById(`status-${input.dataset.section}-${input.dataset.key.replace('.', '-')}`);
             statusDiv.textContent = '验证中...';
 
             try {
-                const response = await fetch(`/api/config/validate?path=${encodeURIComponent(path)}`);
+                const response = await fetch(`/api/config/validate?path=${encodeURIComponent(path)}&path_type=${pathType}`);
                 const data = await response.json();
 
-                if (data.exists && data.is_directory) {
-                    statusDiv.textContent = data.can_write ? '✓ 目录可访问' : '⚠ 目录只读';
-                    statusDiv.className = 'path-status ' + (data.can_write ? 'valid' : 'invalid');
-                } else if (data.exists) {
-                    statusDiv.textContent = '⚠ 路径是文件，不是目录';
-                    statusDiv.className = 'path-status invalid';
+                if (pathType === 'file') {
+                    // Validation for file paths
+                    if (data.exists && data.is_file) {
+                        statusDiv.textContent = data.can_read ? '✓ 文件可读取' : '⚠ 文件不可读';
+                        statusDiv.className = 'path-status ' + (data.can_read ? 'valid' : 'invalid');
+                    } else if (data.exists && data.is_directory) {
+                        statusDiv.textContent = '⚠ 路径是目录，不是文件';
+                        statusDiv.className = 'path-status invalid';
+                    } else {
+                        statusDiv.textContent = '⚠ 文件不存在（保存时将创建）';
+                        statusDiv.className = 'path-status invalid';
+                    }
                 } else {
-                    statusDiv.textContent = '⚠ 目录不存在（保存时将创建）';
-                    statusDiv.className = 'path-status invalid';
+                    // Validation for directory paths (default)
+                    if (data.exists && data.is_directory) {
+                        statusDiv.textContent = data.can_write ? '✓ 目录可访问' : '⚠ 目录只读';
+                        statusDiv.className = 'path-status ' + (data.can_write ? 'valid' : 'invalid');
+                    } else if (data.exists) {
+                        statusDiv.textContent = '⚠ 路径是文件，不是目录';
+                        statusDiv.className = 'path-status invalid';
+                    } else {
+                        statusDiv.textContent = '⚠ 目录不存在（保存时将创建）';
+                        statusDiv.className = 'path-status invalid';
+                    }
                 }
             } catch (error) {
                 statusDiv.textContent = '';
@@ -466,35 +491,56 @@
         }
 
         async function browsePath(input) {
-            // Call backend API to open folder selection dialog
+            const pathType = input.dataset.type || 'directory';
+            const currentPath = input.value || "";
+
+            // Call backend API to open folder or file selection dialog
             try {
-                const currentPath = input.value || "";
-                const response = await fetch('/api/config/browse_folder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: '选择文件夹',
-                        initial_path: currentPath
-                    })
-                });
-                const data = await response.json();
+                let response, data;
+
+                if (pathType === 'file') {
+                    // Open file selection dialog
+                    response = await fetch('/api/config/browse_file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: '选择文件',
+                            initial_path: currentPath,
+                            file_types: 'xlsx|xls|db|sqlite'
+                        })
+                    });
+                } else {
+                    // Open folder selection dialog (default)
+                    response = await fetch('/api/config/browse_folder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: '选择文件夹',
+                            initial_path: currentPath
+                        })
+                    });
+                }
+
+                data = await response.json();
 
                 if (data.path) {
                     input.value = data.path;
                     validatePath(input);
                 } else if (data.error) {
-                    console.error('Failed to open folder dialog:', data.error);
+                    console.error('Failed to open dialog:', data.error);
                     // Fallback to prompt
-                    const path = prompt('请输入文件夹路径:', input.value);
+                    const promptMsg = pathType === 'file' ? '请输入文件路径:' : '请输入文件夹路径:';
+                    const path = prompt(promptMsg, input.value);
                     if (path !== null) {
                         input.value = path;
                         validatePath(input);
                     }
                 }
             } catch (error) {
-                console.error('Failed to open folder dialog:', error);
+                console.error('Failed to open dialog:', error);
                 // Fallback to prompt
-                const path = prompt('请输入文件夹路径:', input.value);
+                const promptMsg = pathType === 'file' ? '请输入文件路径:' : '请输入文件夹路径:';
+                const path = prompt(promptMsg, input.value);
                 if (path !== null) {
                     input.value = path;
                     validatePath(input);
@@ -521,15 +567,13 @@
                 });
             }
 
-            const restart = document.getElementById('restartAfterSave').checked;
-
             showLoading(true);
 
             try {
                 const response = await fetch('/api/config/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ configs, restart })
+                    body: JSON.stringify({ configs, restart: true })
                 });
 
                 const data = await response.json();
@@ -539,13 +583,28 @@
                 if (data.status === 'saved') {
                     showToast('保存成功', '配置已保存', 'success');
 
-                    if (data.restart_required || restart) {
-                        setTimeout(() => {
-                            if (confirm('配置已保存。是否立即重启服务使更改生效？')) {
+                    // Always ask whether to restart
+                    setTimeout(async () => {
+                        if (data.db_path_changed || confirm('配置已保存。是否立即重启服务使更改生效？')) {
+                            try {
+                                const restartResp = await fetch('/api/config/restart', { method: 'POST' });
+                                const restartData = await restartResp.json();
+                                if (restartData.status === 'restarting') {
+                                    showToast('正在重启', '服务正在重启，请稍候...', 'info');
+                                    // Wait for server to restart, then reload
+                                    setTimeout(() => {
+                                        window.location.href = '/';
+                                    }, 3000);
+                                } else {
+                                    showToast('重启失败', restartData.error || '未知错误', 'danger');
+                                }
+                            } catch (e) {
+                                console.error('Restart error:', e);
+                                // Fallback: just reload
                                 window.location.href = '/';
                             }
-                        }, 500);
-                    }
+                        }
+                    }, 500);
                 } else {
                     showToast('保存失败', data.error || '未知错误', 'danger');
                 }

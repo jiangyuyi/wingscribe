@@ -113,7 +113,6 @@ jobs:
           files: installer/Output/WingScribe-Setup-*.exe
           draft: false
           prerelease: false
-          generate_release_notes: true
           body: |
             ## WingScribe ${{ steps.get_version.outputs.version }}
 

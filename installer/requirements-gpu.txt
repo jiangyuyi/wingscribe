@@ -13,8 +13,8 @@ transformers>=4.30.0
 
 # PyTorch with CUDA support
 # Note: Keep these pinned to local wheels in wheels-gpu/
-torch==2.4.0
-torchvision==0.19.0
+torch==2.4.1
+torchvision==0.19.1
 
 # HTTP and networking
 requests>=2.31.0

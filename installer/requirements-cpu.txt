@@ -12,8 +12,8 @@ Pillow>=10.0.0
 transformers>=4.30.0
 
 # Note: Keep these pinned to local wheels in wheels-cpu/
-torch==2.4.0
-torchvision==0.19.0
+torch==2.4.1
+torchvision==0.19.1
 
 # HTTP and networking
 requests>=2.31.0

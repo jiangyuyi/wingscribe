@@ -18,6 +18,8 @@ $ProgressPreference = "SilentlyContinue"
 
 $PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
 $INSTALLER_DIR = $PSScriptRoot
+$TORCH_VERSION = "2.4.1"
+$TORCHVISION_VERSION = "0.19.1"
 
 # Build output directory depends on mode
 $modeLower = $Mode.ToLower()
@@ -133,18 +135,17 @@ function Download-Python {
 function Download-PyTorchWheels {
     Log-Step "Downloading PyTorch $Mode wheels..."
 
-    # PyTorch 2.4.0+ is required (>= 2.4)
-    # CPU: cu118 (CUDA 11.8) or cu121 (CUDA 12.1)
+    # Keep torch/torchvision pinned to versions compatible with ultralytics on Windows.
     $cudaVersion = "cu118"
     if ($Mode -eq "gpu") {
         $wheels = @(
-            "https://download.pytorch.org/whl/$cudaVersion/torch-2.4.0%2B$cudaVersion-cp311-cp311-win_amd64.whl",
-            "https://download.pytorch.org/whl/$cudaVersion/torchvision-0.19.0%2B$cudaVersion-cp311-cp311-win_amd64.whl"
+            "https://download.pytorch.org/whl/$cudaVersion/torch-$TORCH_VERSION%2B$cudaVersion-cp311-cp311-win_amd64.whl",
+            "https://download.pytorch.org/whl/$cudaVersion/torchvision-$TORCHVISION_VERSION%2B$cudaVersion-cp311-cp311-win_amd64.whl"
         )
     } else {
         $wheels = @(
-            "https://download.pytorch.org/whl/cpu/torch-2.4.0%2Bcpu-cp311-cp311-win_amd64.whl",
-            "https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp311-cp311-win_amd64.whl"
+            "https://download.pytorch.org/whl/cpu/torch-$TORCH_VERSION%2Bcpu-cp311-cp311-win_amd64.whl",
+            "https://download.pytorch.org/whl/cpu/torchvision-$TORCHVISION_VERSION%2Bcpu-cp311-cp311-win_amd64.whl"
         )
     }
 
@@ -152,6 +153,10 @@ function Download-PyTorchWheels {
 
     # Also check common wheels directory as fallback
     $commonWheelsDir = Join-Path $INSTALLER_DIR "wheels"
+
+    # Keep wheel cache clean to avoid mixing old torch versions from previous runs.
+    Get-ChildItem -Path $WHEELS_DIR -Filter "torch*.whl" -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
 
     foreach ($wheel in $wheels) {
         $fileName = Split-Path $wheel -Leaf
@@ -204,31 +209,69 @@ function Prepare-ExifTool {
         Remove-Item $exifFilesDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    # Try to download from GitHub
     Log-Info "Preparing full ExifTool runtime (exe + exiftool_files)..."
-    $exifVersion = "13.10"
-    $exifUrl = "https://github.com/exiftool/exiftool/releases/download/${exifVersion}/exiftool-${exifVersion}-win64.zip"
-    $exifZip = Join-Path $TOOLS_DIR "exiftool.zip"
+    $localExifZip = Join-Path $TOOLS_DIR "exiftool-runtime.zip"
+    $downloadedExifZip = Join-Path $BUILD_DIR "exiftool-download.zip"
     $prepared = $false
 
-    try {
-        Invoke-WebRequest -Uri $exifUrl -OutFile $exifZip -UseBasicParsing
-        Expand-Archive -Path $exifZip -DestinationPath $TOOLS_DIR -Force
-        $foundExe = Get-ChildItem -Path $TOOLS_DIR -Filter "exiftool*.exe" -Recurse | Select-Object -First 1
-        if ($foundExe) {
-            Copy-Item $foundExe.FullName -Destination $exifExe -Force
-            $sourceDir = Split-Path $foundExe.FullName -Parent
-            $sourceFilesDir = Join-Path $sourceDir "exiftool_files"
-            if (Test-Path $sourceFilesDir) {
-                Copy-Item $sourceFilesDir -Destination $exifFilesDir -Recurse -Force
-            }
-            $prepared = (Test-Path $exifExe) -and (Test-Path $exifFilesDir)
+    $extractFromZip = {
+        param([string]$zipPath)
+        if (-not (Test-Path $zipPath)) {
+            return $false
         }
-    } catch {
-        Log-Warn "Failed to download ExifTool package: $_"
-    } finally {
-        if (Test-Path $exifZip) {
-            Remove-Item $exifZip -Force -ErrorAction SilentlyContinue
+        $tempExtract = Join-Path $BUILD_DIR "exiftool-extract"
+        if (Test-Path $tempExtract) {
+            Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Expand-Archive -Path $zipPath -DestinationPath $tempExtract -Force
+        $foundExe = Get-ChildItem -Path $tempExtract -Filter "exiftool*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $foundExe) {
+            return $false
+        }
+        Copy-Item $foundExe.FullName -Destination $exifExe -Force
+        $sourceDir = Split-Path $foundExe.FullName -Parent
+        $sourceFilesDir = Join-Path $sourceDir "exiftool_files"
+        if (Test-Path $sourceFilesDir) {
+            Copy-Item $sourceFilesDir -Destination $exifFilesDir -Recurse -Force
+            return ((Test-Path $exifExe) -and (Test-Path $exifFilesDir))
+        }
+        return $false
+    }
+
+    # 1) Prefer repository bundled runtime archive for CI stability.
+    if (Test-Path $localExifZip) {
+        try {
+            $prepared = & $extractFromZip $localExifZip
+            if ($prepared) {
+                Log-Info "Prepared ExifTool from bundled archive: $localExifZip"
+            }
+        } catch {
+            Log-Warn "Failed to extract bundled ExifTool archive: $_"
+        }
+    }
+
+    # 2) Fallback: download archive at build time.
+    if (-not $prepared) {
+        $exifVersion = "13.26"
+        $exifUrls = @(
+            "https://github.com/exiftool/exiftool/releases/download/$exifVersion/exiftool-$exifVersion-win64.zip",
+            "https://exiftool.org/exiftool-$exifVersion_64.zip"
+        )
+        foreach ($exifUrl in $exifUrls) {
+            try {
+                Invoke-WebRequest -Uri $exifUrl -OutFile $downloadedExifZip -UseBasicParsing
+                $prepared = & $extractFromZip $downloadedExifZip
+                if ($prepared) {
+                    Log-Info "Downloaded ExifTool runtime from: $exifUrl"
+                    break
+                }
+            } catch {
+                Log-Warn "Failed to download ExifTool package from $exifUrl : $_"
+            } finally {
+                if (Test-Path $downloadedExifZip) {
+                    Remove-Item $downloadedExifZip -Force -ErrorAction SilentlyContinue
+                }
+            }
         }
     }
 
@@ -309,14 +352,20 @@ function Install-Dependencies {
 
     # First install PyTorch from local wheels
     Log-Info "Installing PyTorch from local wheels into embedded Python..."
-    $torchWheels = Get-ChildItem (Join-Path $WHEELS_DIR "*.whl") | Where-Object {
-        $_.Name -match "^torch-" -or $_.Name -match "^torchvision-"
-    }
+    $wheelSuffix = if ($Mode -eq "gpu") { "cu118" } else { "cpu" }
+    $torchWheels = @(
+        Join-Path $WHEELS_DIR "torch-$TORCH_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl",
+        Join-Path $WHEELS_DIR "torchvision-$TORCHVISION_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl"
+    )
     foreach ($wheel in $torchWheels) {
-        Log-Info "  Installing $($wheel.Name)..."
-        & $pythonExe -m pip install --no-index --no-deps $wheel.FullName
+        if (-not (Test-Path $wheel)) {
+            throw "Expected wheel not found: $wheel"
+        }
+        $wheelName = Split-Path $wheel -Leaf
+        Log-Info "  Installing $wheelName..."
+        & $pythonExe -m pip install --no-index --no-deps $wheel
         if ($LASTEXITCODE -ne 0) {
-            throw "Failed to install wheel: $($wheel.Name)"
+            throw "Failed to install wheel: $wheelName"
         }
     }
 
@@ -327,7 +376,7 @@ function Install-Dependencies {
     } else {
         $requirementsFile = Join-Path $INSTALLER_DIR "requirements-cpu.txt"
     }
-    & $pythonExe -m pip install -r $requirementsFile --find-links $WHEELS_DIR
+    & $pythonExe -m pip install -r $requirementsFile --find-links $WHEELS_DIR --upgrade-strategy only-if-needed
 
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to install dependencies from $requirementsFile"

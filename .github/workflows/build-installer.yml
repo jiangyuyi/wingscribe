@@ -16,6 +16,12 @@ jobs:
     permissions:
       contents: write
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: cpu
+          - mode: gpu
 
     steps:
       - name: Checkout repository
@@ -30,10 +36,14 @@ jobs:
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $version = "${{ github.event.inputs.version }}"
           } else {
-            $version = "${{ github.ref_name }}" -replace "v", ""
+            $version = "${{ github.ref_name }}" -replace "^v", ""
+          }
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Resolved version is empty"
           }
           Write-Output "version=$version" >> $env:GITHUB_OUTPUT
-          Write-Host "Building version: $version"
+          Write-Output "mode=${{ matrix.mode }}" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version: $version (${{ matrix.mode }} mode)"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -44,11 +54,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            installer/wheels
-            installer/build/python-*.zip
-          key: ${{ runner.os }}-python-${{ steps.get_version.outputs.version }}
+            installer/wheels-${{ matrix.mode }}
+            installer/build-${{ matrix.mode }}/python-*.zip
+          key: ${{ runner.os }}-${{ matrix.mode }}-python-${{ steps.get_version.outputs.version }}
           restore-keys: |
-            ${{ runner.os }}-python-
+            ${{ runner.os }}-${{ matrix.mode }}-python-
 
       - name: Download Inno Setup
         shell: pwsh
@@ -69,8 +79,8 @@ jobs:
       - name: Run build script
         shell: pwsh
         run: |
-          Write-Host "Running build script..."
-          & .\installer\build.ps1
+          Write-Host "Running build script for ${{ matrix.mode }} mode..."
+          & .\installer\build.ps1 -Mode ${{ matrix.mode }} -Version "${{ steps.get_version.outputs.version }}"
 
       - name: Create UI assets (placeholder)
         shell: pwsh
@@ -80,9 +90,6 @@ jobs:
           if (-not (Test-Path $assetsDir)) {
             New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
           }
-          # Create placeholder files if they don't exist
-          # In production, these should be actual image files
-          # For now, the installer will use default images
 
       - name: Build installer with Inno Setup
         shell: pwsh
@@ -92,27 +99,84 @@ jobs:
             $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
           }
           $version = "${{ steps.get_version.outputs.version }}"
-          & $iscc /DAppVersion=$version ".\installer\installer.iss"
+          $iss = ".\installer\installer.iss"
+          if ("${{ matrix.mode }}" -eq "gpu") {
+            $iss = ".\installer\installer-gpu.iss"
+          }
+          Write-Host "Building ${{ matrix.mode }} installer with $iss"
+          & $iscc "/DAppVersion=$version" $iss
 
       - name: Get installer size
         shell: pwsh
         run: |
-          $installer = Get-Item "installer/Output/WingScribe-Setup-*.exe"
+          $modeUpper = "${{ matrix.mode }}".ToUpper()
+          $version = "${{ steps.get_version.outputs.version }}"
+          $installer = Get-Item "installer/Output/WingScribe-Setup-$modeUpper-$version.exe"
           $sizeInMB = [math]::Round($installer.Length / 1MB, 2)
           Write-Host "Installer size: $sizeInMB MB"
 
-      - name: Upload installer artifact
+      - name: Upload CPU installer artifact
+        if: matrix.mode == 'cpu'
         uses: actions/upload-artifact@v4
         with:
-          name: WingScribe-Installer-${{ steps.get_version.outputs.version }}
-          path: installer/Output/WingScribe-Setup-*.exe
+          name: WingScribe-Installer-${{ steps.get_version.outputs.version }}-${{ matrix.mode }}
+          path: installer/Output/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
           retention-days: 30
+
+      - name: Upload GPU installer artifact
+        if: matrix.mode == 'gpu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingScribe-Installer-${{ steps.get_version.outputs.version }}-${{ matrix.mode }}
+          path: installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
+          retention-days: 30
+
+  release:
+    needs: build
+    permissions:
+      contents: write
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            $version = "${{ github.ref_name }}" -replace "^v", ""
+          }
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Resolved version is empty"
+          }
+          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Creating release for version: $version"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded artifacts
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path artifacts -Recurse -Filter "*.exe" | ForEach-Object {
+            Write-Host "Found: $($_.FullName)"
+          }
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
-          files: installer/Output/WingScribe-Setup-*.exe
+          files: |
+            artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
+            artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
           draft: false
           prerelease: false
           body: |
@@ -120,13 +184,26 @@ jobs:
 
             ### 下载安装包
 
-            下载 `WingScribe-Setup-${{ steps.get_version.outputs.version }}.exe` 并运行安装程序。
+            根据您的硬件选择对应的安装包：
+
+            - **CPU 版本**: `WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe`
+              - 适用于没有 NVIDIA 显卡或不需要 GPU 加速的用户
+              - 使用 CPU 进行 AI 推理，速度较慢但兼容性好
+
+            - **GPU 版本**: `WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe`
+              - 需要 NVIDIA 显卡（支持 CUDA）
+              - 使用 GPU 进行 AI 推理，速度更快
 
             ### 系统要求
 
+            **通用要求：**
             - Windows 10 或更高版本
             - 至少 2GB 可用内存
             - 至少 2GB 硬盘空间（运行时需要更多空间存储照片和模型）
+
+            **GPU 版本额外要求：**
+            - NVIDIA 显卡（GTX 1060 或更高）
+            - NVIDIA 驱动版本 >= 450.00
 
             ### 安装说明
 
@@ -142,9 +219,9 @@ jobs:
             ### 更新说明
 
             此版本包含以下改进：
-            - 完整的 Windows 安装包
+            - 完整的 Windows 安装包（CPU/GPU 双版本）
             - 图形化配置向导
-            - CPU 模式支持（无需 GPU）
+            - CPU 和 GPU 模式支持
             - 一键启动 Web 服务
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,5 +233,6 @@ jobs:
           Write-Host "## Build Summary" >> $env:GITHUB_STEP_SUMMARY
           Write-Host "" >> $env:GITHUB_STEP_SUMMARY
           Write-Host "- **Version**: ${{ steps.get_version.outputs.version }}" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "- **CPU Installer**: artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "- **GPU Installer**: artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe" >> $env:GITHUB_STEP_SUMMARY
           Write-Host "- **Status**: ${{ job.status }}" >> $env:GITHUB_STEP_SUMMARY
-          Write-Host "- **Installer**: installer/Output/WingScribe-Setup-${{ steps.get_version.outputs.version }}.exe" >> $env:GITHUB_STEP_SUMMARY

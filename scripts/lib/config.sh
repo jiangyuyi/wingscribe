@@ -351,7 +351,7 @@ paths:
 
 processing:
   device: "${DEVICE}"
-  yolo_model: "yolov8n.pt"
+  yolo_model: "yolo26n.pt"
   confidence_threshold: 0.5
   blur_threshold: 40.0
   target_size: 640

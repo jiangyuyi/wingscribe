@@ -12,7 +12,7 @@ installer/
 ├── assets/            # UI 资源文件（图标、图片）
 ├── build/             # 构建输出目录（自动生成）
 │   ├── python/        # Python 运行时
-│   ├── venv/          # 虚拟环境
+│   ├── python/Lib/site-packages/  # 预装依赖
 │   └── src/           # WingScribe 源代码
 ├── wheels/            # PyTorch wheel 文件（自动下载）
 ├── tools/             # ExifTool（自动下载）

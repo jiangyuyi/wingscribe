@@ -7,11 +7,31 @@ $ErrorActionPreference = "Stop"
 $ScriptRoot = Split-Path $MyInvocation.MyCommand.Path
 $AppRoot = Split-Path $ScriptRoot -Parent
 
-# Check if virtual environment exists
-$VenvActivate = Join-Path $AppRoot "venv\Scripts\Activate.ps1"
-if (-not (Test-Path $VenvActivate)) {
-    Write-Host "Error: Virtual environment not found!" -ForegroundColor Red
-    Write-Host "Please run the configuration wizard first." -ForegroundColor Yellow
+# Check bundled Python runtime
+$PythonExe = Join-Path $AppRoot "python\python.exe"
+if (-not (Test-Path $PythonExe)) {
+    Write-Host "Error: Embedded Python not found!" -ForegroundColor Red
+    Write-Host "Please reinstall the application." -ForegroundColor Yellow
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+# Ensure PyTorch native DLLs are discoverable
+$TorchLib = Join-Path $AppRoot "python\Lib\site-packages\torch\lib"
+$PythonRoot = Join-Path $AppRoot "python"
+$ToolsDir = Join-Path $AppRoot "tools"
+$env:PATH = "$PythonRoot;$PythonRoot\Scripts;$TorchLib;$ToolsDir;$env:PATH"
+
+# Preflight check for PyTorch runtime
+try {
+    & $PythonExe -c "import torch" *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "torch import failed"
+    }
+} catch {
+    Write-Host "Error: PyTorch runtime check failed." -ForegroundColor Red
+    Write-Host "Possible missing runtime dependency (e.g. libomp140.x86_64.dll)." -ForegroundColor Yellow
+    Write-Host "Please reinstall WingScribe or install Microsoft Visual C++ Redistributable (x64)." -ForegroundColor Yellow
     Read-Host "Press Enter to exit"
     exit 1
 }
@@ -20,19 +40,12 @@ if (-not (Test-Path $VenvActivate)) {
 $ConfigPath = Join-Path $AppRoot "config\settings.yaml"
 if (-not (Test-Path $ConfigPath)) {
     Write-Host "Configuration not found. Starting configuration wizard..." -ForegroundColor Yellow
-    & python (Join-Path $AppRoot "scripts\config_wizard.py")
+    & $PythonExe (Join-Path $AppRoot "scripts\config_wizard.py")
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Configuration failed. Please run the wizard manually." -ForegroundColor Red
         Read-Host "Press Enter to exit"
         exit 1
     }
-}
-
-# Activate virtual environment
-try {
-    & $VenvActivate
-} catch {
-    Write-Host "Warning: Could not activate virtual environment" -ForegroundColor Yellow
 }
 
 # Change to application directory
@@ -52,7 +65,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 try {
-    & python (Join-Path $AppRoot "src\web\app.py")
+    & $PythonExe (Join-Path $AppRoot "src\web\app.py")
 } catch {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Red

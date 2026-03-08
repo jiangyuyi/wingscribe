@@ -1,5 +1,7 @@
 @echo off
 setlocal
+set "SELFTEST=0"
+if /I "%~1"=="--self-test" set "SELFTEST=1"
 
 REM Get script directory
 set "SCRIPT_DIR=%~dp0"
@@ -22,21 +24,41 @@ if not exist "src\web\app.py" (
     exit /b 1
 )
 
-REM Set Python path
-set "VENV_PYTHON=%APP_ROOT%\venv\Scripts\python.exe"
+REM Set Python path (portable runtime bundled with installer)
+set "PYTHON_EXE=%APP_ROOT%\python\python.exe"
+set "PYTHON_ROOT=%APP_ROOT%\python"
+set "TORCH_LIB=%APP_ROOT%\python\Lib\site-packages\torch\lib"
+set "TOOLS_DIR=%APP_ROOT%\tools"
 
-REM Check for venv Python
-if not exist "%VENV_PYTHON%" (
-    echo Error: Virtual environment not found
-    echo Expected: %VENV_PYTHON%
+REM Ensure PyTorch native DLLs are discoverable
+set "PATH=%PYTHON_ROOT%;%PYTHON_ROOT%\Scripts;%TORCH_LIB%;%TOOLS_DIR%;%PATH%"
+
+if not exist "%PYTHON_EXE%" (
+    echo Error: Embedded Python not found at %PYTHON_EXE%
+    echo Please reinstall the application
     pause
     exit /b 1
+)
+
+REM Preflight check for PyTorch native runtime
+"%PYTHON_EXE%" -c "import torch" >nul 2>&1
+if errorlevel 1 (
+    echo Error: PyTorch runtime check failed.
+    echo Possible missing runtime dependency, for example libomp140.x86_64.dll.
+    echo Please reinstall WingScribe or install Microsoft Visual C++ Redistributable x64.
+    pause
+    exit /b 1
+)
+
+if "%SELFTEST%"=="1" (
+    echo Self-test passed.
+    exit /b 0
 )
 
 REM Run initialization script
 if exist "scripts\init_env.py" (
     echo Initializing WingScribe environment...
-    "%VENV_PYTHON%" "%APP_ROOT%\scripts\init_env.py"
+    "%PYTHON_EXE%" "%APP_ROOT%\scripts\init_env.py"
     if errorlevel 1 (
         echo Warning: Initialization had errors, continuing anyway...
     )
@@ -57,7 +79,7 @@ echo.
 echo ========================================
 echo.
 
-"%VENV_PYTHON%" "%APP_ROOT%\src\web\app.py"
+"%PYTHON_EXE%" "%APP_ROOT%\src\web\app.py"
 
 if errorlevel 1 (
     echo.

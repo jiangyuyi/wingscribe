@@ -1174,7 +1174,7 @@ def get_config_definition():
                     "label": "YOLO 模型",
                     "description": "鸟类检测模型",
                     "type": "string",
-                    "default": "yolov26n.pt"
+                    "default": "yolo26n.pt"
                 },
                 {
                     "key": "confidence_threshold",

@@ -1,6 +1,6 @@
-# WingScribe CPU-only Dependencies
-# This file excludes torch (installed separately from wheels)
-# and testing dependencies to reduce installer size
+# WingScribe GPU Dependencies
+# This file is for NVIDIA GPU systems with CUDA support
+# Requires NVIDIA GPU with CUDA driver installed
 
 # NumPy compatibility: Pin to 1.x for PyTorch compatibility
 numpy<2.0.0
@@ -11,7 +11,8 @@ opencv-python>=4.8.0
 Pillow>=10.0.0
 transformers>=4.30.0
 
-# Note: Keep these pinned to local wheels in wheels-cpu/
+# PyTorch with CUDA support
+# Note: Keep these pinned to local wheels in wheels-gpu/
 torch==2.4.0
 torchvision==0.19.0
 

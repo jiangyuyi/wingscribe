@@ -215,7 +215,7 @@ paths:
 
 processing:
   device: "auto"
-  yolo_model: "yolov8n.pt"
+  yolo_model: "yolo26n.pt"
   confidence_threshold: 0.5
 
 recognition:

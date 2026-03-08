@@ -25,5 +25,4 @@ tests/__pycache__/
 # YOLO model files (auto-downloaded by Ultralytics)
 *.pt
 
-# Web static files (using CDN)
-src/web/static/
+# Web static files are part of source and should be committed

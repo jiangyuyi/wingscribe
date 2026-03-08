@@ -232,7 +232,7 @@ paths:
 
 processing:
   device: "cpu"
-  yolo_model: "yolov26n.pt"
+  yolo_model: "yolo26n.pt"
   confidence_threshold: 0.5
   blur_threshold: 40.0
   target_size: 640

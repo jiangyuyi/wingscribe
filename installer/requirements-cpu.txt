@@ -6,16 +6,14 @@
 numpy<2.0.0
 
 # Core ML/CV libraries
-ultralytics>=8.4.0
+ultralytics==8.4.14
 opencv-python>=4.8.0
 Pillow>=10.0.0
 transformers>=4.30.0
 
-# Note: PyTorch is installed from local wheels in build.ps1
-# Lock torch version to prevent ultralytics from upgrading it
-torch>=2.5.0
-torchvision>=0.20.0
-torchaudio>=2.5.0
+# Note: Keep these pinned to local wheels in wheels-cpu/
+torch==2.4.0
+torchvision==0.19.0
 
 # HTTP and networking
 requests>=2.31.0

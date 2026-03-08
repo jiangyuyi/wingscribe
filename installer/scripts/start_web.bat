@@ -1,5 +1,7 @@
 @echo off
 setlocal
+set "SELFTEST=0"
+if /I "%~1"=="--self-test" set "SELFTEST=1"
 
 REM Get script directory
 set "SCRIPT_DIR=%~dp0"
@@ -22,35 +24,41 @@ if not exist "src\web\app.py" (
     exit /b 1
 )
 
-REM Set Python path
-set "VENV_PYTHON=%APP_ROOT%\venv\Scripts\python.exe"
+REM Set Python path (portable runtime bundled with installer)
+set "PYTHON_EXE=%APP_ROOT%\python\python.exe"
+set "PYTHON_ROOT=%APP_ROOT%\python"
+set "TORCH_LIB=%APP_ROOT%\python\Lib\site-packages\torch\lib"
+set "TOOLS_DIR=%APP_ROOT%\tools"
 
-REM Check for venv Python, if not found try to create it
-if not exist "%VENV_PYTHON%" (
-    echo Virtual environment not found, creating...
-    if exist "%APP_ROOT%\python\python.exe" (
-        echo Using embedded Python to create virtual environment...
-        "%APP_ROOT%\python\python.exe" -m venv "%APP_ROOT%\venv"
-    ) else (
-        echo Error: Virtual environment not found and embedded Python not available
-        echo Expected: %VENV_PYTHON%
-        pause
-        exit /b 1
-    )
-)
+REM Ensure PyTorch native DLLs are discoverable
+set "PATH=%PYTHON_ROOT%;%PYTHON_ROOT%\Scripts;%TORCH_LIB%;%TOOLS_DIR%;%PATH%"
 
-REM Check again after creation attempt
-if not exist "%VENV_PYTHON%" (
-    echo Error: Failed to create virtual environment
-    echo Expected: %VENV_PYTHON%
+if not exist "%PYTHON_EXE%" (
+    echo Error: Embedded Python not found at %PYTHON_EXE%
+    echo Please reinstall the application
     pause
     exit /b 1
+)
+
+REM Preflight check for PyTorch native runtime
+"%PYTHON_EXE%" -c "import torch" >nul 2>&1
+if errorlevel 1 (
+    echo Error: PyTorch runtime check failed.
+    echo Possible missing runtime dependency, for example libomp140.x86_64.dll.
+    echo Please reinstall WingScribe or install Microsoft Visual C++ Redistributable x64.
+    pause
+    exit /b 1
+)
+
+if "%SELFTEST%"=="1" (
+    echo Self-test passed.
+    exit /b 0
 )
 
 REM Run initialization script
 if exist "scripts\init_env.py" (
     echo Initializing WingScribe environment...
-    "%VENV_PYTHON%" "%APP_ROOT%\scripts\init_env.py"
+    "%PYTHON_EXE%" "%APP_ROOT%\scripts\init_env.py"
     if errorlevel 1 (
         echo Warning: Initialization had errors, continuing anyway...
     )
@@ -71,7 +79,7 @@ echo.
 echo ========================================
 echo.
 
-"%VENV_PYTHON%" "%APP_ROOT%\src\web\app.py"
+"%PYTHON_EXE%" "%APP_ROOT%\src\web\app.py"
 
 if errorlevel 1 (
     echo.

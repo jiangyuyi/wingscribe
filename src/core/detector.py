@@ -1,7 +1,6 @@
 import yaml
 from ultralytics import YOLO
 import logging
-from pathlib import Path
 import torch
 import os
 

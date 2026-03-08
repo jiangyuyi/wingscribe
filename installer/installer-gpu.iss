@@ -1,8 +1,10 @@
-; WingScribe GPU Installer Script
+﻿; WingScribe GPU Installer Script
 ; Version with CUDA support for NVIDIA GPUs
 
 #define AppName "WingScribe"
-#define AppVersion "1.0.0"
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppPublisher "WingScribe Project"
 #define AppExeName "start_web.bat"
 
@@ -37,10 +39,7 @@ Name: "desktop"; Description: "Desktop shortcut"; Types: default
 Name: "desktop"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"; Components: desktop
 
 [Files]
-; Virtual environment with pre-installed packages (GPU version)
-Source: "build-gpu\venv\*"; DestDir: "{app}\venv"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
-
-; Embedded Python for venv creation on target machines
+; Embedded Python runtime with pre-installed packages (GPU version)
 Source: "build-gpu\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
 ; WingScribe source code
@@ -53,6 +52,7 @@ Source: "build-gpu\data\references\*"; DestDir: "{app}\data\references"; Flags: 
 
 ; Tools
 Source: "tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Components: main
+Source: "tools\exiftool_files\*"; DestDir: "{app}\tools\exiftool_files"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
 ; Documentation
 Source: "build-gpu\README.md"; DestDir: "{app}"; Flags: ignoreversion; Components: main
@@ -87,9 +87,9 @@ Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Ser
 
 [UninstallDelete]
 ; Delete all application files and user data
-Type: filesandordirs; Name: "{app}\venv"
 Type: filesandordirs; Name: "{app}\src"
 Type: filesandordirs; Name: "{app}\config"
 Type: filesandordirs; Name: "{app}\scripts"
 Type: filesandordirs; Name: "{app}\tools"
 Type: filesandordirs; Name: "{app}\data"
+

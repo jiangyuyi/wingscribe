@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 import shutil
 import os
+from pathlib import Path
 from typing import List, Dict, Any
 
 class ExifWriter:
@@ -13,12 +14,49 @@ class ExifWriter:
         """
         self.exiftool_path = exiftool_path
 
+    def _resolve_exiftool(self) -> str | None:
+        """
+        Resolve exiftool executable path.
+        Priority:
+        1) explicit EXIFTOOL_PATH env var
+        2) configured exiftool_path (absolute path or command in PATH)
+        3) bundled tools/exiftool.exe under app root
+        """
+        env_path = os.getenv("EXIFTOOL_PATH", "").strip()
+        if env_path:
+            p = Path(env_path)
+            if p.exists():
+                return str(p)
+            which_env = shutil.which(env_path)
+            if which_env:
+                return which_env
+
+        # User-provided path or command name
+        cfg_path = self.exiftool_path
+        p = Path(cfg_path)
+        if p.exists():
+            return str(p)
+        which_cfg = shutil.which(cfg_path)
+        if which_cfg:
+            return which_cfg
+
+        # Bundled path in installer layout: {app_root}/tools/exiftool.exe
+        app_root = Path(__file__).resolve().parents[2]
+        bundled = app_root / "tools" / "exiftool.exe"
+        if bundled.exists():
+            return str(bundled)
+
+        return None
+
     def write_metadata(self, image_path: str, tags: Dict[str, Any]):
         """
         Write tags to the image using an argfile to handle character encoding correctly.
         """
-        if not shutil.which(self.exiftool_path):
-            logging.warning(f"ExifTool not found at '{self.exiftool_path}'. Skipping metadata writing.")
+        exiftool_cmd = self._resolve_exiftool()
+        if not exiftool_cmd:
+            logging.warning(
+                f"ExifTool not found (configured: '{self.exiftool_path}'). Skipping metadata writing."
+            )
             return False
 
         # Prepare arguments for argfile
@@ -60,7 +98,7 @@ class ExifWriter:
             
         try:
             cmd = [
-                self.exiftool_path,
+                exiftool_cmd,
                 "-charset", "utf8", # Interpret argfile and CLI args as UTF-8
                 "-@", arg_file
                 # image_path is now IN the argfile

@@ -354,8 +354,8 @@ function Install-Dependencies {
     Log-Info "Installing PyTorch from local wheels into embedded Python..."
     $wheelSuffix = if ($Mode -eq "gpu") { "cu118" } else { "cpu" }
     $torchWheels = @(
-        Join-Path $WHEELS_DIR "torch-$TORCH_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl",
-        Join-Path $WHEELS_DIR "torchvision-$TORCHVISION_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl"
+        (Join-Path $WHEELS_DIR "torch-$TORCH_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl"),
+        (Join-Path $WHEELS_DIR "torchvision-$TORCHVISION_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl")
     )
     foreach ($wheel in $torchWheels) {
         if (-not (Test-Path $wheel)) {

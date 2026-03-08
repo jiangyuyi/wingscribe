@@ -12,6 +12,46 @@ import os
 import sys
 from pathlib import Path
 
+import yaml
+
+
+def _load_settings_with_repair(settings_file: Path, app_root: Path) -> dict:
+    """Load settings.yaml and auto-repair common Windows path escaping issues."""
+    default_config = {
+        "paths": {
+            "base_dir": str(app_root).replace("\\", "/"),
+            "sources": [{"path": ".", "recursive": True, "enabled": True}],
+            "output": {
+                "root_dir": "data/processed",
+                "structure_template": "{source_structure}/{filename}_{species_cn}_{confidence}",
+                "write_back_to_source": False,
+            },
+            "db_path": "data/db/wingscribe.db",
+            "references_path": "data/references",
+            "ioc_list_path": "data/references/Multiling IOC 15.1_d.xlsx",
+            "model_cache_dir": "data/models",
+        },
+        "processing": {"device": "auto", "yolo_model": "yolo26n.pt"},
+        "recognition": {"mode": "local", "region_filter": "auto"},
+        "web": {"host": "0.0.0.0", "port": 8000, "log_level": "info"},
+    }
+
+    raw = settings_file.read_text(encoding="utf-8")
+    try:
+        return yaml.safe_load(raw) or {}
+    except Exception:
+        fixed_raw = raw.replace("\\", "/")
+        try:
+            config = yaml.safe_load(fixed_raw) or {}
+            settings_file.write_text(fixed_raw, encoding="utf-8")
+            print("  Fixed: Normalized Windows path separators in settings.yaml")
+            return config
+        except Exception:
+            print("  Warning: settings.yaml is invalid; regenerated a safe default config.")
+            with open(settings_file, "w", encoding="utf-8") as f:
+                yaml.dump(default_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            return default_config
+
 
 def init_app():
     """Initialize application environment"""
@@ -24,16 +64,14 @@ def init_app():
     print("Initializing WingScribe environment...")
 
     # 1. Load config to get base_dir
-    import yaml
     settings_file = app_root / "config" / "settings.yaml"
     base_dir = None
 
     if settings_file.exists():
-        with open(settings_file, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-            base_dir_str = config.get('paths', {}).get('base_dir', '')
-            if base_dir_str:
-                base_dir = Path(base_dir_str)
+        config = _load_settings_with_repair(settings_file, app_root)
+        base_dir_str = config.get('paths', {}).get('base_dir', '')
+        if base_dir_str:
+            base_dir = Path(base_dir_str)
 
     # 2. Create necessary directories
     print("Creating directories...")
@@ -66,8 +104,7 @@ def init_app():
 
     if settings_file.exists():
         # Read and check settings
-        with open(settings_file, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
+        config = _load_settings_with_repair(settings_file, app_root)
 
         # Fix empty db_path
         if config.get('paths', {}).get('db_path') in ('', None):
@@ -143,9 +180,8 @@ def init_app():
         # Get YOLO model name from config
         yolo_model = "yolo26n.pt"
         if settings_file.exists():
-            with open(settings_file, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-                yolo_model = config.get('processing', {}).get('yolo_model', 'yolo26n.pt')
+            config = _load_settings_with_repair(settings_file, app_root)
+            yolo_model = config.get('processing', {}).get('yolo_model', 'yolo26n.pt')
 
         model_dir = app_root / "data" / "models"
         model_path = model_dir / yolo_model

@@ -8,6 +8,8 @@ param(
     [switch]$SkipWheels = $false,
     [switch]$SkipExifTool = $false,
     [switch]$SkipPython = $false,
+    [switch]$SkipDepsInstall = $false,
+    [switch]$RefreshWheels = $false,
     [ValidateSet("cpu", "gpu")]
     [string]$Mode = "cpu",
     [string]$Version = "1.0.0"
@@ -154,16 +156,32 @@ function Download-PyTorchWheels {
     # Also check common wheels directory as fallback
     $commonWheelsDir = Join-Path $INSTALLER_DIR "wheels"
 
-    # Keep wheel cache clean to avoid mixing old torch versions from previous runs.
-    Get-ChildItem -Path $WHEELS_DIR -Filter "torch*.whl" -ErrorAction SilentlyContinue |
-        ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    if ($RefreshWheels) {
+        Log-Info "RefreshWheels enabled: clearing cached torch wheels..."
+        Get-ChildItem -Path $WHEELS_DIR -Filter "torch*.whl" -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    }
 
     foreach ($wheel in $wheels) {
         $fileName = Split-Path $wheel -Leaf
         $filePath = Join-Path $WHEELS_DIR ($fileName -replace "%2B", "+")
 
-        # Check in mode-specific directory first, then common directory
-        if (-not (Test-Path $filePath)) {
+        # Check in mode-specific directory first, then common directory.
+        # Re-download only when file is missing or looks incomplete.
+        $needsDownload = $true
+        if (Test-Path $filePath) {
+            $minBytes = if ($fileName -like "torch-*") { 150MB } else { 1MB }
+            $existing = Get-Item $filePath -ErrorAction SilentlyContinue
+            if ($existing -and $existing.Length -ge $minBytes) {
+                $needsDownload = $false
+                Log-Info "$fileName already exists, reusing cache"
+            } else {
+                Log-Warn "$fileName exists but looks incomplete, re-downloading"
+                Remove-Item $filePath -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        if ($needsDownload) {
             $commonPath = Join-Path $commonWheelsDir ($fileName -replace "%2B", "+")
             if (Test-Path $commonPath) {
                 Copy-Item $commonPath -Destination $filePath -Force
@@ -177,8 +195,6 @@ function Download-PyTorchWheels {
                     Log-Warn "Failed to download $fileName - $($errMsg)"
                 }
             }
-        } else {
-            Log-Info "$fileName already exists"
         }
     }
 
@@ -722,7 +738,11 @@ function Invoke-Build {
         Prepare-WindowsRuntimeDlls
     }
 
-    Install-Dependencies
+    if ($SkipDepsInstall) {
+        Log-Warn "SkipDepsInstall enabled: skipping pip dependency install step"
+    } else {
+        Install-Dependencies
+    }
     Optimize-PythonRuntime
     Copy-SourceCode
     Download-YoloModel

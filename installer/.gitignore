@@ -1,6 +1,15 @@
 # Build output
 build/
+build-cpu/
+build-gpu/
 Output/
+version.txt
+
+# Installer runtime/cache artifacts (reproducible, no need to commit)
+tools/exiftool_files/
+wheels/
+wheels-cpu/
+wheels-gpu/
 
 # Python
 __pycache__/

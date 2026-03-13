@@ -73,12 +73,12 @@ Name: "{app}\data\references"
 
 [Icons]
 ; Start menu
-Name: "{group}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}
-Name: "{group}\Configuration Guide"; Filename: "{app}\scripts\start_web.bat"; Parameters: "--config-guide"; WorkingDir: {app}
+Name: "{group}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}; IconFilename: "{app}\src\web\static\favicon.ico"
+Name: "{group}\Configuration Guide"; Filename: "{app}\scripts\start_web.bat"; Parameters: "--config-guide"; WorkingDir: {app}; IconFilename: "{app}\src\web\static\favicon.ico"
 Name: "{group}\Uninstall WingScribe GPU"; Filename: "{uninstallexe}"
 
 ; Desktop shortcut
-Name: "{autodesktop}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}; Tasks: desktop
+Name: "{autodesktop}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}; Tasks: desktop; IconFilename: "{app}\src\web\static\favicon.ico"
 
 [Run]
 ; Launch web server after installation

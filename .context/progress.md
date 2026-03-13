@@ -937,3 +937,53 @@ status_daemon() {
 **修改文件**:
 - [X] `src/web/app.py` - save_config API 添加 db_path 验证逻辑
 - [X] `src/web/templates/settings.html` - 保存 db_path 时直接重启
+
+---
+
+### 33. 安装包在全新机器上 venv 无法运行问题 [重构完成，待验收]
+**状态**: ✅ 代码重构完成（方案A），待全新机器验收
+
+**问题描述**:
+- 在全新机器上安装 CPU 版本后运行 start_web.bat
+- 报错: `No Python at 'C:\Users\jiang\AppData\Local\Programs\Python\Python311\python.exe'`
+- 但在本地已配置环境的机器上不会报错
+
+**根本原因**:
+- 打包的 venv 中的 `pyvenv.cfg` 指向构建机器的绝对路径:
+  ```
+  home = C:\Users\jiang\AppData\Local\Programs\Python\Python311
+  executable = C:\Users\jiang\AppData\Local\Programs\Python\Python311\python.exe
+  ```
+- 在全新机器上，这个路径不存在，导致 Python 无法启动
+
+**最终方案 (方案A - 推荐)**:
+1. 不再打包 `venv`（避免绝对路径绑定）
+2. 仅打包 embeddable Python + `Lib/site-packages` 预装依赖
+3. `start_web.bat` / `start_web.ps1` 直接调用 `{app}\python\python.exe`
+4. 移除首次运行“重建 venv”逻辑，简化启动链路
+
+**已修改文件**:
+- [X] `installer/build.ps1` - 依赖安装目标改为 `build-*/python`（不再使用 venv）
+- [X] `installer/requirements-cpu.txt` - 移除 torch/torchvision/torchaudio 声明，避免覆盖本地 wheel
+- [X] `installer/requirements-gpu.txt` - 同上
+- [X] `installer/scripts/start_web.bat` - 改为直接使用 embedded Python
+- [X] `installer/scripts/start_web.ps1` - 同上
+- [X] `installer/installer.iss` - 移除 `venv` 打包
+- [X] `installer/installer-gpu.iss` - 移除 `venv` 打包
+- [X] `.github/workflows/build-installer.yml` - 修正 CPU/GPU ISS 选择逻辑
+
+**待验证**:
+- [ ] 在全新机器上安装测试（CPU/GPU 各1次）
+- [ ] 确认 `scripts/start_web.bat` 可直接启动（无 `No Python at ...`）
+- [ ] 确认 Web 服务与初始化脚本正常运行
+
+**问题详情**:
+- 打包的 venv 存在，但 pyvenv.cfg 指向错误路径
+- start_web.bat 的检测逻辑通过运行 `python --version` 验证 venv 是否有效
+- 如果无效，删除旧 venv，使用 embeddable Python 重新创建
+- 复制 site-packages 中的包到新 venv
+
+**当前状态**:
+- 本地打包完成，安装包已生成
+- 需要在全新机器上验证修复是否生效
+

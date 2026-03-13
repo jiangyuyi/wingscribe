@@ -2,7 +2,59 @@
 
 ## 当前任务
 
-无
+### 任务 33: 安装包在全新机器上 venv 无法运行问题
+
+**问题描述**:
+- 在全新机器上安装 CPU 版本后运行 start_web.bat
+- 报错: `No Python at 'C:\Users\jiang\AppData\Local\Programs\Python\Python311\python.exe'`
+- 但在本地已配置环境的机器上不会报错
+
+**根本原因**:
+- 打包的 venv 中的 `pyvenv.cfg` 指向构建机器的绝对路径:
+  ```
+  home = C:\Users\jiang\AppData\Local\Programs\Python\Python311
+  executable = C:\Users\jiang\AppData\Local\Programs\Python\Python311\python.exe
+  ```
+- 在全新机器上，这个路径不存在，导致 Python 无法启动
+
+**修复方案**:
+1. 打包时同时包含 venv 和 embeddable Python
+2. start_web.bat 首次运行时检测 venv 是否有效
+3. 如果无效，使用 embeddable Python 重新创建 venv
+
+**已修改文件**:
+- `installer/build.ps1` - 添加 -Version 参数支持
+- `installer/compile.ps1` - 从 version.txt 读取版本号
+- `installer/scripts/start_web.bat` - 添加 venv 检测和重建逻辑
+- `installer/installer.iss` - 添加 venv 和 python 目录打包
+- `installer/installer-gpu.iss` - 同上
+
+**待验证**:
+- 在全新机器上安装测试
+- 确认 start_web.bat 能正确检测并重建 venv
+- 确认 Web 服务能正常启动
+
+**start_web.bat 修复逻辑**:
+```batch
+REM 检测 venv 是否有效
+set "VENV_VALID=0"
+if exist "%VENV_PYTHON%" (
+    "%VENV_PYTHON%" --version >nul 2>&1
+    if !errorlevel! equ 0 set "VENV_VALID=1"
+)
+
+REM 如果无效，删除并重建
+if !VENV_VALID! equ 0 (
+    rmdir /s /q "%APP_ROOT%\venv"
+    "%EMBED_PYTHON%" -m venv "%APP_ROOT%\venv"
+    xcopy /e /y "%APP_ROOT%\python\Lib\site-packages\*" "%APP_ROOT%\venv\Lib\site-packages\"
+)
+```
+
+**当前状态**:
+- 本地打包完成，安装包已生成在 `installer/Output/`
+- 版本 1.0.0，CPU 和 GPU 两个版本
+- 需要在全新机器上验证修复是否生效
 
 ---
 

@@ -393,3 +393,192 @@ def test_browse_folder_and_file_api_return_success_and_error(monkeypatch):
 
     assert folder_error == {"error": "dialog unavailable", "path": None}
     assert file_error == {"error": "dialog unavailable", "path": None}
+
+
+def test_get_stats_returns_counts_and_closes_connection(monkeypatch):
+    class StubCursor:
+        def __init__(self):
+            self.calls = []
+            self.results = [(12,), (4,)]
+
+        def execute(self, sql):
+            self.calls.append(sql)
+
+        def fetchone(self):
+            return self.results.pop(0)
+
+    class StubConn:
+        def __init__(self):
+            self.cursor_obj = StubCursor()
+            self.closed = False
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def close(self):
+            self.closed = True
+
+    conn = StubConn()
+    monkeypatch.setattr(web_app, "get_db_conn", lambda: conn)
+
+    result = web_app.get_stats()
+
+    assert result == {"total_photos": 12, "total_species": 4}
+    assert conn.closed is True
+    assert conn.cursor_obj.calls == [
+        "SELECT COUNT(*) FROM photos",
+        "SELECT COUNT(DISTINCT scientific_name) FROM photos",
+    ]
+
+
+def test_get_stats_returns_zero_on_query_error(monkeypatch):
+    class StubCursor:
+        def execute(self, sql):
+            raise RuntimeError("db unavailable")
+
+    class StubConn:
+        def __init__(self):
+            self.closed = False
+
+        def cursor(self):
+            return StubCursor()
+
+        def close(self):
+            self.closed = True
+
+    conn = StubConn()
+    monkeypatch.setattr(web_app, "get_db_conn", lambda: conn)
+
+    result = web_app.get_stats()
+
+    assert result == {"total_photos": 0, "total_species": 0}
+    assert conn.closed is True
+
+
+def test_get_photos_by_taxonomy_prefers_cn_filters_and_resolves_web_paths(monkeypatch):
+    class StubManager:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class StubCursor:
+        def __init__(self):
+            self.executed = []
+
+        def execute(self, sql, params):
+            self.executed.append((sql, list(params)))
+
+        def fetchone(self):
+            return (2,)
+
+        def fetchall(self):
+            return [
+                {"id": 9, "original_path": "raw/a.jpg", "file_path": "processed/a.jpg", "scientific_name": "Parus minor"},
+                {"id": 8, "original_path": "raw/b.jpg", "file_path": "processed/b.jpg", "scientific_name": "Parus minor"},
+            ]
+
+    class StubConn:
+        def __init__(self):
+            self.cursor_obj = StubCursor()
+            self.closed = False
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def close(self):
+            self.closed = True
+
+    manager = StubManager()
+    conn = StubConn()
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: manager)
+    monkeypatch.setattr(web_app, "get_db_conn", lambda: conn)
+    monkeypatch.setattr(web_app, "resolve_web_path", lambda path: f"/raw/{path}")
+    monkeypatch.setattr(web_app, "resolve_processed_web_path", lambda path: f"/processed/{path}")
+
+    result = web_app.get_photos_by_taxonomy(
+        order_cn="雀形目",
+        order_sci="Passeriformes",
+        family_sci="Paridae",
+        genus_cn="山雀属",
+        genus_sci="Parus",
+        scientific_name="Parus minor",
+        date="20260320",
+        limit=10,
+        offset=20,
+    )
+
+    assert result == {
+        "photos": [
+            {
+                "id": 9,
+                "original_path": "raw/a.jpg",
+                "file_path": "processed/a.jpg",
+                "scientific_name": "Parus minor",
+                "web_raw_path": "/raw/raw/a.jpg",
+                "web_processed_path": "/processed/processed/a.jpg",
+            },
+            {
+                "id": 8,
+                "original_path": "raw/b.jpg",
+                "file_path": "processed/b.jpg",
+                "scientific_name": "Parus minor",
+                "web_raw_path": "/raw/raw/b.jpg",
+                "web_processed_path": "/processed/processed/b.jpg",
+            },
+        ],
+        "total_count": 2,
+        "limit": 10,
+        "offset": 20,
+    }
+    assert manager.closed is True
+    assert conn.closed is True
+    assert conn.cursor_obj.executed[0][1] == ["雀形目", "Paridae", "山雀属", "Parus minor", "20260320"]
+    assert conn.cursor_obj.executed[1][1] == ["雀形目", "Paridae", "山雀属", "Parus minor", "20260320", 10, 20]
+
+
+def test_get_photos_by_taxonomy_uses_scientific_fallback_filters(monkeypatch):
+    class StubManager:
+        def close(self):
+            pass
+
+    class StubCursor:
+        def __init__(self):
+            self.executed = []
+
+        def execute(self, sql, params):
+            self.executed.append((sql, list(params)))
+
+        def fetchone(self):
+            return (0,)
+
+        def fetchall(self):
+            return []
+
+    class StubConn:
+        def __init__(self):
+            self.cursor_obj = StubCursor()
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def close(self):
+            pass
+
+    conn = StubConn()
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: StubManager())
+    monkeypatch.setattr(web_app, "get_db_conn", lambda: conn)
+    monkeypatch.setattr(web_app, "resolve_web_path", lambda path: path)
+    monkeypatch.setattr(web_app, "resolve_processed_web_path", lambda path: path)
+
+    web_app.get_photos_by_taxonomy(
+        order_sci="Passeriformes",
+        family_sci="Paridae",
+        genus_sci="Parus",
+        limit=5,
+        offset=0,
+    )
+
+    assert conn.cursor_obj.executed[0][1] == ["Passeriformes", "Paridae", "Parus"]
+    assert conn.cursor_obj.executed[1][1] == ["Passeriformes", "Paridae", "Parus", 5, 0]

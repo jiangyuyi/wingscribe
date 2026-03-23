@@ -77,7 +77,8 @@
 ## Remaining high-value areas
 
 - `src/web/app.py`
-  - Still needs another batch of route tests for photo query, filtering, and pagination endpoints
+  - Added route coverage for stats, taxonomy-photo filtering, and pagination parameter forwarding
+  - Still worth expanding later for any remaining photo list/detail endpoints if the route surface grows
 - `src/recognition/cloud/factory.py`
   - Still needs direct tests for platform creation and default config extraction
 - `src/recognition/inference_api.py`

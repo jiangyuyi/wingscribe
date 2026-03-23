@@ -1438,7 +1438,7 @@ async def validate_config_path(path: str, path_type: str = "directory"):
                         f.read(1)
                     can_read = True
                 elif is_dir:
-                    list(p)
+                    list(p.iterdir())
                     can_read = True
             except:
                 pass

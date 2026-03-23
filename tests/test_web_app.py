@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -58,7 +59,7 @@ def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monke
             INSERT INTO taxonomy (scientific_name, chinese_name, family_cn)
             VALUES (?, ?, ?)
             """,
-            ("Passer montanus", "麻雀", "雀科"),
+            ("Passer montanus", "麻雀", "雀形目"),
         )
         manager.conn.execute(
             """
@@ -161,7 +162,7 @@ def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp
             INSERT INTO taxonomy (scientific_name, chinese_name, family_cn)
             VALUES (?, ?, ?)
             """,
-            ("Passer montanus", "麻雀", "雀科"),
+            ("Passer montanus", "麻雀", "雀形目"),
         )
         manager.conn.execute(
             """
@@ -238,3 +239,157 @@ def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp
     assert row["filename"] == "bird.jpg"
     assert processed_file.exists()
     assert not (processed_root / "trip" / "bird_大山雀_100pct.jpg").exists()
+
+
+def test_get_api_stats_returns_get_stats(monkeypatch):
+    expected = {"photos": 12, "species": 4}
+    monkeypatch.setattr(web_app, "get_stats", lambda: expected)
+
+    assert web_app.get_api_stats() == expected
+
+
+def test_get_scan_history_uses_manager_and_closes(monkeypatch):
+    class StubManager:
+        def __init__(self):
+            self.closed = False
+            self.limit = None
+
+        def get_recent_scans(self, limit):
+            self.limit = limit
+            return [{"folder_path": "D:/birds"}]
+
+        def close(self):
+            self.closed = True
+
+    manager = StubManager()
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: manager)
+
+    result = web_app.get_scan_history()
+
+    assert result == [{"folder_path": "D:/birds"}]
+    assert manager.limit == 10
+    assert manager.closed is True
+
+
+def test_taxonomy_and_search_endpoints_forward_requests(monkeypatch):
+    class StubManager:
+        def __init__(self):
+            self.closed = False
+            self.calls = []
+
+        def search_species(self, query, limit):
+            self.calls.append(("search_species", query, limit))
+            return [{"scientific_name": "Parus minor"}]
+
+        def get_taxonomy_tree_fast(self, include_empty):
+            self.calls.append(("tree_fast", include_empty))
+            return [{"name": "fast"}]
+
+        def get_taxonomy_tree(self, include_empty, date_filter):
+            self.calls.append(("tree_date", include_empty, date_filter))
+            return [{"name": date_filter}]
+
+        def get_stats_by_level(self, level, date_filter):
+            self.calls.append(("stats", level, date_filter))
+            return [{"name": level, "count": 2}]
+
+        def search_taxonomy(self, query, limit):
+            self.calls.append(("search_taxonomy", query, limit))
+            return [{"level": "species", "name": query}]
+
+        def close(self):
+            self.closed = True
+
+    managers = []
+
+    def factory():
+        manager = StubManager()
+        managers.append(manager)
+        return manager
+
+    monkeypatch.setattr(web_app, "create_db_manager", factory)
+
+    assert web_app.search_species("tit") == [{"scientific_name": "Parus minor"}]
+    assert web_app.get_taxonomy_tree(include_empty=False) == [{"name": "fast"}]
+    assert web_app.get_taxonomy_tree(include_empty=True, date="20260320") == [{"name": "20260320"}]
+    assert web_app.get_taxonomy_stats(level="family", date="20260320") == [{"name": "family", "count": 2}]
+    assert web_app.search_taxonomy(q="sparrow", limit=5) == [{"level": "species", "name": "sparrow"}]
+
+    assert managers[0].calls == [("search_species", "tit", 20)]
+    assert managers[1].calls == [("tree_fast", False)]
+    assert managers[2].calls == [("tree_date", True, "20260320")]
+    assert managers[3].calls == [("stats", "family", "20260320")]
+    assert managers[4].calls == [("search_taxonomy", "sparrow", 5)]
+    assert all(manager.closed for manager in managers)
+
+
+def test_validate_config_path_reports_file_and_directory_state(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_file = data_dir / "taxonomy.xlsx"
+    data_file.write_text("ok", encoding="utf-8")
+
+    directory_result = asyncio.run(web_app.validate_config_path(str(data_dir), path_type="directory"))
+    file_result = asyncio.run(web_app.validate_config_path(str(data_file), path_type="file"))
+    missing_result = asyncio.run(web_app.validate_config_path(str(tmp_path / "missing"), path_type="directory"))
+
+    assert directory_result == {
+        "exists": True,
+        "is_directory": True,
+        "is_file": False,
+        "can_write": True,
+        "can_read": True,
+    }
+    assert file_result == {
+        "exists": True,
+        "is_directory": False,
+        "is_file": True,
+        "can_write": True,
+        "can_read": True,
+    }
+    assert missing_result == {
+        "exists": False,
+        "is_directory": False,
+        "is_file": False,
+        "can_write": False,
+        "can_read": False,
+    }
+
+
+def test_browse_folder_and_file_api_return_success_and_error(monkeypatch):
+    async def run_success_cases():
+        folder = await web_app.browse_folder_api(title="Folder", initial_path="D:/birds")
+        file = await web_app.browse_file_api(title="File", initial_path="D:/birds/list.xlsx", file_types="xlsx|xls")
+        return folder, file
+
+    monkeypatch.setattr(
+        web_app.asyncio,
+        "to_thread",
+        lambda func, *args: asyncio.sleep(0, result=func(*args)),
+    )
+    monkeypatch.setattr(web_app, "open_folder_dialog", lambda title, initial: f"{title}|{initial}")
+    monkeypatch.setattr(
+        web_app,
+        "open_file_dialog",
+        lambda title, initial, file_types: f"{title}|{initial}|{file_types}",
+    )
+
+    folder_result, file_result = asyncio.run(run_success_cases())
+
+    assert folder_result == {"path": "Folder|D:/birds"}
+    assert file_result == {"path": "File|D:/birds/list.xlsx|xlsx|xls"}
+
+    async def run_error_cases():
+        folder = await web_app.browse_folder_api()
+        file = await web_app.browse_file_api()
+        return folder, file
+
+    def fail_to_thread(func, *args):
+        raise RuntimeError("dialog unavailable")
+
+    monkeypatch.setattr(web_app.asyncio, "to_thread", fail_to_thread)
+
+    folder_error, file_error = asyncio.run(run_error_cases())
+
+    assert folder_error == {"error": "dialog unavailable", "path": None}
+    assert file_error == {"error": "dialog unavailable", "path": None}

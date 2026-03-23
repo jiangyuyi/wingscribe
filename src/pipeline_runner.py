@@ -124,7 +124,18 @@ class WingScribePipeline:
         else:
             db_path = Path(db_path_config)
 
-        self.db = IOCManager(str(db_path), source_dir)
+        # Path Generator - output.root_dir is now always absolute (required)
+        paths_conf = self.config['paths']
+        out_conf = paths_conf.get('output', {})
+        output_root = out_conf.get('root_dir', '')
+        if not output_root:
+            raise ValueError("output.root_dir is required (must be absolute path)")
+
+        self.db = IOCManager(
+            str(db_path),
+            source_base_dir=source_dir,
+            processed_base_dir=output_root
+        )
         self.device = self.config['processing'].get('device', 'cpu')
 
         # 日志等级配置
@@ -143,26 +154,6 @@ class WingScribePipeline:
         self.recognizer = None # Lazy load later
         self.exif_writer = ExifWriter()
 
-        # Helper function to check if path is absolute (handles both Windows and Unix formats)
-        def is_absolute_path(p: str) -> bool:
-            if not p:
-                return False
-            if p.startswith('/'):
-                return True
-            if len(p) >= 2 and p[1] == ':':
-                return True
-            if p.startswith('//') or p.startswith('\\\\'):
-                return True
-            return False
-
-        # Path Generator - output.root_dir is now always absolute (required)
-        paths_conf = self.config['paths']
-
-        out_conf = paths_conf.get('output', {})
-        output_root = out_conf.get('root_dir', '')
-        if not output_root:
-            raise ValueError("output.root_dir is required (must be absolute path)")
-
         self.path_generator = PathGenerator(
             template=out_conf.get('structure_template', "{year}/{location}/{species_cn}/{filename}"),
             output_root=output_root
@@ -173,10 +164,8 @@ class WingScribePipeline:
         self.source_dir = source_dir
         self.output_root = output_root  # Absolute path for exclusion
         
-        # Batch Buffer
-        self.batch_buffer = []
-        self.batch_lock = threading.Lock() # Lock for buffer access
-        self.current_candidate_labels = None
+        # Recognizer init lock
+        self.batch_lock = threading.Lock()
         self.inference_batch_size = self.config.get('recognition', {}).get('local', {}).get('inference_batch_size', 16)
 
         # Existing hashes for fast deduplication (loaded on demand)
@@ -366,41 +355,33 @@ class WingScribePipeline:
              conf = rec_config.get('api', {})
              self.recognizer = APIBirdRecognizer(
                  api_key=conf.get('key'),
-                 base_url=conf.get('url')
+                 api_url=conf.get('url')
              )
         else:
             logging.error(f"Unknown recognition mode: {mode}")
             raise ValueError(f"Unknown recognition mode: {mode}")
 
-    def _flush_batch(self):
-        with self.batch_lock:
-            if not self.batch_buffer:
-                return
-            items = self.batch_buffer[:] # Copy
-            self.batch_buffer = [] # Clear buffer immediately
-        
+    def _recognize_batch(self, items, candidate_labels):
+        if not items:
+            return
+
         try:
-            # Prepare paths
             image_paths = [item['crop_path'] for item in items]
-            
-            # Batch Predict
             top_k = self.config.get('recognition', {}).get('top_k', 5)
-            
+
             if hasattr(self.recognizer, 'predict_batch'):
-                batch_results = self.recognizer.predict_batch(image_paths, self.current_candidate_labels, top_k=top_k)
+                batch_results = self.recognizer.predict_batch(image_paths, candidate_labels, top_k=top_k)
             else:
                 batch_results = [
-                    self.recognizer.predict(p, self.current_candidate_labels, top_k=top_k) 
+                    self.recognizer.predict(p, candidate_labels, top_k=top_k)
                     for p in image_paths
                 ]
 
-            # Process Results
             alt_threshold = self.config.get('recognition', {}).get('alternatives_threshold', 70)
             low_conf_threshold = self.config.get('recognition', {}).get('low_confidence_threshold', 60)
 
             for item, results in zip(items, batch_results):
                 self._archive_item(item, results, alt_threshold, low_conf_threshold)
-                
         except Exception as e:
             logging.error(f"Batch processing failed: {e}", exc_info=True)
             for item in items:
@@ -567,48 +548,19 @@ class WingScribePipeline:
             with self.batch_lock:
                 if self.recognizer is None: self._init_recognizer()
 
-        # 3. Context Check (Batching)
+        # 3. Candidate labels for this image only.
         location_tag = meta.get('location_tag', 'Unknown')
         candidates = self._select_candidate_labels(location_tag)
-        
-        with self.batch_lock:
-            # If context changed, flush previous batch
-            if self.current_candidate_labels is not None and candidates != self.current_candidate_labels:
-                # We release lock inside flush? No, _flush_batch uses lock.
-                # Recursive locking? Lock is RLock? Default is Lock.
-                # We need to be careful.
-                # Better: Queue everything, flush if needed.
-                # But flush needs to clear buffer.
-                # If we are holding lock, we can't call a function that acquires lock.
-                pass 
-            
-            # Simple strategy: If labels change, we must flush.
-            # But in multi-threaded env, multiple threads might be processing different locations?
-            # If so, they fight over 'current_candidate_labels'.
-            # Ideally, batch should be homogeneous.
-            # For now, let's assume one run mostly has one context or we accept flushing often.
-            
-            if self.current_candidate_labels is not None and candidates != self.current_candidate_labels:
-                 # Manually flush logic here to avoid re-acquiring lock
-                 items = self.batch_buffer[:]
-                 self.batch_buffer = []
-                 # Processing must happen OUTSIDE the lock to avoid blocking detectors
-                 # But we need to update current_labels.
-                 pass # Complex.
-            
-            # SIMPLIFICATION:
-            # We skip flushing on context change inside thread for now, 
-            # assuming the run is mostly consistent or we handle mixed batches later.
-            # OR, we just update the global labels?
-            self.current_candidate_labels = candidates # This is risky if threads mix.
 
-        # 4. Crop & Queue
+        # 4. Crop & recognize as an image-local batch.
         img_width, img_height = 0, 0
         try:
             from PIL import Image
             with Image.open(local_source_path) as tmp_img:
                 img_width, img_height = tmp_img.size
         except: pass
+
+        image_batch_items = []
 
         for i, (box, score) in enumerate(detections):
             # Use output_root for temp directory (which is now resolved to absolute path)
@@ -635,23 +587,18 @@ class WingScribePipeline:
                             pass
                         continue
 
-                should_flush = False
-                with self.batch_lock:
-                    self.batch_buffer.append({
-                        'entry': entry,
-                        'meta': meta,
-                        'crop_path': str(temp_crop_path),
-                        'file_hash': file_hash,
-                        'width': img_width,
-                        'height': img_height,
-                        'detection_index': i,
-                        'detections_count': len(detections)
-                    })
-                    if len(self.batch_buffer) >= self.inference_batch_size:
-                        should_flush = True
-                
-                if should_flush:
-                    self._flush_batch()
+                image_batch_items.append({
+                    'entry': entry,
+                    'meta': meta,
+                    'crop_path': str(temp_crop_path),
+                    'file_hash': file_hash,
+                    'width': img_width,
+                    'height': img_height,
+                    'detection_index': i,
+                    'detections_count': len(detections)
+                })
+
+        self._recognize_batch(image_batch_items, candidates)
 
     def run(self, start_date: str = None, end_date: str = None, existing_hashes: set = None):
         t_start = time.time()
@@ -775,8 +722,6 @@ class WingScribePipeline:
             if futures:
                 wait(futures)
 
-        # Process any remaining items in the buffer
-        self._flush_batch()
         t_end = time.time()
         duration = t_end - t_start
         end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -925,8 +870,6 @@ class WingScribePipeline:
             if futures:
                 wait(futures)
 
-        # Process any remaining items in the buffer
-        self._flush_batch()
         t_end = time.time()
         duration = t_end - t_start
         end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

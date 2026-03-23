@@ -242,7 +242,7 @@ logger.info(f"Photo Source Directory: {source_dir}")
 logger.info(f"Database Path: {db_path}")
 logger.info(f"Processed Images Directory: {processed_dir}")
 
-if not processed_dir.exists():
+if processed_dir and not processed_dir.exists():
     logger.error(f"Processed directory does not exist: {processed_dir}")
     processed_dir.mkdir(parents=True, exist_ok=True)
 
@@ -264,12 +264,19 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "src" / "web" / "templates"
 # Call explicitly
 def init_app_db():
     try:
-        mgr = IOCManager(str(db_path))
+        mgr = create_db_manager()
         mgr.close()
         del mgr
         gc.collect()
     except Exception as e:
         logger.error(f"Startup DB Initialization failed: {e}")
+
+def create_db_manager():
+    return IOCManager(
+        str(db_path),
+        source_base_dir=str(source_dir) if source_dir else "",
+        processed_base_dir=str(processed_dir) if processed_dir else ""
+    )
 
 # --- Helper ---
 def get_db_conn():
@@ -302,7 +309,7 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
         # 基于 source_dir 计算相对路径
         if norm_base and norm_abs.startswith(norm_base):
             # 提取相对路径部分
-            rel_part = norm_abs[len(norm_base):].lstrip('/')
+            rel_part = norm_abs[len(norm_base):].lstrip('/\\')
             result = f"/static/{rel_part.replace(os.sep, '/')}"
             logger.debug(f"resolve_web_path: rel_part={rel_part}, result={result}")
             return result
@@ -316,7 +323,7 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
 def serve_processed_file(path: str):
     """Custom static file handler for processed images (Unicode-safe on Windows)"""
     # 直接用 source_dir 解析
-    full_path = source_dir / path.replace('/', os.sep) if source_dir else None
+    full_path = processed_dir / path.replace('/', os.sep) if processed_dir else None
 
     if full_path and full_path.exists() and full_path.is_file():
         return FileResponse(full_path)
@@ -332,8 +339,8 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
 
         # file_path is stored relative to source_dir, so use source_dir to resolve
         # 不使用 resolve()，避免UNC路径问题
-        if source_dir and not is_absolute_path(normalized):
-            abs_path = source_dir / normalized
+        if processed_dir and not is_absolute_path(normalized):
+            abs_path = processed_dir / normalized
         elif not is_absolute_path(normalized):
             abs_path = BASE_DIR / normalized
         else:
@@ -341,14 +348,14 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
 
         # 使用规范化路径比较
         norm_abs = os.path.normpath(str(abs_path))
-        norm_base = os.path.normpath(str(source_dir)) if source_dir else None
+        norm_base = os.path.normpath(str(processed_dir)) if processed_dir else None
 
         # Check if it's under source_dir, then generate the URL
         if norm_base and norm_abs.startswith(norm_base):
-            rel_part = norm_abs[len(norm_base):].lstrip('/')
+            rel_part = norm_abs[len(norm_base):].lstrip('/\\')
             return f"/processed/{rel_part.replace(os.sep, '/')}"
 
-        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under source_dir {source_dir}")
+        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under processed_dir {processed_dir}")
         return None
     except Exception as e:
         logger.warning(f"Failed to resolve processed path '{file_path_str}': {e}")
@@ -488,7 +495,7 @@ def get_api_stats():
 
 @app.get("/api/scan_history")
 def get_scan_history():
-    manager = IOCManager(str(db_path))
+    manager = create_db_manager()
     try:
         history = manager.get_recent_scans(limit=10)
         return history
@@ -696,7 +703,7 @@ def reset_system():
         init_app_db()
 
         # Re-import taxonomy with references for Chinese name mappings
-        mgr = IOCManager(str(db_path))
+        mgr = create_db_manager()
         if mgr.conn.execute("SELECT count(*) FROM taxonomy").fetchone()[0] == 0:
             refs_dir = str(BASE_DIR / config['paths']['references_path'])
             mgr.import_from_excel(
@@ -713,7 +720,7 @@ def reset_system():
 def rebuild_species_stats():
     """重建物种统计表（首次使用或数据不一致时调用）"""
     try:
-        manager = IOCManager(str(db_path))
+        manager = create_db_manager()
         manager.rebuild_species_stats()
         manager.close()
         return {"status": "success", "message": "Species stats table rebuilt"}
@@ -722,7 +729,7 @@ def rebuild_species_stats():
 
 @app.get("/api/search_species")
 def search_species(q: str):
-    manager = IOCManager(str(db_path))
+    manager = create_db_manager()
     res = manager.search_species(q, limit=20)
     manager.close()
     return res
@@ -730,7 +737,7 @@ def search_species(q: str):
 @app.get("/api/taxonomy/tree")
 def get_taxonomy_tree(include_empty: bool = True, date: str = None):
     """获取分类树，支持显示/隐藏空层级和日期筛选"""
-    manager = IOCManager(str(db_path))
+    manager = create_db_manager()
     try:
         # Use fast method when no date filter (uses precomputed stats table)
         if date:
@@ -744,7 +751,7 @@ def get_taxonomy_tree(include_empty: bool = True, date: str = None):
 @app.get("/api/taxonomy/stats")
 def get_taxonomy_stats(level: str, date: str = None):
     """按层级统计物种数量（order/family/genus/species）"""
-    manager = IOCManager(str(db_path))
+    manager = create_db_manager()
     try:
         stats = manager.get_stats_by_level(level=level, date_filter=date)
         return stats
@@ -765,7 +772,7 @@ def get_photos_by_taxonomy(
     offset: int = 0
 ):
     """按分类层级筛选照片，支持中文和拉丁名参数"""
-    manager = IOCManager(str(db_path))
+    manager = create_db_manager()
     conn = get_db_conn()
     cursor = conn.cursor()
 
@@ -851,7 +858,7 @@ def get_photos_by_taxonomy(
 @app.get("/api/taxonomy/search")
 def search_taxonomy(q: str, limit: int = 20):
     """搜索分类信息（支持目、科、属、物种）"""
-    manager = IOCManager(str(db_path))
+    manager = create_db_manager()
     try:
         results = manager.search_taxonomy(query=q, limit=limit)
         return results
@@ -860,119 +867,84 @@ def search_taxonomy(q: str, limit: int = 20):
 
 @app.post("/api/update_label")
 def update_label(req: UpdateLabelRequest):
-    manager = IOCManager(str(db_path))
-
-    # 1. Fetch photo details BEFORE update to get file paths
-    # Use conn.execute directly as manager.cursor is removed
-    cursor = manager.conn.execute("SELECT * FROM photos WHERE id = ?", (req.photo_id,))
-    photo = cursor.fetchone()
-
-    if not photo:
-        manager.close()
-        raise HTTPException(status_code=404, detail="Photo not found")
-
-    photo = dict(photo)
-
-    # Convert relative paths to absolute using source_dir
-    if source_dir:
-        if photo.get('file_path') and not is_absolute_path(photo['file_path']):
-            photo['file_path'] = str(source_dir / photo['file_path'])
-        if photo.get('original_path') and not is_absolute_path(photo['original_path']):
-            photo['original_path'] = str(source_dir / photo['original_path'])
-    
-    # 2. Get extra bird info (Family) for tags
-    bird_info = manager.get_bird_info(req.scientific_name)
-    family_cn = bird_info['family_cn'] if bird_info else ""
-    
-    # 3. Update DB
-    manager.update_photo_species(req.photo_id, req.scientific_name, req.chinese_name)
-    manager.close()
-    
-    # 4. Prepare Tags
-    # Reconstruct UserComment from candidates_json if available
-    user_comment = req.chinese_name
-    
-    # Try to load candidates to preserve history in EXIF
+    manager = create_db_manager()
+    moved_from = None
+    photo = {}
+    final_processed_path = None
     try:
-        candidates = []
-        if 'candidates_json' in photo and photo['candidates_json']:
-            candidates = json.loads(photo['candidates_json'])
-        
-        if candidates:
-            # We must adhere to the same logic as pipeline: check threshold from config
-            # But wait, config is loaded at module level.
-            alt_threshold = config.get('recognition', {}).get('alternatives_threshold', 70)
-            
-            # Since this is a manual update, the "Top Match" is now the user selection.
-            # But the candidates list reflects the *AI's* original opinion.
-            # We should probably keep the list as "AI Alternatives" vs "Manual Selection".
-            # Or just rewrite the list with the user selection as "Current"?
-            # User requirement: "all alternatives still preserved".
-            
-            # Let's reconstruct the original AI string, but maybe add a note?
-            # Or simpler: Just regenerate the string exactly as the pipeline did, 
-            # based on the stored AI data. The UserComment is "AI's opinion".
-            # The ImageDescription/Keywords reflect the "Current Truth".
-            
-            # Re-generate comment based on AI data
-            # Note: The 'top' in candidates is the original AI top, not necessarily the current label.
-            # This preserves the history of what AI thought.
-            
-            comment_lines = []
-            
-            # Check if we should show alternatives based on original AI top score
-            top_score = candidates[0].get('score', 0) * 100 if candidates else 0
-            show_alternatives = (top_score <= alt_threshold)
-            
-            display_list = candidates if show_alternatives else [candidates[0]]
-            
-            for i, cand in enumerate(display_list):
-                c_sci = cand.get('sci')
-                c_cn = cand.get('cn')
-                c_conf = cand.get('score', 0) * 100
-                
-                if i == 0:
-                    comment_lines.append(f"AI Top: {c_cn} ({c_sci}) - {c_conf:.1f}%")
-                    if show_alternatives and len(display_list) > 1:
-                        comment_lines.append("Alternatives:")
-                else:
-                    comment_lines.append(f"{i}. {c_cn} ({c_sci}) - {c_conf:.1f}%")
-            
-            # Add a manual override note if it differs
-            if candidates[0].get('sci') != req.scientific_name:
-                comment_lines.insert(0, f"[Manual Correction] Current: {req.chinese_name}")
-            
-            user_comment = "&#xa;".join(comment_lines)
-            
-    except Exception as e:
-        logger.error(f"Failed to reconstruct UserComment: {e}")
-        user_comment = req.chinese_name
+        cursor = manager.conn.execute("SELECT * FROM photos WHERE id = ?", (req.photo_id,))
+        photo = cursor.fetchone()
 
-    description = f"{req.chinese_name} ({req.scientific_name})"
-    tags = {
-        "IPTC:Keywords": [req.chinese_name, photo['location_tag'], family_cn, req.scientific_name],
-        "XMP:Description": description,
-        "XPTitle": description,   # Windows Explorer Title
-        "XPSubject": "",          # Explicitly clear Subject per request
-        "ImageDescription": description, # Ensure standard compatibility
-        "UserComment": user_comment
-    }
-    
-    # 5. Handle File Renaming (If template uses species name or confidence)
-    processed_path = photo.get('file_path')
-    
-    if processed_path and os.path.exists(processed_path):
-        out_conf = config.get('paths', {}).get('output', {})
-        template = out_conf.get('structure_template', "")
-        
-        # Check if template depends on species or confidence
-        if any(x in template for x in ["{species_cn}", "{species_sci}", "{confidence}"]):
-            try:
-                # Resolve Source Structure
+        if not photo:
+            raise HTTPException(status_code=404, detail="Photo not found")
+
+        photo = dict(photo)
+        old_scientific_name = photo.get("scientific_name")
+        stored_processed_path = photo.get("file_path")
+        stored_filename = photo.get("filename")
+
+        if photo.get('file_path'):
+            photo['file_path'] = manager.resolve_processed_path(photo['file_path'])
+        if photo.get('original_path'):
+            photo['original_path'] = manager.resolve_original_path(photo['original_path'])
+
+        bird_info = manager.get_bird_info(req.scientific_name)
+        family_cn = bird_info['family_cn'] if bird_info else ""
+
+        user_comment = req.chinese_name
+        try:
+            candidates = []
+            if 'candidates_json' in photo and photo['candidates_json']:
+                candidates = json.loads(photo['candidates_json'])
+
+            if candidates:
+                alt_threshold = config.get('recognition', {}).get('alternatives_threshold', 70)
+                comment_lines = []
+                top_score = candidates[0].get('score', 0) * 100 if candidates else 0
+                show_alternatives = (top_score <= alt_threshold)
+                display_list = candidates if show_alternatives else [candidates[0]]
+
+                for i, cand in enumerate(display_list):
+                    c_sci = cand.get('sci')
+                    c_cn = cand.get('cn')
+                    c_conf = cand.get('score', 0) * 100
+
+                    if i == 0:
+                        comment_lines.append(f"AI Top: {c_cn} ({c_sci}) - {c_conf:.1f}%")
+                        if show_alternatives and len(display_list) > 1:
+                            comment_lines.append("Alternatives:")
+                    else:
+                        comment_lines.append(f"{i}. {c_cn} ({c_sci}) - {c_conf:.1f}%")
+
+                if candidates[0].get('sci') != req.scientific_name:
+                    comment_lines.insert(0, f"[Manual Correction] Current: {req.chinese_name}")
+
+                user_comment = "&#xa;".join(comment_lines)
+        except Exception as e:
+            logger.error(f"Failed to reconstruct UserComment: {e}")
+            user_comment = req.chinese_name
+
+        description = f"{req.chinese_name} ({req.scientific_name})"
+        tags = {
+            "IPTC:Keywords": [req.chinese_name, photo['location_tag'], family_cn, req.scientific_name],
+            "XMP:Description": description,
+            "XPTitle": description,
+            "XPSubject": "",
+            "ImageDescription": description,
+            "UserComment": user_comment
+        }
+
+        processed_path = photo.get('file_path')
+        final_processed_path = processed_path
+
+        if processed_path and os.path.exists(processed_path):
+            out_conf = config.get('paths', {}).get('output', {})
+            template = out_conf.get('structure_template', "")
+
+            if any(x in template for x in ["{species_cn}", "{species_sci}", "{confidence}"]):
                 source_structure = "."
                 if photo.get('original_path'):
                     orig_path_obj = Path(photo['original_path'])
-                    # Check sources to find relative root
                     sources = config.get('paths', {}).get('sources', [])
                     for src in sources:
                         try:
@@ -981,95 +953,93 @@ def update_label(req: UpdateLabelRequest):
                                 rel = orig_path_obj.parent.relative_to(src_path)
                                 source_structure = str(rel).replace('\\', '/')
                                 break
-                        except Exception: continue
+                        except Exception:
+                            continue
 
                 gen_meta = {
                     'captured_date': photo['captured_date'],
                     'location_tag': photo['location_tag'],
                     'primary_bird_cn': req.chinese_name,
                     'scientific_name': req.scientific_name,
-                    'confidence_score': 1.0, # Manual confirmation = 100% confidence
-                    'source_structure': source_structure 
+                    'confidence_score': 1.0,
+                    'source_structure': source_structure
                 }
-                
-                # Re-instantiate generator
-                # output.root_dir is now always absolute path (required)
-                output_root_raw = out_conf.get('root_dir', '')
-                if not output_root_raw:
-                    output_root_raw = processed_dir  # Fallback to configured processed_dir
-                output_root_resolved = Path(output_root_raw)
 
+                output_root_raw = out_conf.get('root_dir', '') or processed_dir
                 generator = PathGenerator(
                     template=template,
-                    output_root=str(output_root_resolved)
+                    output_root=str(Path(output_root_raw))
                 )
-                
-                # FIX: Use ORIGINAL filename stem to avoid appending suffixes to already processed names
-                # e.g. "Bird.jpg" -> "Bird_NewName.jpg", NOT "Bird_OldName_NewName.jpg"
-                orig_filename = photo.get('filename') # Default fallback
+
+                orig_filename = photo.get('filename')
                 if photo.get('original_path'):
                     orig_filename = Path(photo['original_path']).name
-                
+
                 new_path = generator.generate_path(gen_meta, orig_filename)
-                
-                # If path changed, move file and update DB
                 if Path(new_path).resolve() != Path(processed_path).resolve():
                     new_path.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    # Rename/Move
-                    # Since we are essentially "re-processing" the name, 
-                    # we must ensure we don't overwrite an existing file (unless it's self?)
-                    # PathGenerator does NOT handle collision check inside generate_path, 
-                    # pipeline_runner handled it. We should handle it here too.
-                    
+
                     final_path = new_path
                     if final_path.exists() and final_path.resolve() != Path(processed_path).resolve():
-                         stem = final_path.stem
-                         counter = 1
-                         while final_path.exists():
-                             final_path = final_path.with_name(f"{stem}_{counter}.jpg")
-                             counter += 1
-                    
+                        stem = final_path.stem
+                        counter = 1
+                        while final_path.exists():
+                            final_path = final_path.with_name(f"{stem}_{counter}.jpg")
+                            counter += 1
+
                     shutil.move(processed_path, final_path)
-                    
-                    # Update DB (convert absolute path to relative if under source_dir)
-                    conn = get_db_conn()
-                    rel_path = str(final_path)
-                    if source_dir:
-                        try:
-                            rel_path = str(Path(final_path).relative_to(source_dir))
-                        except ValueError:
-                            pass  # Keep absolute path if not under source_dir
-                    conn.execute("UPDATE photos SET file_path = ?, filename = ? WHERE id = ?",
-                                 (rel_path, final_path.name, req.photo_id))
-                    conn.commit()
-                    conn.close()
-                    
-                    processed_path = str(final_path) # Update local var for EXIF writing
+                    moved_from = processed_path
+                    final_processed_path = str(final_path)
+                    stored_processed_path = manager.to_storage_processed_path(str(final_path))
+                    stored_filename = final_path.name
                     logger.info(f"Renamed file to: {final_path}")
-            except Exception as e:
-                logger.error(f"Failed to rename file: {e}")
 
-    # 6. Update Metadata for Processed Image
-    if processed_path and os.path.exists(processed_path):
-        exif_writer.write_metadata(processed_path, tags)
-    
-    # 7. Update Metadata for Original Image (if exists)
-    original_path = photo.get('original_path')
-    if original_path and os.path.exists(original_path):
-        # We might want to append "WingScribe" to keywords if not present,
-        # but purely replacing with the new set is safer to keep consistency with the new ID.
-        # Ideally, we should read existing keywords and merge, but for now,
-        # strictly following the requirement "Update tags" with the corrected info.
-        # Adding "WingScribe" tag to mark it as touched by our system is good practice though.
+        if final_processed_path and os.path.exists(final_processed_path):
+            if not exif_writer.write_metadata(final_processed_path, tags):
+                raise RuntimeError("Failed to update metadata for processed image")
 
-        # Re-creating the logic from pipeline_runner:
-        source_tags = tags.copy()
-        source_tags["IPTC:Keywords"] = source_tags["IPTC:Keywords"] + ["WingScribe"]
-        
-        exif_writer.write_metadata(original_path, source_tags)
+        original_path = photo.get('original_path')
+        if original_path and os.path.exists(original_path):
+            source_tags = tags.copy()
+            source_tags["IPTC:Keywords"] = source_tags["IPTC:Keywords"] + ["WingScribe"]
+            if not exif_writer.write_metadata(original_path, source_tags):
+                raise RuntimeError("Failed to update metadata for original image")
 
-    return {"status": "success"}
+        manager.conn.execute(
+            '''
+            UPDATE photos
+            SET scientific_name = ?, primary_bird_cn = ?, confidence_score = ?, file_path = ?, filename = ?
+            WHERE id = ?
+            ''',
+            (
+                req.scientific_name,
+                req.chinese_name,
+                1.0,
+                stored_processed_path,
+                stored_filename,
+                req.photo_id
+            )
+        )
+        manager.conn.commit()
+
+        if old_scientific_name:
+            manager.update_species_stats_for_photo(old_scientific_name)
+        if req.scientific_name:
+            manager.update_species_stats_for_photo(req.scientific_name)
+
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if moved_from and final_processed_path and os.path.exists(final_processed_path) and not os.path.exists(moved_from):
+            try:
+                shutil.move(final_processed_path, moved_from)
+            except Exception as rollback_error:
+                logger.error(f"Failed to roll back renamed file: {rollback_error}")
+        logger.error(f"Failed to update label for photo {req.photo_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        manager.close()
 
 # --- Configuration Management ---
 class ConfigItem(BaseModel):

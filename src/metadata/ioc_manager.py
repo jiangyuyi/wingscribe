@@ -7,9 +7,18 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 class IOCManager:
-    def __init__(self, db_path: str, base_dir: str = ""):
+    def __init__(
+        self,
+        db_path: str,
+        base_dir: str = "",
+        source_base_dir: str = "",
+        processed_base_dir: str = ""
+    ):
         self.db_path = db_path
-        self.base_dir = Path(base_dir) if base_dir else None
+        if base_dir and not source_base_dir:
+            source_base_dir = base_dir
+        self.source_base_dir = Path(source_base_dir) if source_base_dir else None
+        self.processed_base_dir = Path(processed_base_dir) if processed_base_dir else None
         # Ensure parent directory exists
         db_file = Path(db_path)
         db_file.parent.mkdir(parents=True, exist_ok=True)
@@ -18,23 +27,35 @@ class IOCManager:
         # Removed persistent self.cursor for thread safety
         self._init_db()
 
-    def _abs_to_rel(self, abs_path: str) -> str:
-        """Convert absolute path to relative path based on base_dir"""
-        if not self.base_dir or not abs_path:
+    def _abs_to_rel(self, abs_path: str, base_dir: Optional[Path]) -> str:
+        """Convert absolute path to relative path based on base_dir."""
+        if not base_dir or not abs_path:
             return abs_path
         try:
-            return str(Path(abs_path).relative_to(self.base_dir))
+            return Path(abs_path).relative_to(base_dir).as_posix()
         except ValueError:
             return abs_path  # Not under base_dir, keep as is
 
-    def _rel_to_abs(self, rel_path: str) -> str:
-        """Convert relative path to absolute path based on base_dir"""
-        if not self.base_dir or not rel_path:
+    def _rel_to_abs(self, rel_path: str, base_dir: Optional[Path]) -> str:
+        """Convert relative path to absolute path based on base_dir."""
+        if not base_dir or not rel_path:
             return rel_path
         p = Path(rel_path)
         if p.is_absolute():
             return rel_path
-        return str(self.base_dir / p)
+        return str(base_dir / p)
+
+    def to_storage_original_path(self, abs_path: str) -> str:
+        return self._abs_to_rel(abs_path, self.source_base_dir)
+
+    def to_storage_processed_path(self, abs_path: str) -> str:
+        return self._abs_to_rel(abs_path, self.processed_base_dir)
+
+    def resolve_original_path(self, stored_path: str) -> str:
+        return self._rel_to_abs(stored_path, self.source_base_dir)
+
+    def resolve_processed_path(self, stored_path: str) -> str:
+        return self._rel_to_abs(stored_path, self.processed_base_dir)
 
     def _init_db(self):
         # Taxonomy Table
@@ -468,13 +489,10 @@ class IOCManager:
         Returns:
             分类树列表，每个元素是一个目（Order）对象，包含其下的科、属、物种
         """
-        # Build WHERE clause for date filter if needed
-        date_join = ""
-        date_where = ""
         params = []
+        count_expr = "COUNT(DISTINCT p.id)"
         if date_filter:
-            date_join = "JOIN photos p2 ON p.scientific_name = p2.scientific_name"
-            date_where = "AND p2.captured_date = ?"
+            count_expr = "COUNT(DISTINCT CASE WHEN p.captured_date = ? THEN p.id END)"
             params.append(date_filter)
 
         # Step 1: Get all taxonomy data with photo counts in ONE query
@@ -485,10 +503,9 @@ class IOCManager:
                 t.family_cn, t.family_sci,
                 t.genus_cn, t.genus_sci,
                 t.scientific_name, t.chinese_name, t.english_name,
-                COUNT(DISTINCT p.id) as photo_count
+                {count_expr} as photo_count
             FROM taxonomy t
             LEFT JOIN photos p ON t.scientific_name = p.scientific_name
-            {date_join}
             WHERE t.order_cn IS NOT NULL AND t.order_cn != ''
             GROUP BY t.scientific_name
             ORDER BY t.order_cn, t.family_cn, t.genus_cn, t.chinese_name
@@ -736,9 +753,9 @@ class IOCManager:
         # Convert absolute paths to relative paths for storage
         record = dict(record)
         if 'file_path' in record and record['file_path']:
-            record['file_path'] = self._abs_to_rel(record['file_path'])
+            record['file_path'] = self.to_storage_processed_path(record['file_path'])
         if 'original_path' in record and record['original_path']:
-            record['original_path'] = self._abs_to_rel(record['original_path'])
+            record['original_path'] = self.to_storage_original_path(record['original_path'])
 
         keys = ', '.join(record.keys())
         placeholders = ', '.join(['?'] * len(record))

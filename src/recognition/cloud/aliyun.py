@@ -9,6 +9,7 @@ import base64
 import hashlib
 import hmac
 import httpx
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlencode, quote
 from datetime import datetime
@@ -102,17 +103,14 @@ class AliyunRecognizer(AbstractBirdRecognizer):
 
     def _load_image(self, request: RecognizeRequest) -> bytes:
         """加载图片数据"""
-        from ...core.io import get_fs_manager
-
         if request.image_base64:
             return base64.b64decode(request.image_base64)
         elif request.image_url:
-            with httpx.get(request.image_url, timeout=request.timeout) as response:
-                response.raise_for_status()
-                return response.content
+            response = httpx.get(request.image_url, timeout=request.timeout)
+            response.raise_for_status()
+            return response.content
         elif request.image_path:
-            fs = get_fs_manager()
-            return fs.read_bytes_sync(request.image_path)
+            return Path(request.image_path).read_bytes()
         else:
             raise ValueError("No image source provided")
 

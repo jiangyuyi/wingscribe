@@ -9,6 +9,17 @@ class APIBirdRecognizer(BirdRecognizer):
         self.api_url = api_url
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
+    def predict_batch(
+        self,
+        image_paths: List[str],
+        candidate_labels: List[str],
+        top_k: int = 5
+    ) -> List[List[Dict[str, Any]]]:
+        return [
+            self.predict(image_path, candidate_labels, top_k=top_k)
+            for image_path in image_paths
+        ]
+
     def predict(self, image_path: str, candidate_labels: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Call Hugging Face Inference API for Zero-Shot Classification.

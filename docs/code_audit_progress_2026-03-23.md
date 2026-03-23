@@ -76,6 +76,8 @@
 
 ## Remaining high-value areas
 
+- `src/web/app.py`
+  - Still needs another batch of route tests for photo query, filtering, and pagination endpoints
 - `src/recognition/cloud/factory.py`
   - Still needs direct tests for platform creation and default config extraction
 - `src/recognition/inference_api.py`
@@ -86,5 +88,10 @@
   - Still a large low-coverage business module
 - `TaskManager.should_stop`
   - Still behaves like a pseudo-stop flag rather than an effective cancellation path
+  - Current findings:
+    - `TaskManager.stop()` only sets an in-memory flag
+    - `WingScribePipeline` does not receive or check any stop/cancel signal
+    - `src/web/app.py` currently has no real `/api/pipeline/stop` route in source
+    - `should_stop` is not reset on a new start, so if later wired in, stale state could leak across runs
 - `IOCManager` connection model
   - Still worth a dedicated concurrency refactor later

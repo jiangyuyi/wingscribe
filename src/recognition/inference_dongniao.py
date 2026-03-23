@@ -16,6 +16,17 @@ class DongniaoRecognizer(BirdRecognizer):
         if not self.api_key:
             logging.warning("Dongniao API Key is missing! Recognition will fail.")
 
+    def predict_batch(
+        self,
+        image_paths: List[str],
+        candidate_labels: List[str],
+        top_k: int = 5
+    ) -> List[List[Dict[str, Any]]]:
+        return [
+            self.predict(image_path, candidate_labels=candidate_labels, top_k=top_k)
+            for image_path in image_paths
+        ]
+
     def predict(self, image_path: str, candidate_labels: List[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Predict using Dongniao API.

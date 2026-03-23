@@ -162,8 +162,8 @@ def test_init_recognizer_selects_backend(monkeypatch):
             created["local"] = (model_name, device, hf_mirror)
 
     class FakeDongniao:
-        def __init__(self, api_key, base_url):
-            created["dongniao"] = (api_key, base_url)
+        def __init__(self, api_key, api_url):
+            created["dongniao"] = (api_key, api_url)
 
     class FakeApi:
         def __init__(self, api_url, api_key):

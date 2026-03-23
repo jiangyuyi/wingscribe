@@ -349,7 +349,7 @@ class WingScribePipeline:
             conf = rec_config.get('dongniao', {})
             self.recognizer = DongniaoRecognizer(
                 api_key=conf.get('key'),
-                base_url=conf.get('url')
+                api_url=conf.get('url')
             )
         elif mode == 'api':
              conf = rec_config.get('api', {})

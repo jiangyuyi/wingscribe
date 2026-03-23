@@ -144,6 +144,7 @@ class WingScribePipeline:
         self.total_files = 0
         self.processed_count = 0
         self._progress_callback = None
+        self._stop_checker = None
 
         # Lazy load detector with timeout protection
         self._detector = None
@@ -180,6 +181,21 @@ class WingScribePipeline:
     def set_progress_callback(self, callback):
         """设置进度回调函数"""
         self._progress_callback = callback
+
+    def set_stop_checker(self, callback):
+        """Register a cooperative stop checker."""
+        self._stop_checker = callback
+
+    def _should_stop(self) -> bool:
+        stop_checker = getattr(self, "_stop_checker", None)
+        if stop_checker is None:
+            return False
+
+        try:
+            return bool(stop_checker())
+        except Exception as exc:
+            logging.warning(f"Stop checker failed, ignoring stop signal: {exc}")
+            return False
 
     def _emit_progress(self):
         """发送进度更新"""
@@ -604,6 +620,7 @@ class WingScribePipeline:
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
+        stop_requested = False
 
         # Use provided hashes or load from database
         if existing_hashes is not None:
@@ -631,6 +648,11 @@ class WingScribePipeline:
             futures = []
 
             for source in sources:
+                if self._should_stop():
+                    stop_requested = True
+                    logging.info("Stop requested before scanning next source, stopping pipeline submission")
+                    break
+
                 if not source.get('enabled', True):
                     continue
 
@@ -691,6 +713,11 @@ class WingScribePipeline:
                 self._emit_progress()
 
                 for entry, entry_path in valid_entries:
+                    if self._should_stop():
+                        stop_requested = True
+                        logging.info("Stop requested, stopping new task submission")
+                        break
+
                     meta = parser.parse(entry_path)
                     
                     c_date = meta.get('captured_date')
@@ -718,6 +745,9 @@ class WingScribePipeline:
                         done, not_done = wait(futures, timeout=0.1)
                         futures = list(not_done)
 
+                if stop_requested:
+                    break
+
             # Wait for all tasks to complete
             if futures:
                 wait(futures)
@@ -733,9 +763,12 @@ class WingScribePipeline:
             'range_end': end_date or "All",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
-            'status': 'Completed'
+            'status': 'Stopped' if stop_requested else 'Completed'
         })
-        logging.info(f"Pipeline completed. Processed: {processed_count}. Duration: {duration:.2f}s")
+        if stop_requested:
+            logging.info(f"Pipeline stopped by request. Processed: {processed_count}. Duration: {duration:.2f}s")
+        else:
+            logging.info(f"Pipeline completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 
     def run_by_folders(self, folder_paths: list, recursive: bool = True):
         """
@@ -748,6 +781,7 @@ class WingScribePipeline:
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
+        stop_requested = False
 
         # Ensure existing_hashes is loaded
         if self.existing_hashes is None:
@@ -782,6 +816,11 @@ class WingScribePipeline:
             provider = LocalProvider(base_dir=self.source_dir)
 
             for path_str in resolved_paths:
+                if self._should_stop():
+                    stop_requested = True
+                    logging.info("Stop requested before scanning next folder, stopping pipeline submission")
+                    break
+
                 if not provider.exists(path_str):
                     logging.warning(f"Folder path not found: {path_str}")
                     continue
@@ -844,6 +883,11 @@ class WingScribePipeline:
                 self._emit_progress()
 
                 for entry, entry_path in valid_entries:
+                    if self._should_stop():
+                        stop_requested = True
+                        logging.info("Stop requested, stopping new task submission")
+                        break
+
                     # Parse path metadata (without date filtering)
                     meta = parser.parse(entry_path)
 
@@ -866,6 +910,9 @@ class WingScribePipeline:
                         done, not_done = wait(futures, timeout=0.1)
                         futures = list(not_done)
 
+                if stop_requested:
+                    break
+
             # Wait for all tasks to complete
             if futures:
                 wait(futures)
@@ -881,9 +928,12 @@ class WingScribePipeline:
             'range_end': "",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
-            'status': 'Completed'
+            'status': 'Stopped' if stop_requested else 'Completed'
         })
-        logging.info(f"Pipeline (by folders) completed. Processed: {processed_count}. Duration: {duration:.2f}s")
+        if stop_requested:
+            logging.info(f"Pipeline (by folders) stopped by request. Processed: {processed_count}. Duration: {duration:.2f}s")
+        else:
+            logging.info(f"Pipeline (by folders) completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 
     def _scan_folder_recursive(self, provider, folder_path: str):
         """

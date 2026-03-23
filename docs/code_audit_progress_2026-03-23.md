@@ -87,11 +87,11 @@
 - `src/recognition/inference_local.py`
   - Still a large low-coverage business module
 - `TaskManager.should_stop`
-  - Still behaves like a pseudo-stop flag rather than an effective cancellation path
-  - Current findings:
-    - `TaskManager.stop()` only sets an in-memory flag
-    - `WingScribePipeline` does not receive or check any stop/cancel signal
-    - `src/web/app.py` currently has no real `/api/pipeline/stop` route in source
-    - `should_stop` is not reset on a new start, so if later wired in, stale state could leak across runs
+  - Fixed into a cooperative stop path
+  - Current behavior:
+    - `start_pipeline*()` resets stale stop state before a new run
+    - `src/web/app.py` now exposes `/api/pipeline/stop`
+    - `WingScribePipeline` now receives a stop checker and stops submitting new work when a stop is requested
+    - already-submitted tasks are allowed to finish naturally, and scan history is recorded as `Stopped`
 - `IOCManager` connection model
   - Still worth a dedicated concurrency refactor later

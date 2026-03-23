@@ -356,3 +356,164 @@ def test_run_by_folders_uses_recursive_scanner_and_records_history(tmp_path, mon
     assert processed == [("a.jpg", "20260322"), ("b.jpeg", "20260322")]
     assert history[0]["range_start"] == f"Folders: {target_folder}"
     assert history[0]["processed_count"] == 2
+
+
+def test_run_stops_submitting_new_tasks_when_stop_requested(tmp_path, monkeypatch):
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    valid_a = source_root / "20260320_Beijing" / "a.jpg"
+    valid_b = source_root / "20260320_Beijing" / "b.jpg"
+    valid_a.parent.mkdir(parents=True, exist_ok=True)
+    valid_a.write_bytes(b"a")
+    valid_b.write_bytes(b"b")
+
+    pipeline = MockPipeline()
+    pipeline.config = {"paths": {"sources": [{"path": str(source_root), "recursive": False, "enabled": True}]}}
+    pipeline.source_dir = str(source_root)
+    pipeline.output_root = ""
+    pipeline.total_files = 0
+    pipeline.processed_count = 0
+    pipeline._progress_callback = None
+    pipeline.existing_hashes = set()
+
+    stop_state = {"requested": False}
+    pipeline.set_stop_checker(lambda: stop_state["requested"])
+
+    processed = []
+
+    def process_image(provider, entry, meta):
+        processed.append(entry.name)
+        stop_state["requested"] = True
+
+    pipeline.process_image = process_image
+
+    history = []
+    pipeline.db = SimpleNamespace(
+        get_all_hashes=lambda: set(),
+        add_scan_history=lambda record: history.append(record),
+    )
+
+    class FakeProvider:
+        def __init__(self, base_dir):
+            self.base_dir = base_dir
+
+        def exists(self, path):
+            return True
+
+        def get_local_path(self, path):
+            return path
+
+        def list_dir(self, path, recursive=False):
+            return [_make_entry(valid_a), _make_entry(valid_b)]
+
+    class FakeParser:
+        def __init__(self, source_root_abs, structure_pattern):
+            self.source_root_abs = source_root_abs
+            self.structure_pattern = structure_pattern
+
+        def parse(self, entry_path):
+            return {"captured_date": "20260320", "location_tag": "Beijing"}
+
+    class ImmediateExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn, *args, **kwargs):
+            fn(*args, **kwargs)
+            return SimpleNamespace(done=lambda: True)
+
+    monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
+    monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
+    monkeypatch.setattr("src.pipeline_runner.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("src.pipeline_runner.wait", lambda futures, timeout=None: (list(futures), []))
+
+    pipeline.run(existing_hashes=set())
+
+    assert processed == ["a.jpg"]
+    assert history[0]["processed_count"] == 1
+    assert history[0]["status"] == "Stopped"
+
+
+def test_run_by_folders_stops_submitting_new_tasks_when_stop_requested(tmp_path, monkeypatch):
+    source_root = tmp_path / "source"
+    target_folder = source_root / "trip"
+    target_folder.mkdir(parents=True)
+    valid_a = target_folder / "a.jpg"
+    valid_b = target_folder / "b.jpg"
+    valid_a.write_bytes(b"a")
+    valid_b.write_bytes(b"b")
+
+    pipeline = MockPipeline()
+    pipeline.config = {"paths": {"sources": [{"path": str(source_root), "enabled": True}]}}
+    pipeline.source_dir = str(source_root)
+    pipeline.output_root = ""
+    pipeline.total_files = 0
+    pipeline.processed_count = 0
+    pipeline._progress_callback = None
+    pipeline.existing_hashes = None
+
+    stop_state = {"requested": False}
+    pipeline.set_stop_checker(lambda: stop_state["requested"])
+
+    processed = []
+
+    def process_image(provider, entry, meta):
+        processed.append(entry.name)
+        stop_state["requested"] = True
+
+    pipeline.process_image = process_image
+
+    history = []
+    pipeline.db = SimpleNamespace(
+        get_all_hashes=lambda: set(),
+        add_scan_history=lambda record: history.append(record),
+    )
+    pipeline._scan_folder_recursive = lambda provider, folder_path: [_make_entry(valid_a), _make_entry(valid_b)]
+
+    class FakeProvider:
+        def __init__(self, base_dir):
+            self.base_dir = base_dir
+
+        def exists(self, path):
+            return True
+
+        def list_dir(self, path, recursive=False):
+            return []
+
+    class FakeParser:
+        def __init__(self, source_root_abs, structure_pattern):
+            self.source_root_abs = source_root_abs
+
+        def parse(self, entry_path):
+            return {"captured_date": "20260322", "location_tag": "Trip"}
+
+    class ImmediateExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn, *args, **kwargs):
+            fn(*args, **kwargs)
+            return SimpleNamespace(done=lambda: True)
+
+    monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
+    monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
+    monkeypatch.setattr("src.pipeline_runner.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("src.pipeline_runner.wait", lambda futures, timeout=None: (list(futures), []))
+
+    pipeline.run_by_folders([str(target_folder)], recursive=True)
+
+    assert processed == ["a.jpg"]
+    assert history[0]["processed_count"] == 1
+    assert history[0]["status"] == "Stopped"

@@ -23,11 +23,13 @@ def test_task_manager_start_pipeline_starts_background_thread(monkeypatch):
     monkeypatch.setattr(web_app.threading, "Thread", fake_thread)
 
     manager = web_app.TaskManager()
+    manager.should_stop = True
 
     result = manager.start_pipeline("20260101", "20260131")
 
     assert result is True
     assert manager.is_running is True
+    assert manager.should_stop is False
     assert manager.logs == ["Starting pipeline..."]
     assert len(created_threads) == 1
     assert created_threads[0].target == manager._run_pipeline_thread
@@ -47,11 +49,13 @@ def test_task_manager_start_pipeline_by_folders_starts_background_thread(monkeyp
     monkeypatch.setattr(web_app.threading, "Thread", fake_thread)
 
     manager = web_app.TaskManager()
+    manager.should_stop = True
 
     result = manager.start_pipeline_by_folders(["D:/photos/trip"], recursive=False)
 
     assert result is True
     assert manager.is_running is True
+    assert manager.should_stop is False
     assert manager.logs == ["Starting pipeline for selected folders..."]
     assert len(created_threads) == 1
     assert created_threads[0].target == manager._run_pipeline_thread_by_folders
@@ -120,6 +124,35 @@ def test_start_pipeline_by_folders_endpoint_rejects_when_running(monkeypatch):
     )
 
     assert response == {"status": "error", "message": "Pipeline already running"}
+
+
+def test_stop_pipeline_endpoint_sets_stop_flag(monkeypatch):
+    class StubTaskManager:
+        def __init__(self):
+            self.is_running = True
+            self.stop_called = False
+
+        def stop(self):
+            self.stop_called = True
+
+    manager = StubTaskManager()
+    monkeypatch.setattr(web_app, "task_manager", manager)
+
+    response = web_app.stop_pipeline()
+
+    assert response == {"status": "success", "message": "Pipeline stop requested"}
+    assert manager.stop_called is True
+
+
+def test_stop_pipeline_endpoint_rejects_when_not_running(monkeypatch):
+    class StubTaskManager:
+        is_running = False
+
+    monkeypatch.setattr(web_app, "task_manager", StubTaskManager())
+
+    response = web_app.stop_pipeline()
+
+    assert response == {"status": "error", "message": "Pipeline is not running"}
 
 
 def test_build_folder_tree_filters_system_directories(tmp_path):

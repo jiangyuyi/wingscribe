@@ -65,6 +65,7 @@ class TaskManager:
             return False
 
         self.is_running = True
+        self.should_stop = False
         self.logs = ["Starting pipeline..."]
         logger.info("[TaskManager] Pipeline flag set, starting thread...")
 
@@ -82,6 +83,7 @@ class TaskManager:
             return False
 
         self.is_running = True
+        self.should_stop = False
         self.logs = ["Starting pipeline for selected folders..."]
         logger.info("[TaskManager] Pipeline flag set, starting thread...")
 
@@ -110,6 +112,7 @@ class TaskManager:
             def progress_callback(processed, total):
                 self.logs.append(f"[PROGRESS] {processed}/{total}")
             runner.set_progress_callback(progress_callback)
+            runner.set_stop_checker(lambda: self.should_stop)
 
             self.logs.append("Pipeline initialized, processing selected folders...")
 
@@ -142,6 +145,7 @@ class TaskManager:
             def progress_callback(processed, total):
                 self.logs.append(f"[PROGRESS] {processed}/{total}")
             runner.set_progress_callback(progress_callback)
+            runner.set_stop_checker(lambda: self.should_stop)
 
             self.logs.append("Pipeline initialized, starting processing...")
 
@@ -625,6 +629,15 @@ def start_pipeline_by_folders(req: StartPipelineByFoldersRequest):
     logger.info(f"Starting pipeline by folders: {req.paths}, recursive={req.recursive}")
     task_manager.start_pipeline_by_folders(req.paths, req.recursive)
     return {"status": "success", "message": f"Pipeline started for {len(req.paths)} folder(s)"}
+
+
+@app.post("/api/pipeline/stop")
+def stop_pipeline():
+    if not task_manager.is_running:
+        return {"status": "error", "message": "Pipeline is not running"}
+
+    task_manager.stop()
+    return {"status": "success", "message": "Pipeline stop requested"}
 
 @app.websocket("/ws/progress")
 async def websocket_endpoint(websocket: WebSocket):

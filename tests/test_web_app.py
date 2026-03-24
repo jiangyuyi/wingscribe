@@ -1,7 +1,9 @@
 import asyncio
 from pathlib import Path
+from unittest.mock import ANY
 
 import pytest
+import yaml
 
 from src.metadata.ioc_manager import IOCManager
 from src.web import app as web_app
@@ -27,6 +29,16 @@ def _create_test_manager(db_path: Path, source_root: Path, processed_root: Path)
     )
 
 
+class TemplateRecorder:
+    def __init__(self):
+        self.calls = []
+
+    def TemplateResponse(self, template_name, context):
+        payload = {"template": template_name, "context": context}
+        self.calls.append(payload)
+        return payload
+
+
 def test_resolve_processed_web_path_uses_processed_root(tmp_path, monkeypatch):
     processed_root = tmp_path / "processed"
     processed_root.mkdir()
@@ -35,6 +47,153 @@ def test_resolve_processed_web_path_uses_processed_root(tmp_path, monkeypatch):
     result = web_app.resolve_processed_web_path("birds/output.jpg")
 
     assert result == "/processed/birds/output.jpg"
+
+
+def test_index_redirects_to_settings_when_first_run(monkeypatch):
+    templates = TemplateRecorder()
+    monkeypatch.setattr(web_app, "templates", templates)
+    monkeypatch.setattr(web_app, "is_first_run", lambda: True)
+    monkeypatch.setattr(web_app, "is_paths_configured", lambda: False)
+
+    result = web_app.index(request=object())
+
+    assert result == {
+        "template": "settings.html",
+        "context": {"request": ANY, "is_first_run": True},
+    }
+
+
+def test_index_builds_photo_page_and_pagination(monkeypatch):
+    templates = TemplateRecorder()
+
+    class StubCursor:
+        def __init__(self):
+            self.executed = []
+            self._last_sql = None
+
+        def execute(self, sql, params=None):
+            self._last_sql = sql
+            self.executed.append((sql, list(params or [])))
+
+        def fetchone(self):
+            if "COUNT(*) FROM photos" in self._last_sql:
+                return (4,)
+            raise AssertionError(f"unexpected fetchone for {self._last_sql}")
+
+        def fetchall(self):
+            if "SELECT * FROM photos" in self._last_sql:
+                return [
+                    {
+                        "id": 3,
+                        "original_path": "raw/a.jpg",
+                        "file_path": "processed/a.jpg",
+                        "captured_date": "20260320",
+                    },
+                    {
+                        "id": 2,
+                        "original_path": "raw/b.jpg",
+                        "file_path": "processed/b.jpg",
+                        "captured_date": "20260319",
+                    },
+                ]
+            if "SELECT DISTINCT captured_date" in self._last_sql:
+                return [("20260320",), ("20260319",), (None,)]
+            raise AssertionError(f"unexpected fetchall for {self._last_sql}")
+
+    class StubConn:
+        def __init__(self):
+            self.cursor_obj = StubCursor()
+            self.closed = False
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def close(self):
+            self.closed = True
+
+    conn = StubConn()
+    monkeypatch.setattr(web_app, "templates", templates)
+    monkeypatch.setattr(web_app, "is_first_run", lambda: False)
+    monkeypatch.setattr(web_app, "is_paths_configured", lambda: True)
+    monkeypatch.setattr(web_app, "get_db_conn", lambda: conn)
+    monkeypatch.setattr(web_app, "resolve_web_path", lambda path: f"/raw/{path}")
+    monkeypatch.setattr(web_app, "resolve_processed_web_path", lambda path: f"/processed/{path}")
+
+    result = web_app.index(
+        request=object(),
+        q="sparrow",
+        filter="uncertain",
+        date="20260320",
+        limit=2,
+        offset=1,
+    )
+
+    assert result["template"] == "index.html"
+    context = result["context"]
+    assert context["query"] == "sparrow"
+    assert context["current_filter"] == "uncertain"
+    assert context["current_date"] == "20260320"
+    assert context["available_dates"] == ["20260320", "20260319"]
+    assert context["has_next"] is True
+    assert context["has_prev"] is True
+    assert context["next_offset"] == 3
+    assert context["prev_offset"] == 0
+    assert context["photos"] == [
+        {
+            "id": 3,
+            "original_path": "raw/a.jpg",
+            "file_path": "processed/a.jpg",
+            "captured_date": "20260320",
+            "web_raw_path": "/raw/raw/a.jpg",
+            "web_processed_path": "/processed/processed/a.jpg",
+        },
+        {
+            "id": 2,
+            "original_path": "raw/b.jpg",
+            "file_path": "processed/b.jpg",
+            "captured_date": "20260319",
+            "web_raw_path": "/raw/raw/b.jpg",
+            "web_processed_path": "/processed/processed/b.jpg",
+        },
+    ]
+    assert conn.closed is True
+    assert conn.cursor_obj.executed[0][1] == [
+        "%sparrow%",
+        "%sparrow%",
+        "%sparrow%",
+        "%sparrow%",
+        "待确认鸟种",
+        "Uncertain",
+        "20260320",
+    ]
+    assert conn.cursor_obj.executed[1][1][-2:] == [2, 1]
+
+
+def test_admin_dashboard_uses_settings_template_when_paths_missing(monkeypatch):
+    templates = TemplateRecorder()
+    monkeypatch.setattr(web_app, "templates", templates)
+    monkeypatch.setattr(web_app, "is_paths_configured", lambda: False)
+
+    result = web_app.admin_dashboard(request=object())
+
+    assert result == {
+        "template": "settings.html",
+        "context": {"request": ANY, "is_first_run": False},
+    }
+
+
+def test_admin_dashboard_renders_stats_when_paths_configured(monkeypatch):
+    templates = TemplateRecorder()
+    monkeypatch.setattr(web_app, "templates", templates)
+    monkeypatch.setattr(web_app, "is_paths_configured", lambda: True)
+    monkeypatch.setattr(web_app, "get_stats", lambda: {"total_photos": 12, "total_species": 4})
+
+    result = web_app.admin_dashboard(request=object())
+
+    assert result == {
+        "template": "admin.html",
+        "context": {"request": ANY, "stats": {"total_photos": 12, "total_species": 4}},
+    }
 
 
 def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monkeypatch):
@@ -393,6 +552,134 @@ def test_browse_folder_and_file_api_return_success_and_error(monkeypatch):
 
     assert folder_error == {"error": "dialog unavailable", "path": None}
     assert file_error == {"error": "dialog unavailable", "path": None}
+
+
+def test_download_raw_returns_guidance_message():
+    assert web_app.download_raw("raw/a.jpg") == {"error": "Use context menu to save image"}
+
+
+def test_reset_system_clears_processed_and_reimports_taxonomy(tmp_path, monkeypatch):
+    base_dir = tmp_path / "repo"
+    base_dir.mkdir()
+    processed_root = tmp_path / "processed"
+    processed_root.mkdir()
+    (processed_root / "bird.jpg").write_bytes(b"processed")
+    nested_dir = processed_root / "nested"
+    nested_dir.mkdir()
+    (nested_dir / "keep.txt").write_text("x", encoding="utf-8")
+
+    db_root = tmp_path / "db"
+    db_root.mkdir()
+    db_file = db_root / "wingscribe.db"
+    db_file.write_text("db", encoding="utf-8")
+
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+
+    init_calls = []
+
+    class StubConn:
+        def execute(self, sql):
+            class StubResult:
+                def fetchone(self_inner):
+                    return (0,)
+
+            return StubResult()
+
+    class StubManager:
+        def __init__(self):
+            self.conn = StubConn()
+            self.import_calls = []
+            self.closed = False
+
+        def import_from_excel(self, excel_path, refs_dir):
+            self.import_calls.append((excel_path, refs_dir))
+
+        def close(self):
+            self.closed = True
+
+    manager = StubManager()
+    monkeypatch.setattr(web_app, "BASE_DIR", base_dir)
+    monkeypatch.setattr(web_app, "processed_dir", processed_root)
+    monkeypatch.setattr(web_app, "db_path", db_file)
+    monkeypatch.setattr(
+        web_app,
+        "config",
+        {
+            "paths": {
+                "sources": [{"path": str(source_root)}],
+                "references_path": "data/references",
+                "ioc_list_path": "data/references/ioc.xlsx",
+            }
+        },
+    )
+    monkeypatch.setattr(web_app, "init_app_db", lambda: init_calls.append("called"))
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: manager)
+
+    result = web_app.reset_system()
+
+    assert result == {"status": "success"}
+    assert init_calls == ["called"]
+    assert manager.import_calls == [
+        (
+            str(base_dir / "data/references/ioc.xlsx"),
+            str(base_dir / "data/references"),
+        )
+    ]
+    assert manager.closed is True
+    assert list(processed_root.iterdir()) == []
+    assert not db_file.exists()
+
+
+def test_rebuild_species_stats_returns_success(monkeypatch):
+    class StubManager:
+        def __init__(self):
+            self.rebuilt = False
+            self.closed = False
+
+        def rebuild_species_stats(self):
+            self.rebuilt = True
+
+        def close(self):
+            self.closed = True
+
+    manager = StubManager()
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: manager)
+
+    result = web_app.rebuild_species_stats()
+
+    assert result == {"status": "success", "message": "Species stats table rebuilt"}
+    assert manager.rebuilt is True
+    assert manager.closed is True
+
+
+def test_get_config_returns_first_run_when_settings_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
+
+    result = asyncio.run(web_app.get_config())
+
+    assert result == {"error": "Configuration file not found", "is_first_run": True}
+
+
+def test_get_config_reads_yaml_when_settings_exists(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    settings_path = config_dir / "settings.yaml"
+    settings_path.write_text(
+        yaml.safe_dump({"paths": {"sources": [{"path": "D:/birds"}]}, "web": {"port": 8000}}, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(web_app, "get_config_definition", lambda: {"basic": {"web": []}})
+
+    result = asyncio.run(web_app.get_config())
+
+    assert result == {
+        "config": {"paths": {"sources": [{"path": "D:/birds"}]}, "web": {"port": 8000}},
+        "definition": {"basic": {"web": []}},
+        "is_first_run": False,
+    }
 
 
 def test_get_stats_returns_counts_and_closes_connection(monkeypatch):

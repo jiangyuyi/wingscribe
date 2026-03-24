@@ -93,7 +93,14 @@
   - `src/web/app.py` may still be worth expanding for any remaining photo list/detail/admin routes
 - `src/web/app.py`
   - Added route coverage for stats, taxonomy-photo filtering, and pagination parameter forwarding
-  - Still worth expanding later for any remaining photo list/detail endpoints if the route surface grows
+  - Added route coverage for:
+    - index page first-run redirect and filtered pagination context
+    - admin dashboard template branching
+    - config read endpoint on first-run and normal settings load
+    - raw-download guidance endpoint
+    - reset-system cleanup and taxonomy reimport flow
+    - rebuild-species-stats management endpoint
+  - Current module coverage reached `68%`
 - `src/recognition/inference_dongniao.py`
   - Added coverage for:
     - missing API URL short-circuit

@@ -46,6 +46,10 @@
 - Fixed two real defects in the legacy Dongniao path:
   - `src/recognition/inference_dongniao.py` was missing `predict_batch()`
   - `src/pipeline_runner.py` passed `base_url` to `DongniaoRecognizer`, but the constructor expects `api_url`
+- Hardened the legacy Dongniao recognizer:
+  - short-circuits when `api_url` is missing instead of attempting upload
+  - rejects non-200 upload responses before JSON parsing
+  - skips malformed recognition items instead of failing the whole parse
 - Hardened `IOCManager` for file-backed SQLite pipeline hot paths:
   - hot-path reads/writes now use short-lived operation connections
   - write operations are serialized with a manager-level lock
@@ -91,7 +95,11 @@
   - Added route coverage for stats, taxonomy-photo filtering, and pagination parameter forwarding
   - Still worth expanding later for any remaining photo list/detail endpoints if the route surface grows
 - `src/recognition/inference_dongniao.py`
-  - Still a large low-coverage business module
+  - Added coverage for:
+    - missing API URL short-circuit
+    - upload HTTP error handling
+    - malformed recognition-item skipping
+  - Current module coverage reached `71%`
 - `src/recognition/inference_local.py`
   - Added coverage for:
     - logging-level restoration when `_load_model()` fails

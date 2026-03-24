@@ -14,6 +14,19 @@ def test_predict_returns_empty_without_api_key(tmp_path: Path):
     assert recognizer.predict(str(image_path)) == []
 
 
+def test_predict_returns_empty_without_api_url(tmp_path: Path, monkeypatch):
+    image_path = tmp_path / "bird.jpg"
+    image_path.write_bytes(b"image")
+    recognizer = DongniaoRecognizer("secret", "")
+
+    def fake_upload(*args, **kwargs):
+        raise AssertionError("upload should not be attempted without api url")
+
+    monkeypatch.setattr(recognizer, "_upload_image", fake_upload)
+
+    assert recognizer.predict(str(image_path)) == []
+
+
 def test_upload_image_accepts_flat_list_response(tmp_path: Path, monkeypatch):
     image_path = tmp_path / "bird.jpg"
     image_path.write_bytes(b"image")
@@ -28,6 +41,23 @@ def test_upload_image_accepts_flat_list_response(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("requests.post", lambda *args, **kwargs: StubResponse())
 
     assert recognizer._upload_image(str(image_path)) == "rec-123"
+
+
+def test_upload_image_returns_none_on_http_error(tmp_path: Path, monkeypatch):
+    image_path = tmp_path / "bird.jpg"
+    image_path.write_bytes(b"image")
+    recognizer = DongniaoRecognizer("secret", "https://example.com/api")
+
+    class StubResponse:
+        status_code = 500
+        text = "server error"
+
+        def json(self):
+            raise AssertionError("json should not be parsed on http failure")
+
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: StubResponse())
+
+    assert recognizer._upload_image(str(image_path)) is None
 
 
 def test_upload_image_accepts_dict_response(tmp_path: Path, monkeypatch):
@@ -96,6 +126,17 @@ def test_parse_result_extracts_scientific_name_and_confidence():
     )
 
     assert results == [{"scientific_name": "Sci name", "confidence": 0.985}]
+
+
+def test_parse_result_skips_malformed_items():
+    recognizer = DongniaoRecognizer.__new__(DongniaoRecognizer)
+
+    results = recognizer._parse_result(
+        [{"list": [["bad-score", "Name"], ["only-one-field"], None, [88.0, "中文|English|Sci"]]}],
+        top_k=4,
+    )
+
+    assert results == [{"scientific_name": "Sci", "confidence": 0.88}]
 
 
 def test_predict_batch_processes_each_image(tmp_path: Path, monkeypatch):

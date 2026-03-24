@@ -100,7 +100,11 @@
     - raw-download guidance endpoint
     - reset-system cleanup and taxonomy reimport flow
     - rebuild-species-stats management endpoint
-  - Current module coverage reached `68%`
+    - processed-file serving success and 404 branches
+    - settings page template rendering
+    - restart endpoint success and spawn-failure handling
+    - websocket progress streaming with graceful cancellation
+  - Current module coverage reached `71%`
 - `src/recognition/inference_dongniao.py`
   - Added coverage for:
     - missing API URL short-circuit

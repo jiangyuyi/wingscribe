@@ -49,6 +49,30 @@ def test_resolve_processed_web_path_uses_processed_root(tmp_path, monkeypatch):
     assert result == "/processed/birds/output.jpg"
 
 
+def test_serve_processed_file_returns_file_response_for_existing_file(tmp_path, monkeypatch):
+    processed_root = tmp_path / "processed"
+    processed_root.mkdir()
+    image_path = processed_root / "birds" / "output.jpg"
+    image_path.parent.mkdir()
+    image_path.write_bytes(b"image")
+    monkeypatch.setattr(web_app, "processed_dir", processed_root)
+
+    response = web_app.serve_processed_file("birds/output.jpg")
+
+    assert Path(response.path) == image_path
+
+
+def test_serve_processed_file_raises_404_for_missing_file(tmp_path, monkeypatch):
+    processed_root = tmp_path / "processed"
+    processed_root.mkdir()
+    monkeypatch.setattr(web_app, "processed_dir", processed_root)
+
+    with pytest.raises(web_app.HTTPException) as exc_info:
+        web_app.serve_processed_file("birds/missing.jpg")
+
+    assert exc_info.value.status_code == 404
+
+
 def test_index_redirects_to_settings_when_first_run(monkeypatch):
     templates = TemplateRecorder()
     monkeypatch.setattr(web_app, "templates", templates)
@@ -194,6 +218,15 @@ def test_admin_dashboard_renders_stats_when_paths_configured(monkeypatch):
         "template": "admin.html",
         "context": {"request": ANY, "stats": {"total_photos": 12, "total_species": 4}},
     }
+
+
+def test_settings_page_renders_template(monkeypatch):
+    templates = TemplateRecorder()
+    monkeypatch.setattr(web_app, "templates", templates)
+
+    result = asyncio.run(web_app.settings_page())
+
+    assert result == {"template": "settings.html", "context": {"request": {}}}
 
 
 def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monkeypatch):
@@ -680,6 +713,104 @@ def test_get_config_reads_yaml_when_settings_exists(tmp_path, monkeypatch):
         "definition": {"basic": {"web": []}},
         "is_first_run": False,
     }
+
+
+def test_restart_server_returns_restarting_status(monkeypatch, tmp_path):
+    base_dir = tmp_path / "repo"
+    base_dir.mkdir()
+    popen_calls = {}
+    thread_calls = {}
+
+    class StubThread:
+        def __init__(self, target=None, daemon=None):
+            thread_calls["target"] = target
+            thread_calls["daemon"] = daemon
+            thread_calls["started"] = False
+
+        def start(self):
+            thread_calls["started"] = True
+
+    def fake_popen(cmd, cwd, creationflags):
+        popen_calls["cmd"] = cmd
+        popen_calls["cwd"] = cwd
+        popen_calls["creationflags"] = creationflags
+
+    monkeypatch.setattr(web_app, "BASE_DIR", base_dir)
+    monkeypatch.setattr(web_app, "_startup_host", "127.0.0.1")
+    monkeypatch.setattr(web_app, "_startup_port", 9000)
+    monkeypatch.setattr(web_app, "_startup_python", "python-test")
+    monkeypatch.setattr(web_app, "config", {"web": {"host": "0.0.0.0", "port": 8000}})
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr("threading.Thread", StubThread)
+
+    result = asyncio.run(web_app.restart_server())
+
+    assert result == {"status": "restarting", "message": "Server restarting..."}
+    assert popen_calls == {
+        "cmd": [
+            "python-test",
+            str(base_dir / "src" / "web" / "app.py"),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+        ],
+        "cwd": str(base_dir),
+        "creationflags": ANY,
+    }
+    assert thread_calls["daemon"] is True
+    assert thread_calls["started"] is True
+
+
+def test_restart_server_returns_error_when_spawn_fails(monkeypatch, tmp_path):
+    base_dir = tmp_path / "repo"
+    base_dir.mkdir()
+
+    class StubThread:
+        def __init__(self, target=None, daemon=None):
+            raise AssertionError("exit thread should not be created when spawn fails")
+
+    def fail_popen(*args, **kwargs):
+        raise RuntimeError("spawn failed")
+
+    monkeypatch.setattr(web_app, "BASE_DIR", base_dir)
+    monkeypatch.setattr(web_app, "_startup_host", "127.0.0.1")
+    monkeypatch.setattr(web_app, "_startup_port", 9000)
+    monkeypatch.setattr(web_app, "_startup_python", "python-test")
+    monkeypatch.setattr(web_app, "config", {"web": {"host": "0.0.0.0", "port": 8000}})
+    monkeypatch.setattr("subprocess.Popen", fail_popen)
+    monkeypatch.setattr("threading.Thread", StubThread)
+
+    result = asyncio.run(web_app.restart_server())
+
+    assert result == {"error": "spawn failed"}
+
+
+def test_websocket_endpoint_sends_new_logs_and_handles_cancel(monkeypatch):
+    accepted = {"value": False}
+    sent = []
+
+    class StubWebSocket:
+        async def accept(self):
+            accepted["value"] = True
+
+        async def send_text(self, text):
+            sent.append(text)
+
+    sleep_calls = {"count": 0}
+
+    async def fake_sleep(_seconds):
+        sleep_calls["count"] += 1
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(web_app.task_manager, "logs", ["log-1", "log-2"])
+    monkeypatch.setattr(web_app.asyncio, "sleep", fake_sleep)
+
+    asyncio.run(web_app.websocket_endpoint(StubWebSocket()))
+
+    assert accepted["value"] is True
+    assert sent == ["log-1", "log-2"]
+    assert sleep_calls["count"] == 1
 
 
 def test_get_stats_returns_counts_and_closes_connection(monkeypatch):

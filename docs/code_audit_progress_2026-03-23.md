@@ -76,6 +76,11 @@
 
 ## Remaining high-value areas
 
+- Current known remaining work:
+  - `src/metadata/ioc_manager.py` still uses a long-lived SQLite connection model that is shared inside pipeline worker execution
+  - `src/recognition/inference_local.py` still needs deeper coverage on model-loading and fallback branches
+  - `src/recognition/inference_dongniao.py` still has large uncovered business branches
+  - `src/web/app.py` may still be worth expanding for any remaining photo list/detail/admin routes
 - `src/web/app.py`
   - Added route coverage for stats, taxonomy-photo filtering, and pagination parameter forwarding
   - Still worth expanding later for any remaining photo list/detail endpoints if the route surface grows
@@ -95,4 +100,10 @@
     - `WingScribePipeline` now receives a stop checker and stops submitting new work when a stop is requested
     - already-submitted tasks are allowed to finish naturally, and scan history is recorded as `Stopped`
 - `IOCManager` connection model
+  - Confirmed risk points:
+    - `IOCManager` opens one SQLite connection in `__init__` with `check_same_thread=False`
+    - `WingScribePipeline` holds one long-lived `self.db = IOCManager(...)`
+    - pipeline worker threads call into `self.db.get_bird_info()` and `self.db.add_photo_record()` from `_archive_item()`
+    - write paths also call `update_species_stats_for_photo()` and `commit()` on the same shared connection
+    - Web routes are mostly lower risk because they create and close a fresh `IOCManager` per request
   - Still worth a dedicated concurrency refactor later

@@ -27,6 +27,11 @@ from src.utils.config_loader import load_config, validate_paths_config
 from src.core.io.path_generator import PathGenerator # Added import
 from src.web.routes.recognition import router as recognition_router
 from src.web.task_manager import TaskManager as ExtractedTaskManager
+from src.web.config_helpers import (
+    get_config_definition as _extracted_get_config_definition,
+    get_nested_value as _extracted_get_nested_value,
+    set_nested_value as _extracted_set_nested_value,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1297,6 +1302,10 @@ def set_nested_value(obj, key_path, value):
         current[array_key][index] = value
     else:
         current[final_key] = value
+
+get_config_definition = _extracted_get_config_definition
+get_nested_value = _extracted_get_nested_value
+set_nested_value = _extracted_set_nested_value
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page():

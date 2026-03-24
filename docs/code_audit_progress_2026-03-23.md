@@ -21,8 +21,8 @@
 
 - `python -m pytest tests/test_cloud_recognizers.py -v`
 - `python -m pytest`
-- Result: `145 passed, 1 skipped`
-- Total coverage: `51%`
+- Result: `192 passed, 1 skipped`
+- Total coverage: `62%`
 
 ## Later rounds
 
@@ -44,17 +44,25 @@
 - Fixed two real defects in the legacy Dongniao path:
   - `src/recognition/inference_dongniao.py` was missing `predict_batch()`
   - `src/pipeline_runner.py` passed `base_url` to `DongniaoRecognizer`, but the constructor expects `api_url`
+- Hardened `IOCManager` for file-backed SQLite pipeline hot paths:
+  - hot-path reads/writes now use short-lived operation connections
+  - write operations are serialized with a manager-level lock
+  - `add_photo_record()` and species-stats updates stay in one short transaction
+- Extended local recognizer coverage and fixed two resource-safety issues:
+  - `_load_model()` now restores logger levels even when loading fails midway
+  - `_do_predict()` and `_do_predict_batch()` now close image handles deterministically
 
 ## Current validated state
 
 - Latest full test run:
   - `python -m pytest`
-  - Result: `168 passed, 1 skipped`
-  - Total coverage: `55%`
+  - Result: `192 passed, 1 skipped`
+  - Total coverage: `62%`
 - Recent commits on this branch:
   - `e7f7fd6` `优化: 收口审查修复与测试补强`
   - `1c63cd5` `测试: 补云工厂与API识别覆盖`
   - `5c4a935` `测试: 补懂鸟识别链路覆盖`
+  - `684fc55` `修复: 降低IOC数据库长连接并发风险`
 
 ## Compressed context
 
@@ -66,32 +74,28 @@
   - pipeline no longer mixes candidate labels across images in threaded runs
   - cloud recognizers now load local files and remote URLs correctly
   - legacy API and Dongniao recognizers can now be instantiated because `predict_batch()` exists
-- Current high-value remaining work:
-  - `src/recognition/inference_local.py` still has very low coverage
-  - `src/web/app.py` still has broad uncovered route surface
-  - `TaskManager.should_stop` is still a pseudo-stop flag
-  - `IOCManager` still uses a long-lived SQLite connection model worth refactoring later
+  - cooperative stop now works and stops submitting new work
+  - file-backed IOC hot paths no longer share one SQLite connection across pipeline worker threads
 - Important local-only note:
   - `config/settings.yaml` contains local machine path changes and is intentionally left uncommitted
 
 ## Remaining high-value areas
 
 - Current known remaining work:
-  - `src/metadata/ioc_manager.py` still uses a long-lived SQLite connection model that is shared inside pipeline worker execution
-  - `src/recognition/inference_local.py` still needs deeper coverage on model-loading and fallback branches
+  - `src/recognition/inference_local.py` still has some uncovered model-loading compatibility branches
   - `src/recognition/inference_dongniao.py` still has large uncovered business branches
   - `src/web/app.py` may still be worth expanding for any remaining photo list/detail/admin routes
 - `src/web/app.py`
   - Added route coverage for stats, taxonomy-photo filtering, and pagination parameter forwarding
   - Still worth expanding later for any remaining photo list/detail endpoints if the route surface grows
-- `src/recognition/cloud/factory.py`
-  - Still needs direct tests for platform creation and default config extraction
-- `src/recognition/inference_api.py`
-  - Low coverage and overlaps conceptually with cloud recognition paths
 - `src/recognition/inference_dongniao.py`
   - Still a large low-coverage business module
 - `src/recognition/inference_local.py`
-  - Still a large low-coverage business module
+  - Added coverage for:
+    - logging-level restoration when `_load_model()` fails
+    - closing image handles in `_do_predict_batch()`
+    - closing image handles in `_do_predict()`
+  - Current module coverage reached `67%`
 - `TaskManager.should_stop`
   - Fixed into a cooperative stop path
   - Current behavior:

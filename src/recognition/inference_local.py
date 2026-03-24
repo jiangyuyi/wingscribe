@@ -144,60 +144,61 @@ class LocalBirdRecognizer(BirdRecognizer):
         use_local = ckpt_path.exists()
 
         try:
-            if use_local:
-                logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
-                self.model, _, self.preprocess = oc.create_model_and_transforms(
-                    'ViT-B-16',
-                    pretrained=str(ckpt_path),
-                    **model_kwargs
-                )
-            else:
-                logging.info(f"Local checkpoint not found at {ckpt_path}, loading from Hub: {self.model_id}")
-                self.model, _, self.preprocess = oc.create_model_and_transforms(
-                    self.model_id,
-                    **model_kwargs
-                )
-        except TypeError as e:
-            error_msg = str(e)
-            # Strategy 2: Remove device parameter (older versions)
-            if 'device' in error_msg or 'unexpected keyword argument' in error_msg:
-                logging.warning(f"open_clip doesn't support 'device' param: {e}. Trying without device...")
-                model_kwargs.pop("device", None)
-                try:
-                    if use_local:
-                        self.model, _, self.preprocess = oc.create_model_and_transforms(
-                            'ViT-B-16',
-                            pretrained=str(ckpt_path),
-                            **model_kwargs
-                        )
-                    else:
-                        self.model, _, self.preprocess = oc.create_model_and_transforms(
-                            self.model_id,
-                            **model_kwargs
-                        )
-                    self.model.to(self.device)
-                except TypeError as e2:
-                    # Strategy 3: Remove precision parameter as well
-                    logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
-                    model_kwargs.pop("precision", None)
+            try:
+                if use_local:
+                    logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
                     self.model, _, self.preprocess = oc.create_model_and_transforms(
-                        self.model_id if not use_local else 'ViT-B-16',
-                        pretrained=str(ckpt_path) if use_local else self.model_id
+                        'ViT-B-16',
+                        pretrained=str(ckpt_path),
+                        **model_kwargs
                     )
-                    self.model.to(self.device)
-            else:
-                raise e
-        
-        # Ensure tokenizer is ready
-        self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
+                else:
+                    logging.info(f"Local checkpoint not found at {ckpt_path}, loading from Hub: {self.model_id}")
+                    self.model, _, self.preprocess = oc.create_model_and_transforms(
+                        self.model_id,
+                        **model_kwargs
+                    )
+            except TypeError as e:
+                error_msg = str(e)
+                # Strategy 2: Remove device parameter (older versions)
+                if 'device' in error_msg or 'unexpected keyword argument' in error_msg:
+                    logging.warning(f"open_clip doesn't support 'device' param: {e}. Trying without device...")
+                    model_kwargs.pop("device", None)
+                    try:
+                        if use_local:
+                            self.model, _, self.preprocess = oc.create_model_and_transforms(
+                                'ViT-B-16',
+                                pretrained=str(ckpt_path),
+                                **model_kwargs
+                            )
+                        else:
+                            self.model, _, self.preprocess = oc.create_model_and_transforms(
+                                self.model_id,
+                                **model_kwargs
+                            )
+                        self.model.to(self.device)
+                    except TypeError as e2:
+                        # Strategy 3: Remove precision parameter as well
+                        logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
+                        model_kwargs.pop("precision", None)
+                        self.model, _, self.preprocess = oc.create_model_and_transforms(
+                            self.model_id if not use_local else 'ViT-B-16',
+                            pretrained=str(ckpt_path) if use_local else self.model_id
+                        )
+                        self.model.to(self.device)
+                else:
+                    raise e
 
-        # Restore logging levels
-        for logger, level in _verbose_loggers:
-            if logger is None:
-                # Restore root logger level
-                logging.getLogger().setLevel(level)
-            else:
-                logger.setLevel(level)
+            # Ensure tokenizer is ready
+            self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
+        finally:
+            # Restore logging levels even if model loading fails midway
+            for logger, level in _verbose_loggers:
+                if logger is None:
+                    # Restore root logger level
+                    logging.getLogger().setLevel(level)
+                else:
+                    logger.setLevel(level)
 
         # Verify model device
         try:
@@ -275,8 +276,8 @@ class LocalBirdRecognizer(BirdRecognizer):
         
         for idx, path in enumerate(image_paths):
             try:
-                img = Image.open(path)
-                tensor = self.preprocess(img)
+                with Image.open(path) as img:
+                    tensor = self.preprocess(img)
                 images_tensors.append(tensor)
                 valid_indices.append(idx)
             except Exception as e:
@@ -349,8 +350,8 @@ class LocalBirdRecognizer(BirdRecognizer):
                 return []
 
     def _do_predict(self, image_path, candidate_labels, top_k):
-        image = Image.open(image_path)
-        image_input = self.preprocess(image).unsqueeze(0).to(self.device)
+        with Image.open(image_path) as image:
+            image_input = self.preprocess(image).unsqueeze(0).to(self.device)
         
         # Get cached or new text features
         text_features = self._get_text_features(candidate_labels)

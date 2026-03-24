@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+import logging
 
+import pytest
 import torch
 from PIL import Image
 
@@ -129,3 +131,108 @@ def test_predict_falls_back_to_cpu_on_cuda_error():
     assert recognizer.device == "cpu"
     assert recognizer.model.to_calls == ["cpu"]
     assert recognizer.cached_text_features is None
+
+
+def test_load_model_restores_logging_levels_after_failure(monkeypatch, tmp_path: Path):
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.model_type_slug = "bioclip"
+    recognizer.model_id = "hf-hub:imageomics/bioclip"
+
+    root_logger = logging.getLogger()
+    factory_logger = logging.getLogger("open_clip.factory")
+    httpx_logger = logging.getLogger("httpx")
+    original_levels = (root_logger.level, factory_logger.level, httpx_logger.level)
+
+    class FakeOpenClip:
+        def create_model_and_transforms(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("src.recognition.inference_local._get_open_clip", lambda: FakeOpenClip())
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        recognizer._load_model()
+
+    assert (root_logger.level, factory_logger.level, httpx_logger.level) == original_levels
+
+
+def test_do_predict_batch_closes_image_handles(monkeypatch):
+    class FakeImage:
+        def __init__(self, name):
+            self.name = name
+            self.closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.close()
+            return False
+
+        def close(self):
+            self.closed = True
+
+    opened = []
+
+    def fake_open(path):
+        image = FakeImage(path)
+        opened.append(image)
+        return image
+
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.preprocess = lambda image: torch.tensor([1.0, 0.0], dtype=torch.float32)
+    recognizer.model = _FakeModel()
+    recognizer._get_text_features = lambda labels: torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0]],
+        dtype=torch.float32,
+    )
+
+    monkeypatch.setattr("src.recognition.inference_local.Image.open", fake_open)
+
+    results = recognizer._do_predict_batch(["a.jpg", "b.jpg"], ["sparrow", "robin"], top_k=1)
+
+    assert len(results) == 2
+    assert all(image.closed for image in opened)
+
+
+def test_do_predict_closes_image_handle(monkeypatch):
+    class FakeImage:
+        def __init__(self, name):
+            self.name = name
+            self.closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.close()
+            return False
+
+        def close(self):
+            self.closed = True
+
+    opened = []
+
+    def fake_open(path):
+        image = FakeImage(path)
+        opened.append(image)
+        return image
+
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.preprocess = lambda image: torch.tensor([1.0, 0.0], dtype=torch.float32)
+    recognizer.model = _FakeModel()
+    recognizer._get_text_features = lambda labels: torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0]],
+        dtype=torch.float32,
+    )
+
+    monkeypatch.setattr("src.recognition.inference_local.Image.open", fake_open)
+
+    result = recognizer._do_predict("a.jpg", ["sparrow", "robin"], top_k=1)
+
+    assert result[0]["scientific_name"] == "sparrow"
+    assert opened[0].closed is True

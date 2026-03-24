@@ -24,9 +24,9 @@ sys.path.append(str(BASE_DIR))
 from src.metadata.ioc_manager import IOCManager
 from src.metadata.exif_writer import ExifWriter # Added import
 from src.utils.config_loader import load_config, validate_paths_config
-from src.pipeline_runner import WingScribePipeline # Import Pipeline
 from src.core.io.path_generator import PathGenerator # Added import
 from src.web.routes.recognition import router as recognition_router
+from src.web.task_manager import TaskManager as ExtractedTaskManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 exif_writer = ExifWriter()
 
 # --- Task Manager (Background Pipeline) ---
-class TaskManager:
+class _LegacyTaskManager:
     _instance = None
     
     def __init__(self):
@@ -48,7 +48,7 @@ class TaskManager:
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            cls._instance = TaskManager()
+            cls._instance = _LegacyTaskManager()
         return cls._instance
         
     def stop(self):
@@ -168,6 +168,7 @@ class ListLogHandler(logging.Handler):
         msg = self.format(record)
         self.log_list.append(msg)
 
+TaskManager = ExtractedTaskManager
 task_manager = TaskManager.get_instance()
 
 @asynccontextmanager

@@ -1,7 +1,9 @@
+import threading
+from pathlib import Path
+
+import pandas as pd
 import pytest
 import sqlite3
-from pathlib import Path
-import pandas as pd
 from src.metadata.ioc_manager import IOCManager
 
 @pytest.fixture
@@ -396,3 +398,147 @@ def test_import_from_excel_uses_refs_dir_mappings(monkeypatch, tmp_path):
             "english_name": "Eurasian Tree Sparrow",
         },
     ]
+
+
+def test_pipeline_hot_path_methods_do_not_depend_on_shared_self_conn(tmp_path):
+    db_path = tmp_path / "ioc.db"
+    mgr = IOCManager(str(db_path))
+    original_conn = mgr.conn
+    try:
+        original_conn.execute(
+            """
+            INSERT INTO taxonomy (
+                scientific_name, chinese_name, family_cn, order_cn,
+                genus_cn, genus_sci, family_sci, order_sci, english_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Passer montanus", "麻雀", "雀科", "雀形目",
+                "麻雀属", "Passer", "Passeridae", "Passeriformes", "Eurasian Tree Sparrow",
+            ),
+        )
+        original_conn.commit()
+
+        class PoisonConn:
+            def execute(self, *args, **kwargs):
+                raise AssertionError("shared self.conn should not be used here")
+
+            def commit(self):
+                raise AssertionError("shared self.conn should not be used here")
+
+        mgr.conn = PoisonConn()
+
+        assert mgr.get_bird_info("Passer montanus")["chinese_name"] == "麻雀"
+        assert mgr.check_hash_exists("missing") is False
+        assert mgr.get_all_hashes() == set()
+
+        photo_id = mgr.add_photo_record(
+            {
+                "file_path": str(tmp_path / "processed" / "bird.jpg"),
+                "original_path": str(tmp_path / "source" / "bird.jpg"),
+                "filename": "bird.jpg",
+                "file_hash": "hash-1",
+                "captured_date": "20260324",
+                "location_tag": "Park",
+                "primary_bird_cn": "麻雀",
+                "scientific_name": "Passer montanus",
+                "confidence_score": 0.99,
+                "width": 100,
+                "height": 100,
+            }
+        )
+        assert isinstance(photo_id, int)
+
+        mgr.add_scan_history(
+            {
+                "start_time": "2026-03-24T10:00:00",
+                "end_time": "2026-03-24T10:01:00",
+                "range_start": "20260324",
+                "range_end": "20260324",
+                "processed_count": 1,
+                "duration_seconds": 60.0,
+                "status": "Stopped",
+            }
+        )
+
+        verify = sqlite3.connect(str(db_path))
+        try:
+            photo_count = verify.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+            stats_count = verify.execute(
+                "SELECT photo_count FROM species_stats WHERE scientific_name = ?",
+                ("Passer montanus",),
+            ).fetchone()[0]
+            history_count = verify.execute("SELECT COUNT(*) FROM scan_history").fetchone()[0]
+        finally:
+            verify.close()
+
+        assert photo_count == 1
+        assert stats_count == 1
+        assert history_count == 1
+    finally:
+        mgr.conn = original_conn
+        mgr.close()
+
+
+def test_add_photo_record_allows_shared_manager_calls_from_multiple_threads(tmp_path):
+    db_path = tmp_path / "ioc_threads.db"
+    mgr = IOCManager(str(db_path))
+    try:
+        mgr.conn.execute(
+            """
+            INSERT INTO taxonomy (
+                scientific_name, chinese_name, family_cn, order_cn,
+                genus_cn, genus_sci, family_sci, order_sci, english_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Passer montanus", "麻雀", "雀科", "雀形目",
+                "麻雀属", "Passer", "Passeridae", "Passeriformes", "Eurasian Tree Sparrow",
+            ),
+        )
+        mgr.conn.commit()
+
+        errors = []
+
+        def worker(index: int):
+            try:
+                mgr.add_photo_record(
+                    {
+                        "file_path": str(tmp_path / "processed" / f"bird-{index}.jpg"),
+                        "original_path": str(tmp_path / "source" / f"bird-{index}.jpg"),
+                        "filename": f"bird-{index}.jpg",
+                        "file_hash": f"hash-{index}",
+                        "captured_date": "20260324",
+                        "location_tag": "Park",
+                        "primary_bird_cn": "麻雀",
+                        "scientific_name": "Passer montanus",
+                        "confidence_score": 0.99,
+                        "width": 100,
+                        "height": 100,
+                    }
+                )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(idx,)) for idx in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+
+        verify = sqlite3.connect(str(db_path))
+        try:
+            photo_count = verify.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+            stats_count = verify.execute(
+                "SELECT photo_count FROM species_stats WHERE scientific_name = ?",
+                ("Passer montanus",),
+            ).fetchone()[0]
+        finally:
+            verify.close()
+
+        assert photo_count == 4
+        assert stats_count == 4
+    finally:
+        mgr.close()

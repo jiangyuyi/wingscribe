@@ -100,10 +100,10 @@
     - `WingScribePipeline` now receives a stop checker and stops submitting new work when a stop is requested
     - already-submitted tasks are allowed to finish naturally, and scan history is recorded as `Stopped`
 - `IOCManager` connection model
-  - Confirmed risk points:
-    - `IOCManager` opens one SQLite connection in `__init__` with `check_same_thread=False`
-    - `WingScribePipeline` holds one long-lived `self.db = IOCManager(...)`
-    - pipeline worker threads call into `self.db.get_bird_info()` and `self.db.add_photo_record()` from `_archive_item()`
-    - write paths also call `update_species_stats_for_photo()` and `commit()` on the same shared connection
-    - Web routes are mostly lower risk because they create and close a fresh `IOCManager` per request
-  - Still worth a dedicated concurrency refactor later
+  - Low-risk concurrency hardening completed for pipeline hot-path methods
+  - Current behavior:
+    - file-backed databases now use short-lived operation connections for hot-path reads/writes
+    - write operations are serialized with a manager-level lock to reduce SQLite contention
+    - `add_photo_record()` and species-stats updates now stay in the same short transaction
+    - in-memory databases keep using the shared connection for test compatibility
+    - legacy direct `manager.conn` access still exists for compatibility, so a full session/transaction refactor can still be considered later

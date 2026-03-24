@@ -8,174 +8,174 @@ def get_config_definition():
             "paths": [
                 {
                     "key": "sources[0].path",
-                    "label": "鐓х墖鍩哄噯鐩綍",
-                    "description": "鐓х墖婧愮洰褰曪紙蹇呭～锛屼娇鐢ㄧ粷瀵硅矾寰勶級",
+                    "label": "照片基准目录",
+                    "description": "照片源目录（必填，使用绝对路径）",
                     "type": "path",
-                    "required": True
+                    "required": True,
                 },
                 {
                     "key": "output.root_dir",
-                    "label": "杈撳嚭鐩綍",
-                    "description": "瑁佸垏杈撳嚭鐩綍锛堝繀濉紝浣跨敤缁濆璺緞锛?",
+                    "label": "输出目录",
+                    "description": "裁切输出目录（必填，使用绝对路径）",
                     "type": "path",
-                    "required": True
-                }
+                    "required": True,
+                },
             ],
             "web": [
                 {
                     "key": "host",
-                    "label": "鐩戝惉鍦板潃",
-                    "description": "0.0.0.0 = 鍏佽灞€鍩熺綉璁块棶锛?27.0.0.1 = 浠呮湰鏈?",
+                    "label": "监听地址",
+                    "description": "0.0.0.0 = 允许局域网访问，127.0.0.1 = 仅本机",
                     "type": "string",
-                    "default": "0.0.0.0"
+                    "default": "0.0.0.0",
                 },
                 {
                     "key": "port",
-                    "label": "绔彛鍙?",
-                    "description": "Web 鏈嶅姟璁块棶绔彛",
+                    "label": "端口号",
+                    "description": "Web 服务访问端口",
                     "type": "int",
-                    "default": 8000
-                }
-            ]
+                    "default": 8000,
+                },
+            ],
         },
         "advanced": {
             "paths": [
                 {
                     "key": "db_path",
-                    "label": "鏁版嵁搴撹矾寰?",
-                    "description": "SQLite 鏁版嵁搴撴枃浠朵綅缃?",
-                    "type": "file"
+                    "label": "数据库路径",
+                    "description": "SQLite 数据库文件位置",
+                    "type": "file",
                 },
                 {
                     "key": "references_path",
-                    "label": "鍙傝€冩暟鎹洰褰?",
-                    "description": "IOC 楦熺被鍚嶅綍绛夊弬鑰冩枃浠?",
-                    "type": "directory"
+                    "label": "参考数据目录",
+                    "description": "IOC 鸟类名录等参考文件",
+                    "type": "directory",
                 },
                 {
                     "key": "ioc_list_path",
-                    "label": "IOC 楦熺被鍚嶅綍",
-                    "description": "Excel 鏍煎紡鐨勯笩绫诲垎绫绘暟鎹?",
-                    "type": "file"
+                    "label": "IOC 鸟类名录",
+                    "description": "Excel 格式的鸟类分类数据",
+                    "type": "file",
                 },
                 {
                     "key": "model_cache_dir",
-                    "label": "妯″瀷缂撳瓨鐩綍",
-                    "description": "BioCLIP 妯″瀷缂撳瓨浣嶇疆",
-                    "type": "directory"
+                    "label": "模型缓存目录",
+                    "description": "BioCLIP 模型缓存位置",
+                    "type": "directory",
                 },
                 {
                     "key": "output.structure_template",
-                    "label": "杈撳嚭璺緞妯℃澘",
-                    "description": "澶勭悊鍚庣殑鏂囦欢鍛藉悕妯℃澘",
+                    "label": "输出路径模板",
+                    "description": "处理后的文件命名模板",
                     "type": "string",
-                    "default": "{source_structure}/{filename}_{species_cn}_{confidence}"
+                    "default": "{source_structure}/{filename}_{species_cn}_{confidence}",
                 },
                 {
                     "key": "output.write_back_to_source",
-                    "label": "鍥炲啓鍘熷浘",
-                    "description": "鏄惁灏嗗厓鏁版嵁鍐欏洖鍘熷鐓х墖",
+                    "label": "回写原图",
+                    "description": "是否将元数据写回原始照片",
                     "type": "bool",
-                    "default": False
-                }
+                    "default": False,
+                },
             ],
             "processing": [
                 {
                     "key": "device",
-                    "label": "澶勭悊璁惧",
+                    "label": "处理设备",
                     "description": "auto/cuda/cpu",
                     "type": "select",
                     "options": ["auto", "cuda", "cpu"],
-                    "default": "auto"
+                    "default": "auto",
                 },
                 {
                     "key": "yolo_model",
-                    "label": "YOLO 妯″瀷",
-                    "description": "楦熺被妫€娴嬫ā鍨?",
+                    "label": "YOLO 模型",
+                    "description": "鸟类检测模型",
                     "type": "string",
-                    "default": "yolo26n.pt"
+                    "default": "yolo26n.pt",
                 },
                 {
                     "key": "confidence_threshold",
-                    "label": "妫€娴嬬疆淇″害",
-                    "description": "YOLO 妫€娴嬮槇鍊?(0-1)",
+                    "label": "检测置信度",
+                    "description": "YOLO 检测阈值(0-1)",
                     "type": "float",
                     "default": 0.5,
                     "min": 0.0,
-                    "max": 1.0
+                    "max": 1.0,
                 },
                 {
                     "key": "blur_threshold",
-                    "label": "妯＄硦闃堝€?",
-                    "description": "妯＄硦鐓х墖妫€娴嬮槇鍊?",
+                    "label": "模糊阈值",
+                    "description": "模糊照片检测阈值",
                     "type": "float",
-                    "default": 40.0
+                    "default": 40.0,
                 },
                 {
                     "key": "target_size",
-                    "label": "鐩爣灏哄",
-                    "description": "鍥惧儚澶勭悊鐩爣灏哄",
+                    "label": "目标尺寸",
+                    "description": "图像处理目标尺寸",
                     "type": "int",
-                    "default": 640
+                    "default": 640,
                 },
                 {
                     "key": "crop_padding",
-                    "label": "瑁佸壀杈硅窛",
-                    "description": "楦熺被瑁佸壀鍖哄煙鐨勬墿灞曡竟璺?",
+                    "label": "裁切边距",
+                    "description": "鸟类裁切区域的扩展边距",
                     "type": "int",
-                    "default": 200
-                }
+                    "default": 200,
+                },
             ],
             "recognition": [
                 {
                     "key": "mode",
-                    "label": "璇嗗埆妯″紡",
+                    "label": "识别模式",
                     "description": "local/api/dongniao",
                     "type": "select",
                     "options": ["local", "api", "dongniao"],
-                    "default": "local"
+                    "default": "local",
                 },
                 {
                     "key": "region_filter",
-                    "label": "鍖哄煙杩囨护",
+                    "label": "区域过滤",
                     "description": "china/auto/null",
                     "type": "select",
                     "options": ["china", "auto", "null"],
-                    "default": "auto"
+                    "default": "auto",
                 },
                 {
                     "key": "top_k",
-                    "label": "Top-K 鍊欓€?",
-                    "description": "杩斿洖鍓?K 涓€欓€夌墿绉?",
+                    "label": "Top-K 候选",
+                    "description": "返回前 K 个候选物种",
                     "type": "int",
-                    "default": 5
+                    "default": 5,
                 },
                 {
                     "key": "alternatives_threshold",
-                    "label": "澶囬€夐槇鍊?",
-                    "description": "鏄剧ず澶囬€夌粨鏋滅殑缃俊搴﹂槇鍊?",
+                    "label": "备选阈值",
+                    "description": "显示备选结果的置信度阈值",
                     "type": "int",
-                    "default": 70
+                    "default": 70,
                 },
                 {
                     "key": "low_confidence_threshold",
-                    "label": "浣庣疆淇″害闃堝€?",
-                    "description": "鏍囪涓轰笉纭畾鐨勭疆淇″害闃堝€?",
+                    "label": "低置信度阈值",
+                    "description": "标记为不确定的置信度阈值",
                     "type": "int",
-                    "default": 60
-                }
+                    "default": 60,
+                },
             ],
             "web": [
                 {
                     "key": "log_level",
-                    "label": "鏃ュ織绾у埆",
+                    "label": "日志级别",
                     "description": "info/debug",
                     "type": "select",
                     "options": ["info", "debug"],
-                    "default": "info"
-                }
-            ]
-        }
+                    "default": "info",
+                },
+            ],
+        },
     }
 
 

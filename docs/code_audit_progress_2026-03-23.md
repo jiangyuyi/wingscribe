@@ -88,6 +88,9 @@
 ## Remaining high-value areas
 
 - Current known remaining work:
+  - continue low-risk `src/web/app.py` split after the config-page regression is fixed:
+    - path/file helper extraction (`create_db_manager`, `resolve_web_path`, `resolve_processed_web_path`)
+    - then remove temporary compatibility scaffolding left in `app.py`
   - `src/recognition/inference_local.py` still has some uncovered model-loading compatibility branches
   - `src/recognition/inference_dongniao.py` still has large uncovered business branches
   - `src/web/app.py` may still be worth expanding for any remaining photo list/detail/admin routes

@@ -12,6 +12,32 @@ def test_predict_returns_empty_when_candidate_labels_missing(tmp_path: Path):
     assert recognizer.predict(str(image_path), []) == []
 
 
+def test_predict_returns_empty_when_api_key_missing(tmp_path: Path, monkeypatch):
+    image_path = tmp_path / "bird.jpg"
+    image_path.write_bytes(b"image")
+    recognizer = APIBirdRecognizer("https://example.com/api", "")
+
+    def fake_post(*args, **kwargs):
+        raise AssertionError("request should not be made without api key")
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    assert recognizer.predict(str(image_path), ["sparrow"]) == []
+
+
+def test_predict_returns_empty_when_api_url_missing(tmp_path: Path, monkeypatch):
+    image_path = tmp_path / "bird.jpg"
+    image_path.write_bytes(b"image")
+    recognizer = APIBirdRecognizer("", "secret")
+
+    def fake_post(*args, **kwargs):
+        raise AssertionError("request should not be made without api url")
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    assert recognizer.predict(str(image_path), ["sparrow"]) == []
+
+
 def test_predict_returns_empty_when_http_status_not_200(tmp_path: Path, monkeypatch):
     image_path = tmp_path / "bird.jpg"
     image_path.write_bytes(b"image")
@@ -64,10 +90,11 @@ def test_predict_posts_base64_payload_and_truncates_to_top_k(tmp_path: Path, mon
                 {"label": "Species C", "score": 0.73},
             ]
 
-    def fake_post(url, headers, json):
+    def fake_post(url, headers, json, timeout):
         captured["url"] = url
         captured["headers"] = headers
         captured["json"] = json
+        captured["timeout"] = timeout
         return StubResponse()
 
     monkeypatch.setattr("requests.post", fake_post)
@@ -81,6 +108,7 @@ def test_predict_posts_base64_payload_and_truncates_to_top_k(tmp_path: Path, mon
             "inputs": base64.b64encode(image_data).decode("utf-8"),
             "parameters": {"candidate_labels": ["Species A", "Species B"]},
         },
+        "timeout": 30,
     }
     assert results == [
         {"scientific_name": "Species A", "confidence": 0.91},

@@ -39,6 +39,8 @@
   - `tests/test_inference_api.py`
 - Fixed a real defect in `src/recognition/inference_api.py`:
   - `APIBirdRecognizer` was missing `predict_batch()` and could not be instantiated
+  - `APIBirdRecognizer` now short-circuits when `api_url` or `api_key` is missing instead of sending invalid requests
+  - `APIBirdRecognizer` now sends requests with an explicit default timeout
 - Added Dongniao coverage:
   - `tests/test_inference_dongniao.py`
 - Fixed two real defects in the legacy Dongniao path:
@@ -96,6 +98,12 @@
     - closing image handles in `_do_predict_batch()`
     - closing image handles in `_do_predict()`
   - Current module coverage reached `67%`
+- `src/recognition/inference_api.py`
+  - Added coverage for:
+    - missing API key short-circuit
+    - missing API URL short-circuit
+    - request timeout propagation
+  - Current module coverage reached `98%`
 - `TaskManager.should_stop`
   - Fixed into a cooperative stop path
   - Current behavior:

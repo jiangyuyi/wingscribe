@@ -732,20 +732,25 @@ def reset_system():
 @app.get("/api/admin/rebuild_stats")
 def rebuild_species_stats():
     """重建物种统计表（首次使用或数据不一致时调用）"""
+    manager = None
     try:
         manager = create_db_manager()
         manager.rebuild_species_stats()
-        manager.close()
         return {"status": "success", "message": "Species stats table rebuilt"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+    finally:
+        if manager is not None:
+            manager.close()
 
 @app.get("/api/search_species")
 def search_species(q: str):
     manager = create_db_manager()
-    res = manager.search_species(q, limit=20)
-    manager.close()
-    return res
+    try:
+        res = manager.search_species(q, limit=20)
+        return res
+    finally:
+        manager.close()
 
 @app.get("/api/taxonomy/tree")
 def get_taxonomy_tree(include_empty: bool = True, date: str = None):

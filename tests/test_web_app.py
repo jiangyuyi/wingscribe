@@ -686,12 +686,52 @@ def test_rebuild_species_stats_returns_success(monkeypatch):
     assert manager.closed is True
 
 
+def test_rebuild_species_stats_closes_manager_on_error(monkeypatch):
+    class StubManager:
+        def __init__(self):
+            self.closed = False
+
+        def rebuild_species_stats(self):
+            raise RuntimeError("rebuild failed")
+
+        def close(self):
+            self.closed = True
+
+    manager = StubManager()
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: manager)
+
+    result = web_app.rebuild_species_stats()
+
+    assert result == {"status": "error", "detail": "rebuild failed"}
+    assert manager.closed is True
+
+
 def test_get_config_returns_first_run_when_settings_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
 
     result = asyncio.run(web_app.get_config())
 
     assert result == {"error": "Configuration file not found", "is_first_run": True}
+
+
+def test_search_species_closes_manager_on_error(monkeypatch):
+    class StubManager:
+        def __init__(self):
+            self.closed = False
+
+        def search_species(self, query, limit):
+            raise RuntimeError("search failed")
+
+        def close(self):
+            self.closed = True
+
+    manager = StubManager()
+    monkeypatch.setattr(web_app, "create_db_manager", lambda: manager)
+
+    with pytest.raises(RuntimeError, match="search failed"):
+        web_app.search_species("tit")
+
+    assert manager.closed is True
 
 
 def test_get_config_reads_yaml_when_settings_exists(tmp_path, monkeypatch):

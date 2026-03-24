@@ -105,6 +105,9 @@
     - restart endpoint success and spawn-failure handling
     - websocket progress streaming with graceful cancellation
   - Current module coverage reached `71%`
+  - Low-risk hardening completed for two manager-lifecycle leaks:
+    - `search_species()` now closes `IOCManager` even when search fails
+    - `rebuild_species_stats()` now closes `IOCManager` even when rebuild fails
 - `src/recognition/inference_dongniao.py`
   - Added coverage for:
     - missing API URL short-circuit

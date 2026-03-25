@@ -112,7 +112,8 @@
     - active `TaskManager` has been extracted to `src/web/task_manager.py`
     - active config helper entrypoints now re-export from `src/web/config_helpers.py`
     - active path/file helper entrypoints now re-export from `src/web/path_helpers.py`
-    - legacy in-file implementations still remain in `app.py` temporarily as compatibility scaffolding because historical encoding noise made direct deletion brittle
+    - legacy in-file implementations for task manager, config helpers, and path helpers have now been removed from `app.py`
+    - `app.py` still keeps a compatibility `TaskManager` re-export because tests and callers may import it from there
   - Low-risk hardening completed for two manager-lifecycle leaks:
     - `search_species()` now closes `IOCManager` even when search fails
     - `rebuild_species_stats()` now closes `IOCManager` even when rebuild fails

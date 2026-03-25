@@ -1,17 +1,15 @@
 import logging
-import sqlite3
 import sys
 import yaml
 import shutil
 import os
 import gc
 import asyncio
-import threading
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, WebSocket
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -21,16 +19,15 @@ from typing import Optional, List
 BASE_DIR = Path(__file__).parent.parent.parent.absolute()
 sys.path.append(str(BASE_DIR))
 
-from src.metadata.ioc_manager import IOCManager
 from src.metadata.exif_writer import ExifWriter # Added import
 from src.utils.config_loader import load_config, validate_paths_config
 from src.core.io.path_generator import PathGenerator # Added import
 from src.web.routes.recognition import router as recognition_router
 from src.web.task_manager import TaskManager as ExtractedTaskManager
 from src.web.config_helpers import (
-    get_config_definition as _extracted_get_config_definition,
-    get_nested_value as _extracted_get_nested_value,
-    set_nested_value as _extracted_set_nested_value,
+    get_config_definition,
+    get_nested_value,
+    set_nested_value,
 )
 from src.web import path_helpers
 
@@ -40,139 +37,6 @@ logger = logging.getLogger(__name__)
 
 # Initialize ExifWriter
 exif_writer = ExifWriter()
-
-# --- Task Manager (Background Pipeline) ---
-class _LegacyTaskManager:
-    _instance = None
-    
-    def __init__(self):
-        self.is_running = False
-        self.should_stop = False # New flag
-        self.logs = []
-        self.websocket_clients = []
-    
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = _LegacyTaskManager()
-        return cls._instance
-        
-    def stop(self):
-        self.should_stop = True
-
-    def broadcast_log(self, message: str):
-        self.logs.append(message)
-        if len(self.logs) > 1000: self.logs.pop(0)
-        
-    def start_pipeline(self, start_date=None, end_date=None):
-        logger.info(f"[TaskManager] start_pipeline called with start_date={start_date}, end_date={end_date}")
-        if self.is_running:
-            logger.warning("[TaskManager] Pipeline already running, rejecting request")
-            return False
-
-        self.is_running = True
-        self.should_stop = False
-        self.logs = ["Starting pipeline..."]
-        logger.info("[TaskManager] Pipeline flag set, starting thread...")
-
-        # Run in thread
-        thread = threading.Thread(target=self._run_pipeline_thread, args=(start_date, end_date), daemon=True)
-        thread.start()
-        logger.info("[TaskManager] Thread started, returning success")
-        return True
-
-    def start_pipeline_by_folders(self, folder_paths: list, recursive: bool = True):
-        """按文件夹执行 Pipeline"""
-        logger.info(f"[TaskManager] start_pipeline_by_folders called with paths={folder_paths}, recursive={recursive}")
-        if self.is_running:
-            logger.warning("[TaskManager] Pipeline already running, rejecting request")
-            return False
-
-        self.is_running = True
-        self.should_stop = False
-        self.logs = ["Starting pipeline for selected folders..."]
-        logger.info("[TaskManager] Pipeline flag set, starting thread...")
-
-        # Run in thread
-        thread = threading.Thread(target=self._run_pipeline_thread_by_folders, args=(folder_paths, recursive), daemon=True)
-        thread.start()
-        logger.info("[TaskManager] Thread started, returning success")
-        return True
-
-    def _run_pipeline_thread_by_folders(self, folder_paths: list, recursive: bool):
-        try:
-            # Ensure working directory is project root for relative path resolution
-            os.chdir(str(BASE_DIR))
-
-            # Setup custom logger to capture output
-            log_capture = logging.getLogger()
-            handler = ListLogHandler(self.logs)
-            log_capture.addHandler(handler)
-
-            self.logs.append("Initializing pipeline (this may take a while on first run)...")
-
-            # Create pipeline with timeout protection (120 seconds default)
-            runner = WingScribePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
-
-            # 设置进度回调
-            def progress_callback(processed, total):
-                self.logs.append(f"[PROGRESS] {processed}/{total}")
-            runner.set_progress_callback(progress_callback)
-            runner.set_stop_checker(lambda: self.should_stop)
-
-            self.logs.append("Pipeline initialized, processing selected folders...")
-
-            runner.run_by_folders(folder_paths, recursive=recursive)
-
-            logging.info("Pipeline (by folders) execution completed.")
-        except Exception as e:
-            logging.error(f"Pipeline failed: {e}")
-            self.logs.append(f"Error: {str(e)}")
-        finally:
-            self.is_running = False
-            log_capture.removeHandler(handler)
-
-    def _run_pipeline_thread(self, start_date, end_date):
-        try:
-            # Ensure working directory is project root for relative path resolution
-            os.chdir(str(BASE_DIR))
-
-            # Setup custom logger to capture output
-            log_capture = logging.getLogger()
-            handler = ListLogHandler(self.logs)
-            log_capture.addHandler(handler)
-
-            self.logs.append("Initializing pipeline (this may take a while on first run)...")
-
-            # Create pipeline with timeout protection (120 seconds default)
-            runner = WingScribePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
-
-            # 设置进度回调
-            def progress_callback(processed, total):
-                self.logs.append(f"[PROGRESS] {processed}/{total}")
-            runner.set_progress_callback(progress_callback)
-            runner.set_stop_checker(lambda: self.should_stop)
-
-            self.logs.append("Pipeline initialized, starting processing...")
-
-            runner.run(start_date=start_date, end_date=end_date)
-
-            logging.info("Pipeline execution completed.")
-        except Exception as e:
-            logging.error(f"Pipeline failed: {e}")
-            self.logs.append(f"Error: {str(e)}")
-        finally:
-            self.is_running = False
-            log_capture.removeHandler(handler)
-
-class ListLogHandler(logging.Handler):
-    def __init__(self, log_list):
-        super().__init__()
-        self.log_list = log_list
-    
-    def emit(self, record):
-        msg = self.format(record)
-        self.log_list.append(msg)
 
 TaskManager = ExtractedTaskManager
 task_manager = TaskManager.get_instance()
@@ -280,38 +144,7 @@ def get_db_conn():
 
 def resolve_web_path(original_path_str: str) -> Optional[str]:
     """Resolves raw file path to /static/... URL"""
-    if not original_path_str:
-        logger.warning(f"resolve_web_path: empty path")
-        return None
-    try:
-        # Normalize path separators to avoid escape sequence issues
-        normalized = original_path_str.replace('\\', '/')
-
-        # Handle relative paths - convert to absolute using source_dir
-        # 不使用 resolve()，避免UNC路径问题（与pipeline_runner.py一致）
-        if source_dir and not is_absolute_path(normalized):
-            abs_path = source_dir / normalized
-        else:
-            abs_path = Path(normalized)
-
-        # 使用规范化路径比较，不使用resolve()
-        norm_abs = os.path.normpath(str(abs_path))
-        norm_base = os.path.normpath(str(source_dir)) if source_dir else None
-
-        logger.debug(f"resolve_web_path: input='{original_path_str}', normalized='{normalized}', abs_path='{abs_path}', norm_base={norm_base}")
-
-        # 基于 source_dir 计算相对路径
-        if norm_base and norm_abs.startswith(norm_base):
-            # 提取相对路径部分
-            rel_part = norm_abs[len(norm_base):].lstrip('/\\')
-            result = f"/static/{rel_part.replace(os.sep, '/')}"
-            logger.debug(f"resolve_web_path: rel_part={rel_part}, result={result}")
-            return result
-
-        logger.warning(f"resolve_web_path: path '{abs_path}' is not under source_dir {source_dir}")
-    except Exception as e:
-        logger.warning(f"resolve_web_path failed for '{original_path_str}': {e}")
-    return None
+    return path_helpers.resolve_web_path(original_path_str, source_dir, logger)
 
 @app.get("/processed/{path:path}")
 def serve_processed_file(path: str):
@@ -320,45 +153,7 @@ def serve_processed_file(path: str):
 
 def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
     """Resolves processed file path to /processed/... URL"""
-    if not file_path_str: return None
-    try:
-        # Normalize path separators
-        normalized = file_path_str.replace('\\', '/')
-
-        # file_path is stored relative to source_dir, so use source_dir to resolve
-        # 不使用 resolve()，避免UNC路径问题
-        if processed_dir and not is_absolute_path(normalized):
-            abs_path = processed_dir / normalized
-        elif not is_absolute_path(normalized):
-            abs_path = BASE_DIR / normalized
-        else:
-            abs_path = Path(normalized)
-
-        # 使用规范化路径比较
-        norm_abs = os.path.normpath(str(abs_path))
-        norm_base = os.path.normpath(str(processed_dir)) if processed_dir else None
-
-        # Check if it's under source_dir, then generate the URL
-        if norm_base and norm_abs.startswith(norm_base):
-            rel_part = norm_abs[len(norm_base):].lstrip('/\\')
-            return f"/processed/{rel_part.replace(os.sep, '/')}"
-
-        logger.warning(f"resolve_processed_web_path: path '{abs_path}' is not under processed_dir {processed_dir}")
-        return None
-    except Exception as e:
-        logger.warning(f"Failed to resolve processed path '{file_path_str}': {e}")
-        return None
-
-is_absolute_path = path_helpers.is_absolute_path
-create_db_manager = lambda: path_helpers.create_db_manager(db_path, source_dir, processed_dir)
-get_db_conn = lambda: path_helpers.get_db_conn(db_path)
-resolve_web_path = lambda original_path_str: path_helpers.resolve_web_path(original_path_str, source_dir, logger)
-resolve_processed_web_path = lambda file_path_str: path_helpers.resolve_processed_web_path(
-    file_path_str,
-    processed_dir,
-    BASE_DIR,
-    logger,
-)
+    return path_helpers.resolve_processed_web_path(file_path_str, processed_dir, BASE_DIR, logger)
 
 # --- API Models ---
 class UpdateLabelRequest(BaseModel):
@@ -1064,237 +859,6 @@ class ConfigItem(BaseModel):
 class SaveConfigRequest(BaseModel):
     configs: List[ConfigItem]
     restart: bool = False
-
-def get_config_definition():
-    """Return the configuration schema for UI"""
-    return {
-        "basic": {
-            "paths": [
-                {
-                    "key": "sources[0].path",
-                    "label": "照片基准目录",
-                    "description": "照片源目录（必填，使用绝对路径）",
-                    "type": "path",
-                    "required": True
-                },
-                {
-                    "key": "output.root_dir",
-                    "label": "输出目录",
-                    "description": "裁切输出目录（必填，使用绝对路径）",
-                    "type": "path",
-                    "required": True
-                }
-            ],
-            "web": [
-                {
-                    "key": "host",
-                    "label": "监听地址",
-                    "description": "0.0.0.0 = 允许局域网访问，127.0.0.1 = 仅本机",
-                    "type": "string",
-                    "default": "0.0.0.0"
-                },
-                {
-                    "key": "port",
-                    "label": "端口号",
-                    "description": "Web 服务访问端口",
-                    "type": "int",
-                    "default": 8000
-                }
-            ]
-        },
-        "advanced": {
-            "paths": [
-                {
-                    "key": "db_path",
-                    "label": "数据库路径",
-                    "description": "SQLite 数据库文件位置",
-                    "type": "file"
-                },
-                {
-                    "key": "references_path",
-                    "label": "参考数据目录",
-                    "description": "IOC 鸟类名录等参考文件",
-                    "type": "directory"
-                },
-                {
-                    "key": "ioc_list_path",
-                    "label": "IOC 鸟类名录",
-                    "description": "Excel 格式的鸟类分类数据",
-                    "type": "file"
-                },
-                {
-                    "key": "model_cache_dir",
-                    "label": "模型缓存目录",
-                    "description": "BioCLIP 模型缓存位置",
-                    "type": "directory"
-                },
-                {
-                    "key": "output.structure_template",
-                    "label": "输出路径模板",
-                    "description": "处理后的文件命名模板",
-                    "type": "string",
-                    "default": "{source_structure}/{filename}_{species_cn}_{confidence}"
-                },
-                {
-                    "key": "output.write_back_to_source",
-                    "label": "回写原图",
-                    "description": "是否将元数据写回原始照片",
-                    "type": "bool",
-                    "default": False
-                }
-            ],
-            "processing": [
-                {
-                    "key": "device",
-                    "label": "处理设备",
-                    "description": "auto/cuda/cpu",
-                    "type": "select",
-                    "options": ["auto", "cuda", "cpu"],
-                    "default": "auto"
-                },
-                {
-                    "key": "yolo_model",
-                    "label": "YOLO 模型",
-                    "description": "鸟类检测模型",
-                    "type": "string",
-                    "default": "yolo26n.pt"
-                },
-                {
-                    "key": "confidence_threshold",
-                    "label": "检测置信度",
-                    "description": "YOLO 检测阈值 (0-1)",
-                    "type": "float",
-                    "default": 0.5,
-                    "min": 0.0,
-                    "max": 1.0
-                },
-                {
-                    "key": "blur_threshold",
-                    "label": "模糊阈值",
-                    "description": "模糊照片检测阈值",
-                    "type": "float",
-                    "default": 40.0
-                },
-                {
-                    "key": "target_size",
-                    "label": "目标尺寸",
-                    "description": "图像处理目标尺寸",
-                    "type": "int",
-                    "default": 640
-                },
-                {
-                    "key": "crop_padding",
-                    "label": "裁剪边距",
-                    "description": "鸟类裁剪区域的扩展边距",
-                    "type": "int",
-                    "default": 200
-                }
-            ],
-            "recognition": [
-                {
-                    "key": "mode",
-                    "label": "识别模式",
-                    "description": "local/api/dongniao",
-                    "type": "select",
-                    "options": ["local", "api", "dongniao"],
-                    "default": "local"
-                },
-                {
-                    "key": "region_filter",
-                    "label": "区域过滤",
-                    "description": "china/auto/null",
-                    "type": "select",
-                    "options": ["china", "auto", "null"],
-                    "default": "auto"
-                },
-                {
-                    "key": "top_k",
-                    "label": "Top-K 候选",
-                    "description": "返回前 K 个候选物种",
-                    "type": "int",
-                    "default": 5
-                },
-                {
-                    "key": "alternatives_threshold",
-                    "label": "备选阈值",
-                    "description": "显示备选结果的置信度阈值",
-                    "type": "int",
-                    "default": 70
-                },
-                {
-                    "key": "low_confidence_threshold",
-                    "label": "低置信度阈值",
-                    "description": "标记为不确定的置信度阈值",
-                    "type": "int",
-                    "default": 60
-                }
-            ],
-            "web": [
-                {
-                    "key": "log_level",
-                    "label": "日志级别",
-                    "description": "info/debug",
-                    "type": "select",
-                    "options": ["info", "debug"],
-                    "default": "info"
-                }
-            ]
-        }
-    }
-
-def get_nested_value(obj, key_path):
-    """Get value from nested dict using dot notation"""
-    keys = key_path.split('.')
-    value = obj
-    for key in keys:
-        if isinstance(value, dict):
-            value = value.get(key)
-        else:
-            return None
-    return value
-
-def set_nested_value(obj, key_path, value):
-    """Set value in nested dict using dot notation, supports array indices like sources[0].path"""
-    import re
-    # Split by '.' but preserve array indices like [0]
-    keys = re.split(r'\.(?!\d)', key_path)
-    current = obj
-
-    for key in keys[:-1]:
-        # Handle array index like "sources[0]"
-        array_match = re.match(r'^(\w+)\[(\d+)\]$', key)
-        if array_match:
-            array_key = array_match.group(1)
-            index = int(array_match.group(2))
-
-            if array_key not in current:
-                current[array_key] = []
-            # Ensure the array is long enough
-            while len(current[array_key]) <= index:
-                current[array_key].append({})
-            current = current[array_key][index]
-        else:
-            if key not in current:
-                current[key] = {}
-            current = current[key]
-
-    # Set the final value
-    final_key = keys[-1]
-    array_match = re.match(r'^(\w+)\[(\d+)\]$', final_key)
-    if array_match:
-        array_key = array_match.group(1)
-        index = int(array_match.group(2))
-        if array_key not in current:
-            current[array_key] = []
-        while len(current[array_key]) <= index:
-            current[array_key].append({})
-        current[array_key][index] = value
-    else:
-        current[final_key] = value
-
-get_config_definition = _extracted_get_config_definition
-get_nested_value = _extracted_get_nested_value
-set_nested_value = _extracted_set_nested_value
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page():

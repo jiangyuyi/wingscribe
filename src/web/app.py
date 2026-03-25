@@ -32,6 +32,7 @@ from src.web.config_helpers import (
     get_nested_value as _extracted_get_nested_value,
     set_nested_value as _extracted_set_nested_value,
 )
+from src.web import path_helpers
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -217,18 +218,7 @@ _startup_python = sys.executable
 # Helper function to check if path is absolute (handles both Windows and Unix formats)
 def is_absolute_path(p: str) -> bool:
     """Check if path is absolute, including Windows drive letter format like 'Y:/path'"""
-    if not p:
-        return False
-    # Check for Unix absolute path
-    if p.startswith('/'):
-        return True
-    # Check for Windows drive letter format (Y:/ or Y:\ or //server/path)
-    if len(p) >= 2 and p[1] == ':':
-        return True
-    # Check for UNC path
-    if p.startswith('//') or p.startswith('\\\\'):
-        return True
-    return False
+    return path_helpers.is_absolute_path(p)
 
 # Resolve db_path - relative to current working directory if not set or empty
 db_path_config = config['paths'].get('db_path')
@@ -282,17 +272,11 @@ def init_app_db():
         logger.error(f"Startup DB Initialization failed: {e}")
 
 def create_db_manager():
-    return IOCManager(
-        str(db_path),
-        source_base_dir=str(source_dir) if source_dir else "",
-        processed_base_dir=str(processed_dir) if processed_dir else ""
-    )
+    return path_helpers.create_db_manager(db_path, source_dir, processed_dir)
 
 # --- Helper ---
 def get_db_conn():
-    conn = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return path_helpers.get_db_conn(db_path)
 
 def resolve_web_path(original_path_str: str) -> Optional[str]:
     """Resolves raw file path to /static/... URL"""
@@ -332,13 +316,7 @@ def resolve_web_path(original_path_str: str) -> Optional[str]:
 @app.get("/processed/{path:path}")
 def serve_processed_file(path: str):
     """Custom static file handler for processed images (Unicode-safe on Windows)"""
-    # 直接用 source_dir 解析
-    full_path = processed_dir / path.replace('/', os.sep) if processed_dir else None
-
-    if full_path and full_path.exists() and full_path.is_file():
-        return FileResponse(full_path)
-
-    raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    return path_helpers.get_processed_file_response(path, processed_dir)
 
 def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
     """Resolves processed file path to /processed/... URL"""
@@ -370,6 +348,17 @@ def resolve_processed_web_path(file_path_str: str) -> Optional[str]:
     except Exception as e:
         logger.warning(f"Failed to resolve processed path '{file_path_str}': {e}")
         return None
+
+is_absolute_path = path_helpers.is_absolute_path
+create_db_manager = lambda: path_helpers.create_db_manager(db_path, source_dir, processed_dir)
+get_db_conn = lambda: path_helpers.get_db_conn(db_path)
+resolve_web_path = lambda original_path_str: path_helpers.resolve_web_path(original_path_str, source_dir, logger)
+resolve_processed_web_path = lambda file_path_str: path_helpers.resolve_processed_web_path(
+    file_path_str,
+    processed_dir,
+    BASE_DIR,
+    logger,
+)
 
 # --- API Models ---
 class UpdateLabelRequest(BaseModel):

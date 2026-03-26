@@ -111,9 +111,11 @@
   - Low-risk structure split started:
     - active `TaskManager` has been extracted to `src/web/task_manager.py`
     - active config helper entrypoints now re-export from `src/web/config_helpers.py`
+    - active config-management logic now routes through `src/web/config_service.py`
     - active path/file helper entrypoints now re-export from `src/web/path_helpers.py`
     - legacy in-file implementations for task manager, config helpers, and path helpers have now been removed from `app.py`
     - `app.py` still keeps a compatibility `TaskManager` re-export because tests and callers may import it from there
+    - `app.py` also keeps compatibility wrappers for `open_folder_dialog`, `open_file_dialog`, and `threading` because existing tests and callers patch those names directly
   - Low-risk hardening completed for two manager-lifecycle leaks:
     - `search_species()` now closes `IOCManager` even when search fails
     - `rebuild_species_stats()` now closes `IOCManager` even when rebuild fails

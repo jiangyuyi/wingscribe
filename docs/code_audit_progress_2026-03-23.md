@@ -201,3 +201,12 @@
      - removed stale import comments and dead imports from `src/web/app.py`
      - removed outdated inline rewrite note after the admin reset route extraction
      - kept compatibility exports and route wrappers unchanged to avoid late-stage behavior drift
+
+5. Post-wrap-up bugfix during manual validation
+   - issue:
+     - original-image serving could fail on Windows with `ValueError: Paths don't have the same drive`
+     - root cause was the old single-root `StaticFiles` assumption for raw images when configured sources span different drives
+   - status:
+     - raw image serving now uses an explicit `/raw/source-{index}/...` route instead of relying on one mounted `StaticFiles` root
+     - raw URL resolution now matches against all configured source roots
+     - added regression tests for multi-source path resolution and raw file serving

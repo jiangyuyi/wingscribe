@@ -11,6 +11,7 @@ from src.web import path_helpers
 def test_app_reexports_path_helpers(monkeypatch, tmp_path):
     monkeypatch.setattr(web_app, "db_path", tmp_path / "data.db")
     monkeypatch.setattr(web_app, "source_dir", tmp_path / "raw")
+    monkeypatch.setattr(web_app, "source_dirs", [tmp_path / "raw"])
     monkeypatch.setattr(web_app, "processed_dir", tmp_path / "processed")
 
     conn = web_app.get_db_conn()
@@ -22,9 +23,33 @@ def test_app_reexports_path_helpers(monkeypatch, tmp_path):
     assert web_app.is_absolute_path("D:/photos")
     assert web_app.resolve_web_path("bird.jpg") == path_helpers.resolve_web_path(
         "bird.jpg",
-        web_app.source_dir,
+        web_app.source_dirs,
         web_app.logger,
     )
+
+
+def test_resolve_web_path_selects_matching_source_for_absolute_path(tmp_path):
+    source_a = tmp_path / "source-a"
+    source_b = tmp_path / "source-b"
+    image_path = source_b / "nested" / "bird.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"image")
+
+    result = path_helpers.resolve_web_path(str(image_path), [source_a, source_b], web_app.logger)
+
+    assert result == "/raw/source-1/nested/bird.jpg"
+
+
+def test_get_raw_file_response_returns_file_for_source_key(tmp_path):
+    source_a = tmp_path / "source-a"
+    source_b = tmp_path / "source-b"
+    image_path = source_b / "nested" / "bird.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"image")
+
+    response = path_helpers.get_raw_file_response("source-1/nested/bird.jpg", [source_a, source_b])
+
+    assert Path(response.path) == image_path
 
 
 def test_get_processed_file_response_returns_file(tmp_path):

@@ -62,6 +62,19 @@ def test_serve_processed_file_returns_file_response_for_existing_file(tmp_path, 
     assert Path(response.path) == image_path
 
 
+def test_serve_raw_file_returns_file_response_for_selected_source(tmp_path, monkeypatch):
+    source_a = tmp_path / "source-a"
+    source_b = tmp_path / "source-b"
+    image_path = source_b / "nested" / "bird.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"image")
+    monkeypatch.setattr(web_app, "source_dirs", [source_a, source_b])
+
+    response = web_app.serve_raw_file("source-1/nested/bird.jpg")
+
+    assert Path(response.path) == image_path
+
+
 def test_serve_processed_file_raises_404_for_missing_file(tmp_path, monkeypatch):
     processed_root = tmp_path / "processed"
     processed_root.mkdir()
@@ -71,6 +84,19 @@ def test_serve_processed_file_raises_404_for_missing_file(tmp_path, monkeypatch)
         web_app.serve_processed_file("birds/missing.jpg")
 
     assert exc_info.value.status_code == 404
+
+
+def test_resolve_web_path_uses_matching_source_root(tmp_path, monkeypatch):
+    source_a = tmp_path / "source-a"
+    source_b = tmp_path / "source-b"
+    image_path = source_b / "nested" / "bird.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"image")
+    monkeypatch.setattr(web_app, "source_dirs", [source_a, source_b])
+
+    result = web_app.resolve_web_path(str(image_path))
+
+    assert result == "/raw/source-1/nested/bird.jpg"
 
 
 def test_index_redirects_to_settings_when_first_run(monkeypatch):

@@ -71,8 +71,13 @@ if not is_valid:
         logger.error(f"  - {err}")
     raise ValueError(f"Invalid paths configuration: {errors}")
 
-# Get source directory (photo base directory) for path resolution
+# Get source directories for raw photo path resolution
 sources = config['paths'].get('sources', [])
+source_dirs = [
+    Path(src.get('path'))
+    for src in sources
+    if src.get('path')
+]
 source_dir = ''
 if sources and len(sources) > 0:
     source_dir = sources[0].get('path', '')
@@ -118,10 +123,6 @@ if processed_dir and not processed_dir.exists():
 # Note: Using custom route for /processed (see serve_processed_file above)
 app.include_router(recognition_router)
 
-# Mount source directory for "Original View" - use follow_symlink=True for Unicode path support
-if source_dir and source_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(source_dir), follow_symlink=True), name="static")
-
 # Mount library static files (Bootstrap, icons, etc.) - does not depend on source_dir
 lib_static_dir = BASE_DIR / "src" / "web" / "static"
 if lib_static_dir.exists():
@@ -148,8 +149,13 @@ def get_db_conn():
     return path_helpers.get_db_conn(db_path)
 
 def resolve_web_path(original_path_str: str) -> Optional[str]:
-    """Resolves raw file path to /static/... URL"""
-    return path_helpers.resolve_web_path(original_path_str, source_dir, logger)
+    """Resolves raw file path to /raw/... URL"""
+    return path_helpers.resolve_web_path(original_path_str, source_dirs, logger)
+
+@app.get("/raw/{path:path}")
+def serve_raw_file(path: str):
+    """Custom file handler for original images across multiple source roots."""
+    return path_helpers.get_raw_file_response(path, source_dirs)
 
 @app.get("/processed/{path:path}")
 def serve_processed_file(path: str):

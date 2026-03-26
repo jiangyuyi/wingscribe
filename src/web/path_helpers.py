@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
@@ -36,36 +36,83 @@ def get_db_conn(db_path: Path):
     return conn
 
 
-def resolve_web_path(original_path_str: str, source_dir: Optional[Path], logger) -> Optional[str]:
+def get_raw_file_response(path: str, source_dirs: Sequence[Path]):
+    if not source_dirs:
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    normalized = path.replace("\\", "/")
+    parts = normalized.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    source_key, relative_path = parts
+    if not source_key.startswith("source-"):
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    try:
+        source_index = int(source_key.split("-", 1)[1])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=f"File not found: {path}") from exc
+
+    if source_index < 0 or source_index >= len(source_dirs):
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    full_path = source_dirs[source_index] / relative_path.replace("/", os.sep)
+    if full_path.exists() and full_path.is_file():
+        return FileResponse(full_path)
+    raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+
+def resolve_web_path(
+    original_path_str: str,
+    source_dirs: Sequence[Path],
+    logger,
+) -> Optional[str]:
     """Resolve raw file path to /static/... URL."""
     if not original_path_str:
         logger.warning("resolve_web_path: empty path")
         return None
     try:
         normalized = original_path_str.replace("\\", "/")
-        if source_dir and not is_absolute_path(normalized):
-            abs_path = source_dir / normalized
+        candidate_paths = []
+        if is_absolute_path(normalized):
+            candidate_paths.append(Path(normalized))
         else:
-            abs_path = Path(normalized)
-
-        norm_abs = os.path.normpath(str(abs_path))
-        norm_base = os.path.normpath(str(source_dir)) if source_dir else None
+            candidate_paths.extend(source_dir / normalized for source_dir in source_dirs)
 
         logger.debug(
-            "resolve_web_path: input='%s', normalized='%s', abs_path='%s', norm_base=%s",
+            "resolve_web_path: input='%s', normalized='%s', sources=%s",
             original_path_str,
             normalized,
-            abs_path,
-            norm_base,
+            source_dirs,
         )
 
-        if norm_base and norm_abs.startswith(norm_base):
-            rel_part = norm_abs[len(norm_base):].lstrip("/\\")
-            result = f"/static/{rel_part.replace(os.sep, '/')}"
-            logger.debug("resolve_web_path: rel_part=%s, result=%s", rel_part, result)
-            return result
+        for source_index, source_dir in enumerate(source_dirs):
+            norm_base = os.path.normpath(str(source_dir))
+            for abs_path in candidate_paths:
+                norm_abs = os.path.normpath(str(abs_path))
+                try:
+                    rel_part = os.path.relpath(norm_abs, norm_base)
+                except ValueError:
+                    continue
 
-        logger.warning("resolve_web_path: path '%s' is not under source_dir %s", abs_path, source_dir)
+                if rel_part == "." or rel_part.startswith(".."):
+                    continue
+
+                result = f"/raw/source-{source_index}/{rel_part.replace(os.sep, '/')}"
+                logger.debug(
+                    "resolve_web_path: source_index=%s, rel_part=%s, result=%s",
+                    source_index,
+                    rel_part,
+                    result,
+                )
+                return result
+
+        logger.warning(
+            "resolve_web_path: path '%s' is not under configured sources %s",
+            original_path_str,
+            source_dirs,
+        )
     except Exception as exc:
         logger.warning("resolve_web_path failed for '%s': %s", original_path_str, exc)
     return None

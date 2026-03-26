@@ -8,7 +8,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -18,9 +18,9 @@ from typing import Optional, List
 BASE_DIR = Path(__file__).parent.parent.parent.absolute()
 sys.path.append(str(BASE_DIR))
 
-from src.metadata.exif_writer import ExifWriter # Added import
+from src.metadata.exif_writer import ExifWriter
 from src.utils.config_loader import load_config, validate_paths_config
-from src.core.io.path_generator import PathGenerator # Added import
+from src.core.io.path_generator import PathGenerator
 from src.web.routes.recognition import router as recognition_router
 from src.web import task_manager as task_manager_module
 from src.web.task_manager import TaskManager as ExtractedTaskManager
@@ -340,9 +340,6 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/download_raw")
 def download_raw(path: str):
     return admin_service.download_raw()
-
-# Existing APIs (search, update, reset) ... 
-# (Keep reset logic but simplify for brevity in this rewrite, ensure full logic is present in final file)
 
 @app.post("/api/admin/reset")
 def reset_system():

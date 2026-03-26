@@ -195,3 +195,9 @@
      - completed via `src/web/admin_service.py`
      - `app.py` now keeps route-level wrappers while admin/statistics behavior lives in the extracted service
      - added direct service tests for admin dashboard rendering, stats aggregation, scan-history manager closing, and rebuild error cleanup
+
+4. Final low-risk cleanup before wrap-up
+   - status:
+     - removed stale import comments and dead imports from `src/web/app.py`
+     - removed outdated inline rewrite note after the admin reset route extraction
+     - kept compatibility exports and route wrappers unchanged to avoid late-stage behavior drift

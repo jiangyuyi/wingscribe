@@ -163,6 +163,9 @@
      - `/api/photos/by_taxonomy`
      - `/api/taxonomy/search`
    - keep route signatures stable in `app.py` and move business logic behind thin wrappers
+   - status:
+     - completed via `src/web/taxonomy_service.py`
+     - added direct service tests for manager closing and taxonomy-photo query parameter behavior
 
 2. Split pipeline-management logic out of `src/web/app.py`
    - target endpoints/functions:

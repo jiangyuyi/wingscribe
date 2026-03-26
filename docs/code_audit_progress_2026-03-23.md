@@ -152,3 +152,24 @@
     - `add_photo_record()` and species-stats updates now stay in the same short transaction
     - in-memory databases keep using the shared connection for test compatibility
     - legacy direct `manager.conn` access still exists for compatibility, so a full session/transaction refactor can still be considered later
+
+## Next split steps
+
+1. Split taxonomy/photo query logic out of `src/web/app.py`
+   - target endpoints/functions:
+     - `/api/search_species`
+     - `/api/taxonomy/tree`
+     - `/api/taxonomy/stats`
+     - `/api/photos/by_taxonomy`
+     - `/api/taxonomy/search`
+   - keep route signatures stable in `app.py` and move business logic behind thin wrappers
+
+2. Split pipeline-management logic out of `src/web/app.py`
+   - target endpoints/functions:
+     - `/api/pipeline/start`
+     - `/api/pipeline/folders`
+     - `/api/pipeline/folders/{full_path}`
+     - `/api/pipeline/start_by_folders`
+     - `/api/pipeline/stop`
+     - folder-tree helpers
+   - preserve compatibility symbols that tests currently patch from `web_app`

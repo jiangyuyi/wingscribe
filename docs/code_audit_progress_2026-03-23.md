@@ -176,3 +176,9 @@
      - `/api/pipeline/stop`
      - folder-tree helpers
    - preserve compatibility symbols that tests currently patch from `web_app`
+   - status:
+     - completed via `src/web/pipeline_service.py`
+     - `app.py` now keeps thin wrappers for the active pipeline-management routes
+     - `_build_folder_tree` now delegates to the extracted service implementation
+     - compatibility re-exports for `TaskManager` and `threading` are still preserved in `app.py` so existing tests and callers can keep patching the same names
+     - added direct service tests for date normalization, stop rejection, folder filtering, and missing-folder lazy-load behavior

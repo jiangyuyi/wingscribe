@@ -25,6 +25,7 @@ from src.web.routes.recognition import router as recognition_router
 from src.web import task_manager as task_manager_module
 from src.web.task_manager import TaskManager as ExtractedTaskManager
 from src.web import taxonomy_service
+from src.web import pipeline_service
 from src.web.config_helpers import (
     get_config_definition,
     get_nested_value,
@@ -301,69 +302,18 @@ def get_scan_history():
 
 @app.post("/api/pipeline/start")
 def start_pipeline(req: StartPipelineRequest):
-    if task_manager.is_running:
-        return {"status": "error", "message": "Pipeline already running"}
-    
-    # Normalize empty strings to None
-    s_date = req.start_date if req.start_date else None
-    e_date = req.end_date if req.end_date else None
-    
-    task_manager.start_pipeline(s_date, e_date)
-    return {"status": "success", "message": "Pipeline started"}
-
-# 需要排除的系统文件夹列表
-IGNORED_DIRS = {'@Recycle', '$RECYCLE.BIN', '.Trash-', '@eaDir', 'System Volume Information'}
+    return pipeline_service.start_pipeline(task_manager, req)
 
 @app.get("/api/pipeline/folders")
 def get_folder_tree():
     """获取 sources 配置的文件夹树形结构（只返回第一层）"""
-    try:
-        sources = config.get('paths', {}).get('sources', [])
-        if not sources:
-            return {"tree": []}
-
-        tree = []
-        for source in sources:
-            if not source.get('enabled', True):
-                continue
-
-            path_str = source.get('path', '')
-            if not path_str:
-                continue
-
-            # sources.path now uses absolute path
-            full_path = Path(path_str)
-
-            if not full_path.exists():
-                continue
-
-            # Build tree from this path, only first level (lazy load children)
-            folder_tree = _build_folder_tree(full_path, recursive=False, base_rel_path=path_str, max_depth=1)
-            tree.extend(folder_tree)
-
-        return {"tree": tree}
-    except Exception as e:
-        logger.error(f"Error building folder tree: {e}")
-        return {"tree": [], "error": str(e)}
+    return pipeline_service.get_folder_tree(config, logger, _build_folder_tree)
 
 
 @app.get("/api/pipeline/folders/{full_path:path}")
 def get_folder_children(full_path: str):
     """获取指定路径的子目录（懒加载）"""
-    try:
-        # full_path is now absolute, no need to resolve relative to base_dir
-        current_path = Path(full_path)
-
-        if not current_path.exists() or not current_path.is_dir():
-            return {"children": []}
-
-        # Build one level of children
-        children = _build_folder_tree(current_path, recursive=False, base_rel_path=full_path, max_depth=1)
-
-        return {"children": children}
-    except Exception as e:
-        logger.error(f"Error getting folder children: {e}")
-        return {"children": [], "error": str(e)}
+    return pipeline_service.get_folder_children(full_path, logger, _build_folder_tree)
 
 def _build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = "", max_depth: int = 5, current_depth: int = 0):
     """递归构建文件夹树
@@ -373,64 +323,24 @@ def _build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = ""
         recursive: 是否递归扫描子目录
         base_rel_path: 相对于 source_dir 的基础路径
     """
-    if current_depth >= max_depth:
-        return []
-
-    result = []
-    try:
-        for item in sorted(root_path.iterdir()):
-            if not item.is_dir():
-                continue
-
-            # Skip system directories and recycle bins
-            if item.name.startswith('.') or item.name.startswith('$'):
-                continue
-            if item.name in IGNORED_DIRS or any(item.name.startswith(p.replace('-', '')) for p in IGNORED_DIRS if '-'):
-                continue
-
-            # Calculate relative path from source_dir
-            if base_rel_path:
-                rel_path = f"{base_rel_path}/{item.name}"
-            else:
-                rel_path = item.name
-
-            node = {
-                "name": item.name,
-                "path": rel_path,
-                "type": "folder"
-            }
-
-            if recursive and current_depth < max_depth - 1:
-                children = _build_folder_tree(item, recursive, rel_path, max_depth, current_depth + 1)
-                if children:
-                    node["children"] = children
-
-            result.append(node)
-    except PermissionError:
-        pass
-    except Exception as e:
-        logger.warning(f"Error scanning {root_path}: {e}")
-
-    return result
+    return pipeline_service.build_folder_tree(
+        root_path,
+        recursive,
+        base_rel_path=base_rel_path,
+        max_depth=max_depth,
+        current_depth=current_depth,
+        logger=logger,
+    )
 
 @app.post("/api/pipeline/start_by_folders")
 def start_pipeline_by_folders(req: StartPipelineByFoldersRequest):
     """按文件夹执行 Pipeline"""
-    if task_manager.is_running:
-        return {"status": "error", "message": "Pipeline already running"}
-
-    logger.info(f"Starting pipeline by folders: {req.paths}, recursive={req.recursive}")
-    task_manager.start_pipeline_by_folders(req.paths, req.recursive)
-    return {"status": "success", "message": f"Pipeline started for {len(req.paths)} folder(s)"}
+    return pipeline_service.start_pipeline_by_folders(task_manager, req, logger)
 
 
 @app.post("/api/pipeline/stop")
 def stop_pipeline():
-    if not task_manager.is_running:
-        return {"status": "error", "message": "Pipeline is not running"}
-
-    task_manager.stop()
-    return {"status": "success", "message": "Pipeline stop requested"}
+    return pipeline_service.stop_pipeline(task_manager)
 
 @app.websocket("/ws/progress")
 async def websocket_endpoint(websocket: WebSocket):

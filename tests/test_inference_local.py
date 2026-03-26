@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 from pathlib import Path
 import logging
 
@@ -54,6 +56,37 @@ def test_get_text_features_uses_cache(monkeypatch):
 
     assert recognizer.model.encode_text_calls == 1
     assert first is second
+
+
+def test_get_text_features_serializes_concurrent_cache_misses():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.model = _FakeModel()
+    recognizer.cached_labels = None
+    recognizer.cached_text_features = None
+    recognizer.tokenizer = lambda labels: torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float32)
+
+    original_encode_text = recognizer.model.encode_text
+
+    def slow_encode_text(batch_tokens):
+        time.sleep(0.05)
+        return original_encode_text(batch_tokens)
+
+    recognizer.model.encode_text = slow_encode_text
+    results = []
+
+    def worker():
+        results.append(recognizer._get_text_features(["sparrow", "robin"]))
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert recognizer.model.encode_text_calls == 1
+    assert len(results) == 2
+    assert results[0] is results[1]
 
 
 def test_predict_batch_returns_empty_lists_when_no_candidate_labels():

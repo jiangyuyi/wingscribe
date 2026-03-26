@@ -32,6 +32,45 @@ from src.core.io.path_parser import PathParser
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+def _get_process_rss_mb() -> float:
+    try:
+        import psutil
+
+        return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+    except Exception:
+        pass
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = PROCESS_MEMORY_COUNTERS()
+        counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+        process = ctypes.windll.kernel32.GetCurrentProcess()
+        ctypes.windll.psapi.GetProcessMemoryInfo(
+            process,
+            ctypes.byref(counters),
+            counters.cb,
+        )
+        return counters.WorkingSetSize / (1024 * 1024)
+    except Exception:
+        return -1.0
+
 class SmartScanner:
     def __init__(self, root_path: Path, start_date: str = None, end_date: str = None, exclude_dirs: list = None):
         self.root_path = root_path
@@ -140,6 +179,7 @@ class WingScribePipeline:
 
         # 日志等级配置
         self.log_level = self.config.get('web', {}).get('log_level', 'info').lower()
+        self.memory_profile_enabled = os.getenv("WINGSCRIBE_PROFILE_MEMORY") == "1"
         # 进度跟踪
         self.total_files = 0
         self.processed_count = 0
@@ -181,6 +221,19 @@ class WingScribePipeline:
     def set_progress_callback(self, callback):
         """设置进度回调函数"""
         self._progress_callback = callback
+
+    def _log_memory(self, stage: str):
+        if not getattr(self, "memory_profile_enabled", False):
+            return
+
+        logging.info(
+            "[MemoryProfile][Pipeline][%s][thread=%s] rss=%.1fMB recognizer=%s detector_loaded=%s",
+            stage,
+            threading.current_thread().name,
+            _get_process_rss_mb(),
+            type(self.recognizer).__name__ if self.recognizer is not None else "None",
+            self._detector_loaded,
+        )
 
     def set_stop_checker(self, callback):
         """Register a cooperative stop checker."""
@@ -377,6 +430,8 @@ class WingScribePipeline:
             logging.error(f"Unknown recognition mode: {mode}")
             raise ValueError(f"Unknown recognition mode: {mode}")
 
+        self._log_memory(f"after_recognizer_init mode={mode}")
+
     def _recognize_batch(self, items, candidate_labels):
         if not items:
             return
@@ -384,6 +439,7 @@ class WingScribePipeline:
         try:
             image_paths = [item['crop_path'] for item in items]
             top_k = self.config.get('recognition', {}).get('top_k', 5)
+            self._log_memory(f"before_recognize_batch items={len(items)} labels={len(candidate_labels)}")
 
             if hasattr(self.recognizer, 'predict_batch'):
                 batch_results = self.recognizer.predict_batch(image_paths, candidate_labels, top_k=top_k)
@@ -392,6 +448,7 @@ class WingScribePipeline:
                     self.recognizer.predict(p, candidate_labels, top_k=top_k)
                     for p in image_paths
                 ]
+            self._log_memory(f"after_recognize_batch items={len(items)} labels={len(candidate_labels)}")
 
             alt_threshold = self.config.get('recognition', {}).get('alternatives_threshold', 70)
             low_conf_threshold = self.config.get('recognition', {}).get('low_confidence_threshold', 60)

@@ -210,3 +210,12 @@
      - raw image serving now uses an explicit `/raw/source-{index}/...` route instead of relying on one mounted `StaticFiles` root
      - raw URL resolution now matches against all configured source roots
      - added regression tests for multi-source path resolution and raw file serving
+
+6. CPU memory profiling for local recognition
+   - status:
+     - added optional memory profiling logs gated by `WINGSCRIBE_PROFILE_MEMORY=1`
+     - added a concurrency guard around local text-feature cache construction
+     - added regression coverage to ensure concurrent cache misses only encode text features once
+   - finding:
+     - CPU memory growth is dominated by text-feature encoding for the candidate label set, not by per-image tensor stacking
+     - prior logs showed repeated concurrent cache misses for the same label set, which could multiply temporary memory usage under thread-pool parallelism

@@ -2,7 +2,11 @@ from src.web import admin_service
 
 
 class TemplateRecorder:
-    def TemplateResponse(self, template_name, context):
+    def TemplateResponse(self, template_name=None, context=None, *, name=None, **kwargs):
+        if name is not None:
+            template_name = name
+        if context is None:
+            context = {}
         return {"template": template_name, "context": context}
 
 

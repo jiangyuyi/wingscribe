@@ -198,7 +198,10 @@ def is_paths_configured():
 def index(request: Request, q: str = "", filter: str = "", date: str = "", limit: int = 50, offset: int = 0, skip_first_check: bool = False):
     # Check for first run or empty paths - redirect to settings if not configured
     if not skip_first_check and (is_first_run() or not is_paths_configured()):
-        return templates.TemplateResponse("settings.html", {"request": request, "is_first_run": is_first_run()})
+        return templates.TemplateResponse(
+            name="settings.html",
+            context={"request": request, "is_first_run": is_first_run()},
+        )
 
     conn = get_db_conn()
     cursor = conn.cursor()
@@ -249,21 +252,24 @@ def index(request: Request, q: str = "", filter: str = "", date: str = "", limit
     next_offset = offset + limit
     prev_offset = max(0, offset - limit)
     
-    return templates.TemplateResponse("index.html", {
-        "request": request, 
-        "photos": display_photos,
-        "query": q,
-        "current_filter": filter,
-        "current_date": date,
-        "limit": limit,
-        "offset": offset,
-        "total_count": total_count,
-        "available_dates": available_dates,
-        "has_next": has_next,
-        "has_prev": has_prev,
-        "next_offset": next_offset,
-        "prev_offset": prev_offset
-    })
+    return templates.TemplateResponse(
+        name="index.html",
+        context={
+            "request": request,
+            "photos": display_photos,
+            "query": q,
+            "current_filter": filter,
+            "current_date": date,
+            "limit": limit,
+            "offset": offset,
+            "total_count": total_count,
+            "available_dates": available_dates,
+            "has_next": has_next,
+            "has_prev": has_prev,
+            "next_offset": next_offset,
+            "prev_offset": prev_offset,
+        },
+    )
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
@@ -601,9 +607,9 @@ class SaveConfigRequest(BaseModel):
     restart: bool = False
 
 @app.get("/settings", response_class=HTMLResponse)
-async def settings_page():
+async def settings_page(request: Request):
     """Configuration page"""
-    return templates.TemplateResponse("settings.html", {"request": {}})
+    return templates.TemplateResponse(name="settings.html", context={"request": request})
 
 @app.get("/api/config")
 async def get_config():

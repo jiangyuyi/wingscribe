@@ -182,3 +182,16 @@
      - `_build_folder_tree` now delegates to the extracted service implementation
      - compatibility re-exports for `TaskManager` and `threading` are still preserved in `app.py` so existing tests and callers can keep patching the same names
      - added direct service tests for date normalization, stop rejection, folder filtering, and missing-folder lazy-load behavior
+
+3. Continue trimming `src/web/app.py` around admin/statistics logic
+   - target endpoints/functions:
+     - `/admin`
+     - `/api/stats`
+     - `/api/scan_history`
+     - `/download_raw`
+     - `/api/admin/reset`
+     - `/api/admin/rebuild_stats`
+   - status:
+     - completed via `src/web/admin_service.py`
+     - `app.py` now keeps route-level wrappers while admin/statistics behavior lives in the extracted service
+     - added direct service tests for admin dashboard rendering, stats aggregation, scan-history manager closing, and rebuild error cleanup

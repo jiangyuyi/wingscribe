@@ -26,6 +26,7 @@ from src.web import task_manager as task_manager_module
 from src.web.task_manager import TaskManager as ExtractedTaskManager
 from src.web import taxonomy_service
 from src.web import pipeline_service
+from src.web import admin_service
 from src.web.config_helpers import (
     get_config_definition,
     get_nested_value,
@@ -260,45 +261,18 @@ def index(request: Request, q: str = "", filter: str = "", date: str = "", limit
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
-    # Check if paths are configured - redirect to settings if not
-    if not is_paths_configured():
-        return templates.TemplateResponse("settings.html", {"request": request, "is_first_run": False})
-    stats = get_stats()
-    return templates.TemplateResponse("admin.html", {"request": request, "stats": stats})
+    return admin_service.admin_dashboard(request, templates, is_paths_configured, get_stats)
 
 def get_stats():
-    """获取统计数据"""
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT COUNT(*) FROM photos")
-        total_photos = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(DISTINCT scientific_name) FROM photos")
-        total_species = cursor.fetchone()[0]
-    except:
-        total_photos = 0
-        total_species = 0
-    finally:
-        conn.close()
-
-    return {
-        "total_photos": total_photos,
-        "total_species": total_species
-    }
+    return admin_service.get_stats(get_db_conn)
 
 @app.get("/api/stats")
 def get_api_stats():
-    """API: 获取统计数据"""
     return get_stats()
 
 @app.get("/api/scan_history")
 def get_scan_history():
-    manager = create_db_manager()
-    try:
-        history = manager.get_recent_scans(limit=10)
-        return history
-    finally:
-        manager.close()
+    return admin_service.get_scan_history(create_db_manager)
 
 @app.post("/api/pipeline/start")
 def start_pipeline(req: StartPipelineRequest):
@@ -365,86 +339,26 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/download_raw")
 def download_raw(path: str):
-    # path parameter is expected to be a web path suffix or relative path
-    # But since we have multiple roots, this is tricky.
-    # Better to rely on static serving for viewing.
-    # If user wants to "download", they can right click -> save as on the served image.
-    # Implementing a generic download endpoint for arbitrary files is complex with multiple roots.
-    # We will skip this for now and rely on static mounts.
-    return {"error": "Use context menu to save image"}
+    return admin_service.download_raw()
 
 # Existing APIs (search, update, reset) ... 
 # (Keep reset logic but simplify for brevity in this rewrite, ensure full logic is present in final file)
 
 @app.post("/api/admin/reset")
 def reset_system():
-    try:
-        # 安全检查：获取所有配置的源目录，禁止删除这些目录
-        source_paths = []
-        sources_config = config.get('paths', {}).get('sources', [])
-        for src in sources_config:
-            src_path = src.get('path', '')
-            if src_path:
-                # sources.path is now always absolute
-                source_paths.append(Path(src_path).absolute())
-
-        # 如果 output 目录也是源目录，禁止删除（防止配置错误导致的灾难）
-        protected_paths = set(source_paths)
-        protected_paths.add(BASE_DIR.absolute())  # 保护项目根目录
-
-        logger.warning(f"Factory reset: Protected paths: {protected_paths}")
-
-        # 1. Clear DB
-        if db_path.exists():
-            gc.collect()
-            temp_path = db_path.with_suffix(".db.del")
-            try:
-                if temp_path.exists(): os.remove(temp_path)
-                os.rename(db_path, temp_path)
-                os.remove(temp_path)
-            except: pass
-
-        # 2. Clear Processed - 带安全检查
-        # 只清空与源目录不同的输出目录
-        processed_abs = processed_dir.absolute()
-        if processed_dir.exists() and processed_abs not in protected_paths:
-            for item in processed_dir.iterdir():
-                try:
-                    if item.is_file(): item.unlink()
-                    elif item.is_dir(): shutil.rmtree(item)
-                except: pass
-        else:
-            logger.warning(f"Skipped clearing processed_dir (protected or not exists): {processed_dir}")
-
-        init_app_db()
-
-        # Re-import taxonomy with references for Chinese name mappings
-        mgr = create_db_manager()
-        if mgr.conn.execute("SELECT count(*) FROM taxonomy").fetchone()[0] == 0:
-            refs_dir = str(BASE_DIR / config['paths']['references_path'])
-            mgr.import_from_excel(
-                str(BASE_DIR / config['paths']['ioc_list_path']),
-                refs_dir=refs_dir
-            )
-        mgr.close()
-        
-        return {"status": "success"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    return admin_service.reset_system(
+        config,
+        BASE_DIR,
+        db_path,
+        processed_dir,
+        init_app_db,
+        create_db_manager,
+        logger,
+    )
 
 @app.get("/api/admin/rebuild_stats")
 def rebuild_species_stats():
-    """重建物种统计表（首次使用或数据不一致时调用）"""
-    manager = None
-    try:
-        manager = create_db_manager()
-        manager.rebuild_species_stats()
-        return {"status": "success", "message": "Species stats table rebuilt"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
-    finally:
-        if manager is not None:
-            manager.close()
+    return admin_service.rebuild_species_stats(create_db_manager)
 
 @app.get("/api/search_species")
 def search_species(q: str):

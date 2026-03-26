@@ -33,7 +33,11 @@ class TemplateRecorder:
     def __init__(self):
         self.calls = []
 
-    def TemplateResponse(self, template_name, context):
+    def TemplateResponse(self, template_name=None, context=None, *, name=None, **kwargs):
+        if name is not None:
+            template_name = name
+        if context is None:
+            context = {}
         payload = {"template": template_name, "context": context}
         self.calls.append(payload)
         return payload
@@ -250,9 +254,9 @@ def test_settings_page_renders_template(monkeypatch):
     templates = TemplateRecorder()
     monkeypatch.setattr(web_app, "templates", templates)
 
-    result = asyncio.run(web_app.settings_page())
+    result = asyncio.run(web_app.settings_page(request=object()))
 
-    assert result == {"template": "settings.html", "context": {"request": {}}}
+    assert result == {"template": "settings.html", "context": {"request": ANY}}
 
 
 def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monkeypatch):

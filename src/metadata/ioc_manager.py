@@ -3,38 +3,90 @@ import logging
 import pandas as pd
 import zipfile
 import xml.etree.ElementTree as ET
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Dict, Optional
 
 class IOCManager:
-    def __init__(self, db_path: str, base_dir: str = ""):
+    def __init__(
+        self,
+        db_path: str,
+        base_dir: str = "",
+        source_base_dir: str = "",
+        processed_base_dir: str = ""
+    ):
         self.db_path = db_path
-        self.base_dir = Path(base_dir) if base_dir else None
+        self._use_shared_connection_only = db_path == ":memory:"
+        self._write_lock = threading.Lock()
+        if base_dir and not source_base_dir:
+            source_base_dir = base_dir
+        self.source_base_dir = Path(source_base_dir) if source_base_dir else None
+        self.processed_base_dir = Path(processed_base_dir) if processed_base_dir else None
         # Ensure parent directory exists
         db_file = Path(db_path)
+        self._db_file = db_file
         db_file.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(db_file), check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = self._create_connection()
         # Removed persistent self.cursor for thread safety
         self._init_db()
 
-    def _abs_to_rel(self, abs_path: str) -> str:
-        """Convert absolute path to relative path based on base_dir"""
-        if not self.base_dir or not abs_path:
+    def _create_connection(self):
+        conn = sqlite3.connect(str(self._db_file), timeout=30.0, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    @contextmanager
+    def _operation_connection(self, write: bool = False):
+        if self._use_shared_connection_only:
+            yield self.conn
+            return
+
+        if write:
+            with self._write_lock:
+                conn = self._create_connection()
+                try:
+                    yield conn
+                    conn.commit()
+                finally:
+                    conn.close()
+            return
+
+        conn = self._create_connection()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def _abs_to_rel(self, abs_path: str, base_dir: Optional[Path]) -> str:
+        """Convert absolute path to relative path based on base_dir."""
+        if not base_dir or not abs_path:
             return abs_path
         try:
-            return str(Path(abs_path).relative_to(self.base_dir))
+            return Path(abs_path).relative_to(base_dir).as_posix()
         except ValueError:
             return abs_path  # Not under base_dir, keep as is
 
-    def _rel_to_abs(self, rel_path: str) -> str:
-        """Convert relative path to absolute path based on base_dir"""
-        if not self.base_dir or not rel_path:
+    def _rel_to_abs(self, rel_path: str, base_dir: Optional[Path]) -> str:
+        """Convert relative path to absolute path based on base_dir."""
+        if not base_dir or not rel_path:
             return rel_path
         p = Path(rel_path)
         if p.is_absolute():
             return rel_path
-        return str(self.base_dir / p)
+        return str(base_dir / p)
+
+    def to_storage_original_path(self, abs_path: str) -> str:
+        return self._abs_to_rel(abs_path, self.source_base_dir)
+
+    def to_storage_processed_path(self, abs_path: str) -> str:
+        return self._abs_to_rel(abs_path, self.processed_base_dir)
+
+    def resolve_original_path(self, stored_path: str) -> str:
+        return self._rel_to_abs(stored_path, self.source_base_dir)
+
+    def resolve_processed_path(self, stored_path: str) -> str:
+        return self._rel_to_abs(stored_path, self.processed_base_dir)
 
     def _init_db(self):
         # Taxonomy Table
@@ -431,8 +483,9 @@ class IOCManager:
         if not scientific_name:
             return None
         try:
-            cursor = self.conn.execute("SELECT * FROM taxonomy WHERE scientific_name=?", (scientific_name,))
-            row = cursor.fetchone()
+            with self._operation_connection() as conn:
+                cursor = conn.execute("SELECT * FROM taxonomy WHERE scientific_name=?", (scientific_name,))
+                row = cursor.fetchone()
             return dict(row) if row else None
         except Exception as e:
             logging.warning(f"get_bird_info failed for '{scientific_name}': {e}")
@@ -468,13 +521,10 @@ class IOCManager:
         Returns:
             分类树列表，每个元素是一个目（Order）对象，包含其下的科、属、物种
         """
-        # Build WHERE clause for date filter if needed
-        date_join = ""
-        date_where = ""
         params = []
+        count_expr = "COUNT(DISTINCT p.id)"
         if date_filter:
-            date_join = "JOIN photos p2 ON p.scientific_name = p2.scientific_name"
-            date_where = "AND p2.captured_date = ?"
+            count_expr = "COUNT(DISTINCT CASE WHEN p.captured_date = ? THEN p.id END)"
             params.append(date_filter)
 
         # Step 1: Get all taxonomy data with photo counts in ONE query
@@ -485,10 +535,9 @@ class IOCManager:
                 t.family_cn, t.family_sci,
                 t.genus_cn, t.genus_sci,
                 t.scientific_name, t.chinese_name, t.english_name,
-                COUNT(DISTINCT p.id) as photo_count
+                {count_expr} as photo_count
             FROM taxonomy t
             LEFT JOIN photos p ON t.scientific_name = p.scientific_name
-            {date_join}
             WHERE t.order_cn IS NOT NULL AND t.order_cn != ''
             GROUP BY t.scientific_name
             ORDER BY t.order_cn, t.family_cn, t.genus_cn, t.chinese_name
@@ -724,54 +773,56 @@ class IOCManager:
 
     def check_hash_exists(self, file_hash: str) -> bool:
         if not file_hash: return False
-        cursor = self.conn.execute("SELECT 1 FROM photos WHERE file_hash = ? LIMIT 1", (file_hash,))
-        return cursor.fetchone() is not None
+        with self._operation_connection() as conn:
+            cursor = conn.execute("SELECT 1 FROM photos WHERE file_hash = ? LIMIT 1", (file_hash,))
+            return cursor.fetchone() is not None
 
     def get_all_hashes(self) -> set:
         """获取所有已处理文件的哈希集合，用于批量去重"""
-        cursor = self.conn.execute("SELECT file_hash FROM photos WHERE file_hash IS NOT NULL AND file_hash != ''")
-        return {row[0] for row in cursor.fetchall()}
+        with self._operation_connection() as conn:
+            cursor = conn.execute("SELECT file_hash FROM photos WHERE file_hash IS NOT NULL AND file_hash != ''")
+            return {row[0] for row in cursor.fetchall()}
 
     def add_photo_record(self, record: Dict):
         # Convert absolute paths to relative paths for storage
         record = dict(record)
         if 'file_path' in record and record['file_path']:
-            record['file_path'] = self._abs_to_rel(record['file_path'])
+            record['file_path'] = self.to_storage_processed_path(record['file_path'])
         if 'original_path' in record and record['original_path']:
-            record['original_path'] = self._abs_to_rel(record['original_path'])
+            record['original_path'] = self.to_storage_original_path(record['original_path'])
 
         keys = ', '.join(record.keys())
         placeholders = ', '.join(['?'] * len(record))
         values = tuple(record.values())
 
         sql = f"INSERT INTO photos ({keys}) VALUES ({placeholders})"
-        cursor = self.conn.execute(sql, values)
-        self.conn.commit()
+        with self._operation_connection(write=True) as conn:
+            cursor = conn.execute(sql, values)
 
-        # Update species stats
-        if record.get('scientific_name'):
-            self.update_species_stats_for_photo(record['scientific_name'])
+            # Update species stats in the same transaction to keep photo/stat changes aligned
+            if record.get('scientific_name'):
+                self._update_species_stats_for_photo_conn(conn, record['scientific_name'])
 
-        return cursor.lastrowid
+            return cursor.lastrowid
 
     def update_photo_species(self, photo_id: int, scientific_name: str, chinese_name: str):
-        # Get old scientific_name before update
-        cursor = self.conn.execute("SELECT scientific_name FROM photos WHERE id = ?", (photo_id,))
-        row = cursor.fetchone()
-        old_sci_name = row[0] if row else None
+        with self._operation_connection(write=True) as conn:
+            # Get old scientific_name before update
+            cursor = conn.execute("SELECT scientific_name FROM photos WHERE id = ?", (photo_id,))
+            row = cursor.fetchone()
+            old_sci_name = row[0] if row else None
 
-        self.conn.execute('''
-            UPDATE photos
-            SET scientific_name = ?, primary_bird_cn = ?, confidence_score = 1.0
-            WHERE id = ?
-        ''', (scientific_name, chinese_name, photo_id))
-        self.conn.commit()
+            conn.execute('''
+                UPDATE photos
+                SET scientific_name = ?, primary_bird_cn = ?, confidence_score = 1.0
+                WHERE id = ?
+            ''', (scientific_name, chinese_name, photo_id))
 
-        # Update species stats for both old and new species
-        if old_sci_name:
-            self.update_species_stats_for_photo(old_sci_name)
-        if scientific_name:
-            self.update_species_stats_for_photo(scientific_name)
+            # Update species stats for both old and new species in the same transaction
+            if old_sci_name:
+                self._update_species_stats_for_photo_conn(conn, old_sci_name)
+            if scientific_name:
+                self._update_species_stats_for_photo_conn(conn, scientific_name)
 
     def add_scan_history(self, record: Dict):
         keys = ', '.join(record.keys())
@@ -779,12 +830,13 @@ class IOCManager:
         values = tuple(record.values())
         
         sql = f"INSERT INTO scan_history ({keys}) VALUES ({placeholders})"
-        self.conn.execute(sql, values)
-        self.conn.commit()
+        with self._operation_connection(write=True) as conn:
+            conn.execute(sql, values)
 
     def get_recent_scans(self, limit: int = 5) -> List[Dict]:
-        cursor = self.conn.execute("SELECT * FROM scan_history ORDER BY id DESC LIMIT ?", (limit,))
-        return [dict(row) for row in cursor.fetchall()]
+        with self._operation_connection() as conn:
+            cursor = conn.execute("SELECT * FROM scan_history ORDER BY id DESC LIMIT ?", (limit,))
+            return [dict(row) for row in cursor.fetchall()]
 
     # ========== Species Stats Table Methods ==========
 
@@ -811,12 +863,19 @@ class IOCManager:
             LEFT JOIN photos p ON t.scientific_name = p.scientific_name
             GROUP BY t.scientific_name
         '''
-        self.conn.execute(sql)
-        self.conn.commit()
+        with self._operation_connection(write=True) as conn:
+            conn.execute(sql)
         logging.info("Species stats table rebuilt")
 
     def update_species_stats_for_photo(self, scientific_name: str):
         """更新单个物种的统计（照片添加/修改后调用）"""
+        if not scientific_name:
+            return
+
+        with self._operation_connection(write=True) as conn:
+            self._update_species_stats_for_photo_conn(conn, scientific_name)
+
+    def _update_species_stats_for_photo_conn(self, conn, scientific_name: str):
         if not scientific_name:
             return
 
@@ -839,8 +898,7 @@ class IOCManager:
             WHERE t.scientific_name = ?
             GROUP BY t.scientific_name
         '''
-        self.conn.execute(sql, (scientific_name,))
-        self.conn.commit()
+        conn.execute(sql, (scientific_name,))
 
     def get_species_stats_fast(self, min_count: int = 1) -> List[Dict]:
         """快速获取有照片的物种统计（从预计算表）"""

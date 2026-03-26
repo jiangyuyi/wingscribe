@@ -9,19 +9,32 @@ from .bioclip_base import BirdRecognizer
 
 class DongniaoRecognizer(BirdRecognizer):
     def __init__(self, api_key: str, api_url: str = "https://ai.open.hhodata.com/api/v2/dongniao"):
-        self.api_key = api_key
-        self.api_url = api_url
+        self.api_key = api_key or ""
+        self.api_url = api_url or ""
         self.did = hashlib.md5(str(uuid.getnode()).encode()).hexdigest()[:32] # Generate consistent DID based on node
         
         if not self.api_key:
             logging.warning("Dongniao API Key is missing! Recognition will fail.")
+        if not self.api_url:
+            logging.warning("Dongniao API URL is missing! Recognition will fail.")
+
+    def predict_batch(
+        self,
+        image_paths: List[str],
+        candidate_labels: List[str],
+        top_k: int = 5
+    ) -> List[List[Dict[str, Any]]]:
+        return [
+            self.predict(image_path, candidate_labels=candidate_labels, top_k=top_k)
+            for image_path in image_paths
+        ]
 
     def predict(self, image_path: str, candidate_labels: List[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Predict using Dongniao API.
         Note: candidate_labels is ignored as Dongniao doesn't support zero-shot candidate restriction.
         """
-        if not self.api_key:
+        if not self.api_key or not self.api_url:
             return []
 
         try:
@@ -54,6 +67,10 @@ class DongniaoRecognizer(BirdRecognizer):
             }
             
             response = requests.post(self.api_url, headers=headers, files=files, timeout=30)
+            status_code = getattr(response, "status_code", 200)
+            if status_code != 200:
+                logging.error(f"Dongniao upload failed: {status_code} - {response.text}")
+                return None
             
             try:
                 resp_json = response.json()
@@ -143,9 +160,17 @@ class DongniaoRecognizer(BirdRecognizer):
         
         results = []
         for item in prediction_list[:top_k]:
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                logging.warning(f"Dongniao Parse Warning: Skip malformed item: {item}")
+                continue
+
             # item: [confidence, "NameString", id, "Type"]
-            conf = float(item[0]) / 100.0 # Convert 98.5 -> 0.985
-            name_str = item[1]
+            try:
+                conf = float(item[0]) / 100.0 # Convert 98.5 -> 0.985
+                name_str = str(item[1])
+            except (TypeError, ValueError) as exc:
+                logging.warning(f"Dongniao Parse Warning: Skip invalid item {item}: {exc}")
+                continue
             
             # Parse "Chinese|English|Latin"
             # Example: "北美红松鼠|North American Red Squirrel|Tamiasciurus hudsonicus"

@@ -1,5 +1,6 @@
 import os
 import torch
+import threading
 from pathlib import Path
 from PIL import Image
 from .bioclip_base import BirdRecognizer
@@ -8,6 +9,45 @@ import logging
 
 # Lazy import open_clip - will be imported after environment variables are set
 _open_clip = None
+
+
+def _get_process_rss_mb() -> float:
+    try:
+        import psutil
+
+        return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+    except Exception:
+        pass
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = PROCESS_MEMORY_COUNTERS()
+        counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+        process = ctypes.windll.kernel32.GetCurrentProcess()
+        ctypes.windll.psapi.GetProcessMemoryInfo(
+            process,
+            ctypes.byref(counters),
+            counters.cb,
+        )
+        return counters.WorkingSetSize / (1024 * 1024)
+    except Exception:
+        return -1.0
 
 def _get_open_clip():
     """Lazy load open_clip to ensure HF mirror env vars are set first."""
@@ -46,9 +86,10 @@ def _check_cuda_stable(max_retries: int = 3) -> bool:
 
 class LocalBirdRecognizer(BirdRecognizer):
     def __init__(self, model_name: str = "bioclip", device: str = None, hf_mirror: str = None):
+        self._memory_profile_enabled = os.getenv("WINGSCRIBE_PROFILE_MEMORY") == "1"
+        self._text_features_lock = threading.Lock()
         # Set HuggingFace mirror if provided
         if hf_mirror:
-            import os
             os.environ['HF_ENDPOINT'] = hf_mirror
             os.environ['HF_HUB_URL'] = hf_mirror
             # Also try the newer HFTransfer method
@@ -97,6 +138,19 @@ class LocalBirdRecognizer(BirdRecognizer):
             else:
                 raise e
 
+    def _log_memory(self, stage: str):
+        if not getattr(self, "_memory_profile_enabled", False):
+            return
+
+        rss_mb = _get_process_rss_mb()
+        logging.info(
+            "[MemoryProfile][LocalBirdRecognizer][%s][thread=%s] rss=%.1fMB device=%s",
+            stage,
+            threading.current_thread().name,
+            rss_mb,
+            self.device,
+        )
+
     def _load_model(self):
         import gc
         # Pre-emptive cleanup to avoid VRAM fragmentation causing spikes
@@ -144,60 +198,61 @@ class LocalBirdRecognizer(BirdRecognizer):
         use_local = ckpt_path.exists()
 
         try:
-            if use_local:
-                logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
-                self.model, _, self.preprocess = oc.create_model_and_transforms(
-                    'ViT-B-16',
-                    pretrained=str(ckpt_path),
-                    **model_kwargs
-                )
-            else:
-                logging.info(f"Local checkpoint not found at {ckpt_path}, loading from Hub: {self.model_id}")
-                self.model, _, self.preprocess = oc.create_model_and_transforms(
-                    self.model_id,
-                    **model_kwargs
-                )
-        except TypeError as e:
-            error_msg = str(e)
-            # Strategy 2: Remove device parameter (older versions)
-            if 'device' in error_msg or 'unexpected keyword argument' in error_msg:
-                logging.warning(f"open_clip doesn't support 'device' param: {e}. Trying without device...")
-                model_kwargs.pop("device", None)
-                try:
-                    if use_local:
-                        self.model, _, self.preprocess = oc.create_model_and_transforms(
-                            'ViT-B-16',
-                            pretrained=str(ckpt_path),
-                            **model_kwargs
-                        )
-                    else:
-                        self.model, _, self.preprocess = oc.create_model_and_transforms(
-                            self.model_id,
-                            **model_kwargs
-                        )
-                    self.model.to(self.device)
-                except TypeError as e2:
-                    # Strategy 3: Remove precision parameter as well
-                    logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
-                    model_kwargs.pop("precision", None)
+            try:
+                if use_local:
+                    logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
                     self.model, _, self.preprocess = oc.create_model_and_transforms(
-                        self.model_id if not use_local else 'ViT-B-16',
-                        pretrained=str(ckpt_path) if use_local else self.model_id
+                        'ViT-B-16',
+                        pretrained=str(ckpt_path),
+                        **model_kwargs
                     )
-                    self.model.to(self.device)
-            else:
-                raise e
-        
-        # Ensure tokenizer is ready
-        self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
+                else:
+                    logging.info(f"Local checkpoint not found at {ckpt_path}, loading from Hub: {self.model_id}")
+                    self.model, _, self.preprocess = oc.create_model_and_transforms(
+                        self.model_id,
+                        **model_kwargs
+                    )
+            except TypeError as e:
+                error_msg = str(e)
+                # Strategy 2: Remove device parameter (older versions)
+                if 'device' in error_msg or 'unexpected keyword argument' in error_msg:
+                    logging.warning(f"open_clip doesn't support 'device' param: {e}. Trying without device...")
+                    model_kwargs.pop("device", None)
+                    try:
+                        if use_local:
+                            self.model, _, self.preprocess = oc.create_model_and_transforms(
+                                'ViT-B-16',
+                                pretrained=str(ckpt_path),
+                                **model_kwargs
+                            )
+                        else:
+                            self.model, _, self.preprocess = oc.create_model_and_transforms(
+                                self.model_id,
+                                **model_kwargs
+                            )
+                        self.model.to(self.device)
+                    except TypeError as e2:
+                        # Strategy 3: Remove precision parameter as well
+                        logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
+                        model_kwargs.pop("precision", None)
+                        self.model, _, self.preprocess = oc.create_model_and_transforms(
+                            self.model_id if not use_local else 'ViT-B-16',
+                            pretrained=str(ckpt_path) if use_local else self.model_id
+                        )
+                        self.model.to(self.device)
+                else:
+                    raise e
 
-        # Restore logging levels
-        for logger, level in _verbose_loggers:
-            if logger is None:
-                # Restore root logger level
-                logging.getLogger().setLevel(level)
-            else:
-                logger.setLevel(level)
+            # Ensure tokenizer is ready
+            self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
+        finally:
+            # Restore logging levels even if model loading fails midway
+            for logger, level in _verbose_loggers:
+                if logger is None:
+                    # Restore root logger level
+                    logging.getLogger().setLevel(level)
+                else:
+                    logger.setLevel(level)
 
         # Verify model device
         try:
@@ -209,6 +264,7 @@ class LocalBirdRecognizer(BirdRecognizer):
             logging.warning(f"Could not verify model device: {e}")
 
         logging.info("Model loaded successfully.")
+        self._log_memory("after_model_load")
 
     def _get_text_features(self, candidate_labels):
         # Check if cache is valid
@@ -216,34 +272,44 @@ class LocalBirdRecognizer(BirdRecognizer):
             logging.debug("Text features cache hit.")
             return self.cached_text_features
 
-        logging.info(f"Cache miss. Encoding {len(candidate_labels)} text labels (this may take a moment)...")
-        
-        prompted_labels = [f"a photo of {label}, a type of bird." for label in candidate_labels]
-        tokens = self.tokenizer(prompted_labels) # CPU tensor first
-        
-        # Batch processing to avoid OOM
-        batch_size = 512 # Conservative batch size
-        text_features_list = []
-        
-        device_type = 'cuda' if 'cuda' in self.device else 'cpu'
-        
-        with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
-            for i in range(0, len(tokens), batch_size):
-                batch_tokens = tokens[i : i + batch_size].to(self.device)
-                batch_features = self.model.encode_text(batch_tokens)
-                # Normalize immediately to save memory and prep for cosine sim
-                batch_features /= batch_features.norm(dim=-1, keepdim=True)
-                text_features_list.append(batch_features)
-                
-        # Concatenate all features
-        all_text_features = torch.cat(text_features_list, dim=0)
-        
-        # Update Cache
-        self.cached_labels = candidate_labels
-        self.cached_text_features = all_text_features
-        logging.info("Text features encoded and cached.")
-        
-        return all_text_features
+        if not hasattr(self, "_text_features_lock"):
+            self._text_features_lock = threading.Lock()
+
+        with self._text_features_lock:
+            if self.cached_labels == candidate_labels and self.cached_text_features is not None:
+                logging.debug("Text features cache hit after lock acquisition.")
+                return self.cached_text_features
+
+            logging.info(f"Cache miss. Encoding {len(candidate_labels)} text labels (this may take a moment)...")
+            self._log_memory(f"before_text_encode labels={len(candidate_labels)}")
+
+            prompted_labels = [f"a photo of {label}, a type of bird." for label in candidate_labels]
+            tokens = self.tokenizer(prompted_labels) # CPU tensor first
+
+            # Batch processing to avoid OOM
+            batch_size = 512 # Conservative batch size
+            text_features_list = []
+
+            device_type = 'cuda' if 'cuda' in self.device else 'cpu'
+
+            with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
+                for i in range(0, len(tokens), batch_size):
+                    batch_tokens = tokens[i : i + batch_size].to(self.device)
+                    batch_features = self.model.encode_text(batch_tokens)
+                    # Normalize immediately to save memory and prep for cosine sim
+                    batch_features /= batch_features.norm(dim=-1, keepdim=True)
+                    text_features_list.append(batch_features)
+
+            # Concatenate all features
+            all_text_features = torch.cat(text_features_list, dim=0)
+
+            # Update Cache
+            self.cached_labels = candidate_labels
+            self.cached_text_features = all_text_features
+            logging.info("Text features encoded and cached.")
+            self._log_memory(f"after_text_encode labels={len(candidate_labels)}")
+
+            return all_text_features
 
     def predict_batch(self, image_paths: List[str], candidate_labels: List[str], top_k: int = 5) -> List[List[Dict[str, Any]]]:
         """
@@ -275,8 +341,8 @@ class LocalBirdRecognizer(BirdRecognizer):
         
         for idx, path in enumerate(image_paths):
             try:
-                img = Image.open(path)
-                tensor = self.preprocess(img)
+                with Image.open(path) as img:
+                    tensor = self.preprocess(img)
                 images_tensors.append(tensor)
                 valid_indices.append(idx)
             except Exception as e:
@@ -286,7 +352,9 @@ class LocalBirdRecognizer(BirdRecognizer):
             return [[] for _ in image_paths]
             
         # Stack: [B, C, H, W]
+        self._log_memory(f"before_image_stack batch={len(images_tensors)}")
         image_input = torch.stack(images_tensors).to(self.device)
+        self._log_memory(f"after_image_stack batch={len(images_tensors)}")
         
         # 2. Get Text Features (Cached)
         text_features = self._get_text_features(candidate_labels)
@@ -299,6 +367,7 @@ class LocalBirdRecognizer(BirdRecognizer):
             
             # MatMul: [B, Dim] @ [Dim, N_Labels] -> [B, N_Labels]
             text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
+        self._log_memory(f"after_batch_inference batch={len(images_tensors)}")
             
         # 4. Process Results
         batch_results = [[] for _ in image_paths] # Default empty
@@ -349,8 +418,8 @@ class LocalBirdRecognizer(BirdRecognizer):
                 return []
 
     def _do_predict(self, image_path, candidate_labels, top_k):
-        image = Image.open(image_path)
-        image_input = self.preprocess(image).unsqueeze(0).to(self.device)
+        with Image.open(image_path) as image:
+            image_input = self.preprocess(image).unsqueeze(0).to(self.device)
         
         # Get cached or new text features
         text_features = self._get_text_features(candidate_labels)

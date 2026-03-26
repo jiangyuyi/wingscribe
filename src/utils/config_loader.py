@@ -5,6 +5,16 @@ from pathlib import Path
 # 全局配置缓存
 _config_cache = None
 
+
+def _deep_merge_dict(target: dict, source: dict) -> dict:
+    """Recursively merge source into target."""
+    for key, value in source.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_merge_dict(target[key], value)
+        else:
+            target[key] = value
+    return target
+
 def validate_paths_config(config: dict) -> tuple[bool, list]:
     """
     验证路径配置：
@@ -103,15 +113,7 @@ def load_config(settings_path: str = "config/settings.yaml", secrets_path: str =
         logging.info(f"Loading secrets from {secret_path}")
         with open(secret_path, 'r', encoding='utf-8') as f:
             secrets = yaml.safe_load(f) or {}
-            
-        # 3. Merge (Simple recursive merge for 'recognition' section)
-        if 'recognition' in secrets and 'recognition' in config:
-            rec_sec = secrets['recognition']
-            target_rec = config['recognition']
-            
-            for key in ['api', 'dongniao']:
-                if key in rec_sec and key in target_rec:
-                    # Update keys inside the sub-dict
-                    target_rec[key].update(rec_sec[key])
+
+        _deep_merge_dict(config, secrets)
     
     return config

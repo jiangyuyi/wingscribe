@@ -5,9 +5,27 @@ from typing import List, Dict, Any
 from .bioclip_base import BirdRecognizer
 
 class APIBirdRecognizer(BirdRecognizer):
-    def __init__(self, api_url: str, api_key: str):
+    def __init__(self, api_url: str, api_key: str, timeout: int = 30):
         self.api_url = api_url
-        self.headers = {"Authorization": f"Bearer {api_key}"}
+        self.api_key = api_key or ""
+        self.timeout = timeout
+        self.headers = {"Authorization": f"Bearer {self.api_key}"}
+
+        if not self.api_key:
+            logging.warning("API recognizer key is missing! Recognition will fail.")
+        if not self.api_url:
+            logging.warning("API recognizer URL is missing! Recognition will fail.")
+
+    def predict_batch(
+        self,
+        image_paths: List[str],
+        candidate_labels: List[str],
+        top_k: int = 5
+    ) -> List[List[Dict[str, Any]]]:
+        return [
+            self.predict(image_path, candidate_labels, top_k=top_k)
+            for image_path in image_paths
+        ]
 
     def predict(self, image_path: str, candidate_labels: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -15,6 +33,8 @@ class APIBirdRecognizer(BirdRecognizer):
         """
         if not candidate_labels:
             logging.warning("No candidate labels provided for API inference.")
+            return []
+        if not self.api_key or not self.api_url:
             return []
 
         try:
@@ -32,7 +52,12 @@ class APIBirdRecognizer(BirdRecognizer):
                 }
             }
 
-            response = requests.post(self.api_url, headers=self.headers, json=payload)
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json=payload,
+                timeout=self.timeout,
+            )
             
             if response.status_code != 200:
                 logging.error(f"HF API Error: {response.status_code} - {response.text}")

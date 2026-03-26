@@ -23,11 +23,19 @@ def check_system_dependencies(config: dict) -> bool:
 
     # 2. Check Critical Directories
     # Based on standard structure, but respecting config if provided
+    paths = config.get('paths', {})
+    source_path = ''
+    sources = paths.get('sources', [])
+    if sources:
+        source_path = sources[0].get('path', '')
+
+    output_root = paths.get('output', {}).get('root_dir', '')
+
     paths_to_check = [
-        config.get('paths', {}).get('raw_dir', 'data/raw'),
-        config.get('paths', {}).get('processed_dir', 'data/processed'),
-        Path(config.get('paths', {}).get('db_path', 'data/db/wingscribe.db')).parent,
-        config.get('paths', {}).get('model_cache_dir', 'data/models')
+        source_path or paths.get('raw_dir', 'data/raw'),
+        output_root or paths.get('processed_dir', 'data/processed'),
+        Path(paths.get('db_path', 'data/db/wingscribe.db')).parent,
+        paths.get('model_cache_dir', 'data/models')
     ]
 
     for p in paths_to_check:

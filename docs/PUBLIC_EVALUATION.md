@@ -104,6 +104,17 @@ python scripts/evaluate_public.py `
 
 当前工具使用 CUB 官方 bbox，而不是运行 WingScribe 的 YOLO 检测器，用来隔离识别器、裁切 margin 和框误差的影响。因此结果仍不代表 WingScribe 完整检测流水线的准确率。
 
+两个模式运行完成后，可以生成差异报告：
+
+```powershell
+python scripts/compare_evaluation_reports.py `
+  --baseline evaluation_results\cub-bbox.json `
+  --candidate evaluation_results\cub-multicrop-2.json `
+  --output evaluation_results\cub-comparison.json
+```
+
+有标签报告会统计 Top-1 改善和退化；无标签报告只统计 Top-1 一致率、Top-5 Jaccard、置信变化和分歧样本，不把一致率表述为准确率。
+
 ## 实施状态
 
 已完成：
@@ -114,6 +125,7 @@ python scripts/evaluate_public.py `
 - 两路/三路 multi-crop 批量编码与 embedding 加权融合。
 - 批量评测、失败计数、Top-1、Top-5 和耗时分位数。
 - 包含逐样本结果和运行元数据的 JSON 报告。
+- 有标签改善/退化和无标签一致性的报告比较工具。
 - 不加载模型权重的单元测试和直接运行的命令行入口。
 
 后续按独立提交推进：

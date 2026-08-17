@@ -119,7 +119,7 @@ python scripts/compare_evaluation_reports.py `
   --output evaluation_results\cub-comparison.json
 ```
 
-有标签报告会统计 Top-1 改善和退化；无标签报告只统计 Top-1 一致率、Top-5 Jaccard、置信变化和分歧样本，不把一致率表述为准确率。
+有标签报告会统计基线/候选 Top-1、准确率差值、逐样本改善和退化，并对配对正确性变化执行双侧精确二项检验；无标签报告只统计 Top-1 一致率、Top-5 Jaccard、置信变化和分歧样本，不生成准确率或显著性结论。
 
 ## 实施状态
 
@@ -149,11 +149,11 @@ python scripts/evaluate_quality.py `
 
 后续按独立提交推进：
 
-1. 在公开集上运行 single-crop 与 multi-crop 对比矩阵并确定默认权重。
-2. iNaturalist 中国鸟类固定 manifest 生成器和许可校验。
-3. 任意本地目录上的无标签基线/实验影子比较。
+1. iNaturalist 中国鸟类固定 manifest 生成器和许可校验。
+2. 任意本地目录上的无标签基线/实验影子比较。
+3. 根据完整 CUB 结果重新设计 multi-crop 视野和融合权重，再决定是否继续实验。
 
-截至 2026-08-17，已尝试从 CaltechDATA 官方地址下载，但当前连接速度约为 10KB/s，预计超过 24 小时，因此已停止。真实对比矩阵仍待取得完整压缩包并通过 MD5 校验后运行；当前单元测试使用合成的小型 CUB 目录，不应被表述为模型准确率实测。
+截至 2026-08-18，CUB 原始数据包已通过镜像取得，并以 CaltechDATA 官方 MD5 `97eceeb196236b17998738112f37df78` 校验；适配器核对为 5,994 张训练图、5,794 张测试图和 200 类。完整测试集结果见 `PUBLIC_EVALUATION_RESULTS_2026-08-18.md`。合成小型 CUB 目录仍只用于单元测试，不与真实模型结果混用。
 
 ## 仓库边界
 

@@ -43,7 +43,33 @@ def test_compare_reports_distinguishes_improvements_and_regressions():
     assert comparison["metrics"]["mean_top5_jaccard"] == 1.0
     assert comparison["metrics"]["top1_improvements"] == 1
     assert comparison["metrics"]["top1_regressions"] == 1
+    assert comparison["metrics"]["baseline_top1_accuracy"] == pytest.approx(1 / 3)
+    assert comparison["metrics"]["candidate_top1_accuracy"] == pytest.approx(1 / 3)
+    assert comparison["metrics"]["top1_accuracy_delta"] == 0.0
+    assert comparison["metrics"]["paired_top1_exact_p_value"] == 1.0
     assert comparison["disagreements"][0]["sample_id"] == "2"
+
+
+def test_compare_reports_calculates_paired_exact_significance():
+    baseline = {
+        "predictions": [
+            _prediction(str(index), "Alpha", ["Beta"])
+            for index in range(4)
+        ]
+    }
+    candidate = {
+        "predictions": [
+            _prediction(str(index), "Alpha", ["Alpha"])
+            for index in range(4)
+        ]
+    }
+
+    metrics = compare_reports(baseline, candidate)["metrics"]
+
+    assert metrics["baseline_top1_accuracy"] == 0.0
+    assert metrics["candidate_top1_accuracy"] == 1.0
+    assert metrics["top1_accuracy_delta"] == 1.0
+    assert metrics["paired_top1_exact_p_value"] == pytest.approx(0.125)
 
 
 def test_compare_reports_supports_unlabeled_shadow_results():
@@ -56,6 +82,10 @@ def test_compare_reports_supports_unlabeled_shadow_results():
     assert comparison["metrics"]["top1_improvements"] == 0
     assert comparison["metrics"]["top1_regressions"] == 0
     assert comparison["metrics"]["top1_agreement"] == 0.0
+    assert comparison["metrics"]["baseline_top1_accuracy"] is None
+    assert comparison["metrics"]["candidate_top1_accuracy"] is None
+    assert comparison["metrics"]["top1_accuracy_delta"] is None
+    assert comparison["metrics"]["paired_top1_exact_p_value"] is None
 
 
 def test_compare_reports_excludes_failed_samples_and_counts_missing_ids():

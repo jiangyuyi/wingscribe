@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Iterable
 
 
@@ -49,6 +50,27 @@ def _mean(values: Iterable[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+def _paired_exact_p_value(improvements: int, regressions: int) -> float:
+    """Two-sided exact binomial sign test for paired correctness changes."""
+    discordant = improvements + regressions
+    if discordant == 0:
+        return 1.0
+
+    tail_end = min(improvements, regressions)
+    log_terms = [
+        math.lgamma(discordant + 1)
+        - math.lgamma(index + 1)
+        - math.lgamma(discordant - index + 1)
+        - discordant * math.log(2)
+        for index in range(tail_end + 1)
+    ]
+    largest = max(log_terms)
+    tail_probability = math.exp(largest) * sum(
+        math.exp(value - largest) for value in log_terms
+    )
+    return min(1.0, 2 * tail_probability)
+
+
 def compare_reports(
     baseline_report: dict[str, Any],
     candidate_report: dict[str, Any],
@@ -66,6 +88,8 @@ def compare_reports(
     top5_jaccards: list[float] = []
     confidence_deltas: list[float] = []
     labeled_samples = 0
+    baseline_correct_count = 0
+    candidate_correct_count = 0
     improvements = 0
     regressions = 0
     disagreements: list[dict[str, Any]] = []
@@ -108,6 +132,8 @@ def compare_reports(
             labeled_samples += 1
             baseline_correct = baseline_top1 == expected_label
             candidate_correct = candidate_top1 == expected_label
+            baseline_correct_count += int(baseline_correct)
+            candidate_correct_count += int(candidate_correct)
             improvements += int(not baseline_correct and candidate_correct)
             regressions += int(baseline_correct and not candidate_correct)
 
@@ -135,6 +161,9 @@ def compare_reports(
         reverse=True,
     )
 
+    baseline_accuracy = baseline_correct_count / labeled_samples if labeled_samples else None
+    candidate_accuracy = candidate_correct_count / labeled_samples if labeled_samples else None
+
     return {
         "baseline_run": baseline_report.get("run", {}),
         "candidate_run": candidate_report.get("run", {}),
@@ -150,8 +179,18 @@ def compare_reports(
             "mean_abs_top1_confidence_delta": _mean(confidence_deltas),
             "top1_changed_samples": len(disagreements),
             "labeled_samples": labeled_samples,
+            "baseline_top1_accuracy": baseline_accuracy,
+            "candidate_top1_accuracy": candidate_accuracy,
+            "top1_accuracy_delta": (
+                candidate_accuracy - baseline_accuracy if labeled_samples else None
+            ),
             "top1_improvements": improvements,
             "top1_regressions": regressions,
+            "paired_top1_exact_p_value": (
+                _paired_exact_p_value(improvements, regressions)
+                if labeled_samples
+                else None
+            ),
         },
         "disagreements": disagreements[:disagreement_limit],
     }

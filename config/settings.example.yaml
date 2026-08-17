@@ -54,6 +54,11 @@ processing:
   # 建议值: 40-100，值越高要求越清晰
   blur_threshold: 40.0
 
+  # 质量处理模式:
+  # legacy_reject 保持旧行为，按 blur_threshold 跳过模糊图
+  # score_only 仅计算综合质量指标，不跳过图片；disabled 完全关闭质量计算
+  quality_mode: "legacy_reject"
+
   # 裁切图尺寸: 建议保持 640
   target_size: 640
 

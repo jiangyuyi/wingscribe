@@ -16,7 +16,7 @@ sys.path.append(PROJECT_ROOT)
 
 from src.metadata.ioc_manager import IOCManager
 from src.core.detector import BirdDetector
-from src.core.quality import QualityChecker
+from src.core.quality import QualityEvaluator, QualityResult
 from src.core.processor import ImageProcessor
 from src.recognition.inference_local import LocalBirdRecognizer
 from src.recognition.inference_dongniao import DongniaoRecognizer
@@ -648,19 +648,22 @@ class WingScribePipeline:
             )
             
             if success:
-                # 5. Blur detection (quality check)
-                blur_threshold = self.config.get('processing', {}).get('blur_threshold', 40.0)
-                if blur_threshold > 0:
-                    blur_score = QualityChecker.calculate_blur_score(str(temp_crop_path))
-                    if blur_score < blur_threshold:
-                        logging.info(f"[Quality] blur_score={blur_score:.1f} < {blur_threshold} SKIP - {temp_crop_path.name}")
-                        try:
-                            os.remove(str(temp_crop_path))
-                        except:
-                            pass
-                        continue
+                # 5. Quality evaluation. The default mode preserves the legacy blur filter.
+                should_process, quality_result = self._evaluate_crop_quality(
+                    str(temp_crop_path),
+                    detection_score=score,
+                    box=box,
+                    image_width=img_width,
+                    image_height=img_height,
+                )
+                if not should_process:
+                    try:
+                        os.remove(str(temp_crop_path))
+                    except OSError:
+                        pass
+                    continue
 
-                image_batch_items.append({
+                batch_item = {
                     'entry': entry,
                     'meta': meta,
                     'crop_path': str(temp_crop_path),
@@ -669,9 +672,73 @@ class WingScribePipeline:
                     'height': img_height,
                     'detection_index': i,
                     'detections_count': len(detections)
-                })
+                }
+                if quality_result is not None:
+                    batch_item['quality'] = quality_result.to_dict()
+                image_batch_items.append(batch_item)
 
         self._recognize_batch(image_batch_items, candidates)
+
+    def _evaluate_crop_quality(
+        self,
+        crop_path: str,
+        *,
+        detection_score: float,
+        box,
+        image_width: int,
+        image_height: int,
+    ) -> tuple[bool, QualityResult | None]:
+        processing_config = self.config.get('processing', {})
+        quality_mode = processing_config.get('quality_mode', 'legacy_reject')
+        if quality_mode not in {'legacy_reject', 'score_only', 'disabled'}:
+            logging.warning(
+                "Unknown processing.quality_mode=%r; falling back to legacy_reject",
+                quality_mode,
+            )
+            quality_mode = 'legacy_reject'
+
+        if quality_mode == 'disabled':
+            return True, None
+
+        blur_threshold = processing_config.get('blur_threshold', 40.0)
+        if quality_mode == 'legacy_reject' and blur_threshold <= 0:
+            return True, None
+
+        bird_pixel_ratio = self._calculate_bird_pixel_ratio(box, image_width, image_height)
+        result = QualityEvaluator.evaluate(
+            crop_path,
+            detector_confidence=detection_score,
+            bird_pixel_ratio=bird_pixel_ratio,
+        )
+
+        if quality_mode == 'score_only':
+            logging.debug(
+                "[Quality] score=%.3f blur_score=%.1f valid=%s - %s",
+                result.quality_score,
+                result.laplacian_variance,
+                result.valid,
+                Path(crop_path).name,
+            )
+            return True, result
+
+        if result.laplacian_variance < blur_threshold:
+            logging.info(
+                "[Quality] blur_score=%.1f < %s SKIP - %s",
+                result.laplacian_variance,
+                blur_threshold,
+                Path(crop_path).name,
+            )
+            return False, result
+        return True, result
+
+    @staticmethod
+    def _calculate_bird_pixel_ratio(box, image_width: int, image_height: int) -> float | None:
+        if image_width <= 0 or image_height <= 0 or box is None or len(box) < 4:
+            return None
+        x1, y1, x2, y2 = (float(value) for value in box[:4])
+        clipped_width = max(0.0, min(x2, image_width) - max(x1, 0.0))
+        clipped_height = max(0.0, min(y2, image_height) - max(y1, 0.0))
+        return (clipped_width * clipped_height) / (image_width * image_height)
 
     def run(self, start_date: str = None, end_date: str = None, existing_hashes: set = None):
         t_start = time.time()

@@ -43,6 +43,12 @@ iscc .\installer-gpu.iss
 
 产物：`Output/WingScribe-Setup-GPU-<version>.exe`
 
+GPU 包使用 CUDA 12.8 版 PyTorch，以支持 RTX 50 系列（Blackwell）。本地构建可通过参数指定兼容的 wheel 镜像：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode gpu -Version 1.0.0 -PyTorchWheelBase https://mirrors.nju.edu.cn/pytorch/whl
+```
+
 ## 本地快速回归（强烈推荐）
 
 当你只改脚本/逻辑，不改依赖时，避免重复下载和安装：

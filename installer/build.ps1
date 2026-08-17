@@ -12,7 +12,8 @@ param(
     [switch]$RefreshWheels = $false,
     [ValidateSet("cpu", "gpu")]
     [string]$Mode = "cpu",
-    [string]$Version = "1.0.0"
+    [string]$Version = "1.0.0",
+    [string]$PyTorchWheelBase = "https://download.pytorch.org/whl"
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,8 +21,23 @@ $ProgressPreference = "SilentlyContinue"
 
 $PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
 $INSTALLER_DIR = $PSScriptRoot
-$TORCH_VERSION = "2.4.1"
-$TORCHVISION_VERSION = "0.19.1"
+$pytorchBuilds = @{
+    cpu = @{
+        TorchVersion = "2.4.1"
+        TorchvisionVersion = "0.19.1"
+        WheelChannel = "cpu"
+    }
+    gpu = @{
+        TorchVersion = "2.10.0"
+        TorchvisionVersion = "0.25.0"
+        WheelChannel = "cu128"
+    }
+}
+$pytorchBuild = $pytorchBuilds[$Mode.ToLower()]
+$TORCH_VERSION = $pytorchBuild.TorchVersion
+$TORCHVISION_VERSION = $pytorchBuild.TorchvisionVersion
+$PYTORCH_WHEEL_CHANNEL = $pytorchBuild.WheelChannel
+$PYTORCH_WHEEL_BASE = $PyTorchWheelBase.TrimEnd("/")
 
 # Build output directory depends on mode
 $modeLower = $Mode.ToLower()
@@ -137,17 +153,15 @@ function Download-Python {
 function Download-PyTorchWheels {
     Log-Step "Downloading PyTorch $Mode wheels..."
 
-    # Keep torch/torchvision pinned to versions compatible with ultralytics on Windows.
-    $cudaVersion = "cu118"
     if ($Mode -eq "gpu") {
         $wheels = @(
-            "https://download.pytorch.org/whl/$cudaVersion/torch-$TORCH_VERSION%2B$cudaVersion-cp311-cp311-win_amd64.whl",
-            "https://download.pytorch.org/whl/$cudaVersion/torchvision-$TORCHVISION_VERSION%2B$cudaVersion-cp311-cp311-win_amd64.whl"
+            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torch-$TORCH_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl",
+            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torchvision-$TORCHVISION_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl"
         )
     } else {
         $wheels = @(
-            "https://download.pytorch.org/whl/cpu/torch-$TORCH_VERSION%2Bcpu-cp311-cp311-win_amd64.whl",
-            "https://download.pytorch.org/whl/cpu/torchvision-$TORCHVISION_VERSION%2Bcpu-cp311-cp311-win_amd64.whl"
+            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torch-$TORCH_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl",
+            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torchvision-$TORCHVISION_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl"
         )
     }
 
@@ -368,10 +382,9 @@ function Install-Dependencies {
 
     # First install PyTorch from local wheels
     Log-Info "Installing PyTorch from local wheels into embedded Python..."
-    $wheelSuffix = if ($Mode -eq "gpu") { "cu118" } else { "cpu" }
     $torchWheels = @(
-        (Join-Path $WHEELS_DIR "torch-$TORCH_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl"),
-        (Join-Path $WHEELS_DIR "torchvision-$TORCHVISION_VERSION+$wheelSuffix-cp311-cp311-win_amd64.whl")
+        (Join-Path $WHEELS_DIR "torch-$TORCH_VERSION+$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl"),
+        (Join-Path $WHEELS_DIR "torchvision-$TORCHVISION_VERSION+$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl")
     )
     foreach ($wheel in $torchWheels) {
         if (-not (Test-Path $wheel)) {

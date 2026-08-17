@@ -395,9 +395,12 @@ head crop 放在这一阶段之后：它对柳莺、鹀、鹟等难种可能有�
 - 已完成模糊、降采样、曝光和噪声的可重复质量退化报告；原计划使用的 `20260326test` 本地目录当前不存在，真实照片质量矩阵仍待可用目录。
 - 已完成本地识别器 embedding 接口和可控显存占用的多视野融合评测；在取得真实评测结果前不接入生产默认流程。
 - 已完成显式模型注册表、硬件/峰值显存报告并加入 BioCLIP 2.5 ViT-H/14 实验评测入口；未知模型不再静默回退，生产默认仍为 BioCLIP2。
+- 已通过镜像下载并校验 BioCLIP 2.5 权重，在 RTX 5060 Laptop 8 GB 上完成 fp16、batch 1 单图烟雾测试：模型加载 10.25 秒、编码 0.75 秒、候选分类 0.14 秒，峰值 allocated/reserved 显存约 3.74/3.82 GiB，进程 RSS 约 1.53 GiB。该结果只证明可运行和资源成本可接受，不代表准确率优于 BioCLIP2。
+- 已确认旧 GPU installer 的 PyTorch 2.4.1/cu118 不支持 RTX 5060 的 `sm_120`，表现为模型可加载但编码长期无有效 GPU 利用率；GPU installer 已规划升级为 PyTorch 2.10.0/cu128，CPU installer 继续保持 2.4.1/cpu，避免扩大 CPU 发布风险。
 - 已完成多指标 `QualityEvaluator`，并以 `legacy_reject`、`score_only`、`disabled` 三种模式接入流水线。默认 `legacy_reject` 保持旧行为，综合质量分暂不写入数据库，也不参与识别排序。
 - 已完成独立 `LocationResolver`、行政区 CSV/用户别名 YAML 格式、歧义拒绝、词典版本缓存和只读预览 API；当前不接入生产识别，下一步需确认完整行政区数据的来源与许可证并执行预览验证。
 - 质量持久化、展示与连拍排序留在数据库字段和分组语义明确后实施。
+- 下一步仍优先取得公共评测数据并运行 BioCLIP2/BioCLIP 2.5、single-crop/multi-crop 对比；在有准确率结果前，BioCLIP 2.5 不进入生产默认配置。
 
 ## 8. 需要确认的产品选择
 

@@ -102,6 +102,8 @@ python scripts/evaluate_public.py `
 
 `--model bioclip-2.5-vith14` 是实验选项，不会改变生产默认模型。[官方模型卡](https://huggingface.co/imageomics/bioclip-2.5-vith14)标明其为 ViT-H/14、MIT 许可，单个权重文件约 3.94 GB；必须先在 RTX 5060 Laptop 8 GB 上验证峰值显存、吞吐和准确率，再考虑生产启用。模型和 tokenizer 均按官方要求使用相同的 HuggingFace Hub 标识。BioCLIP 与 BioCLIP2 的架构分别以各自的[官方 BioCLIP](https://huggingface.co/imageomics/bioclip)和[官方 BioCLIP2](https://huggingface.co/imageomics/bioclip-2)配置为准。未指定 `--batch-size` 时，2.5 从保守的 batch 1 开始，其他模型保持 batch 16。
 
+RTX 5060 Laptop 的 batch 1 烟雾测试已通过：PyTorch 2.10.0/cu128 能原生识别 `sm_120`，单图编码约 0.75 秒，峰值 allocated/reserved 显存约 3.74/3.82 GiB。PyTorch 2.4.1/cu118 虽能加载模型，但不支持该架构并会在编码阶段长期停滞，因此 GPU installer 必须使用 CUDA 12.8 或更新的兼容构建。这组数据不包含公共集真值，只用于验证运行兼容性和资源需求。
+
 每份报告会记录 Python/PyTorch/CUDA 版本、实际设备、CPU RSS 起止值；CUDA 模式还记录 GPU 名称、总显存，以及评测阶段峰值 allocated/reserved 显存。显存采样在模型加载后重置峰值，因此包含已加载模型的当前占用和后续推理峰值，但不代表模型下载或加载瞬间的系统内存峰值。
 
 首次试运行可以添加 `--limit 20`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
@@ -132,6 +134,7 @@ python scripts/compare_evaluation_reports.py `
 - 有标签改善/退化和无标签一致性的报告比较工具。
 - 可重复的模糊、降采样、曝光和噪声退化质量回归报告。
 - 不加载模型权重的单元测试和直接运行的命令行入口。
+- RTX 5060 Laptop 8 GB 上的 BioCLIP 2.5 batch 1 运行与资源烟雾测试。
 
 质量指标回归可以对任意公开图片目录运行：
 

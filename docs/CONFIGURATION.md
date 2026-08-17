@@ -98,10 +98,13 @@ sources:
 **本地模型 (BioCLIP):**
 ```yaml
 local:
+  # bioclip-2.5-vith14 仅用于实验，完成目标硬件基准前不要替换默认值
   model_type: "bioclip-2"     # 推荐使用 "bioclip-2" 以获得更高精度
   batch_size: 512              # 文本编码批次大小 (通常不需要修改)
   inference_batch_size: 16     # 图片推理批次大小，如果显存不足(低于 8G)请调小
 ```
+
+支持的本地模型为 `bioclip`、`bioclip-2` 和实验性的 `bioclip-2.5-vith14`。未知名称会直接报错，不再静默回退到其他模型。
 
 ---
 

@@ -4,6 +4,7 @@ import threading
 from pathlib import Path
 from PIL import Image
 from .bioclip_base import BirdRecognizer
+from .model_registry import get_model_spec
 from typing import List, Dict, Any
 import logging
 
@@ -113,15 +114,17 @@ class LocalBirdRecognizer(BirdRecognizer):
         else:
             self.device = device
 
-        # Map friendly names to HF model IDs
-        model_map = {
-            "bioclip": "hf-hub:imageomics/bioclip",
-            "bioclip-2": "hf-hub:imageomics/bioclip-2"
-        }
-
-        self.model_id = model_map.get(model_name.lower(), model_map["bioclip"])
-        self.model_type_slug = model_name.lower()
+        self.model_spec = get_model_spec(model_name)
+        self.model_id = self.model_spec.hub_model_id
+        self.model_type_slug = self.model_spec.slug
         self.hf_mirror = hf_mirror  # Save for _load_model
+
+        if self.model_spec.experimental:
+            logging.warning(
+                "%s is experimental and has substantially higher memory requirements; "
+                "keep bioclip-2 as the production fallback",
+                self.model_type_slug,
+            )
 
         logging.info(f"Loading {model_name} ({self.model_id}) on {self.device}...")
 
@@ -180,6 +183,7 @@ class LocalBirdRecognizer(BirdRecognizer):
         # Check for local model in specific subfolder
         local_model_root = Path("data/models")
         local_model_path = local_model_root / self.model_type_slug
+        model_spec = getattr(self, "model_spec", None) or get_model_spec(self.model_type_slug)
 
         # RTX 4060/Laptop Fix: Use fp16 for CUDA to reduce bandwidth spike/power surge
         precision = 'fp16' if self.device == 'cuda' else 'fp32'
@@ -194,7 +198,11 @@ class LocalBirdRecognizer(BirdRecognizer):
         }
 
         # Try local path first
-        ckpt_path = local_model_path / "open_clip_pytorch_model.bin"
+        local_checkpoints = (
+            local_model_path / "open_clip_model.safetensors",
+            local_model_path / "open_clip_pytorch_model.bin",
+        )
+        ckpt_path = next((path for path in local_checkpoints if path.exists()), local_checkpoints[-1])
         use_local = ckpt_path.exists()
 
         try:
@@ -202,7 +210,7 @@ class LocalBirdRecognizer(BirdRecognizer):
                 if use_local:
                     logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
                     self.model, _, self.preprocess = oc.create_model_and_transforms(
-                        'ViT-B-16',
+                        model_spec.architecture,
                         pretrained=str(ckpt_path),
                         **model_kwargs
                     )
@@ -221,7 +229,7 @@ class LocalBirdRecognizer(BirdRecognizer):
                     try:
                         if use_local:
                             self.model, _, self.preprocess = oc.create_model_and_transforms(
-                                'ViT-B-16',
+                                model_spec.architecture,
                                 pretrained=str(ckpt_path),
                                 **model_kwargs
                             )
@@ -236,7 +244,7 @@ class LocalBirdRecognizer(BirdRecognizer):
                         logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
                         model_kwargs.pop("precision", None)
                         self.model, _, self.preprocess = oc.create_model_and_transforms(
-                            self.model_id if not use_local else 'ViT-B-16',
+                            self.model_id if not use_local else model_spec.architecture,
                             pretrained=str(ckpt_path) if use_local else self.model_id
                         )
                         self.model.to(self.device)
@@ -244,7 +252,8 @@ class LocalBirdRecognizer(BirdRecognizer):
                     raise e
 
             # Ensure tokenizer is ready
-            self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
+            tokenizer_id = model_spec.architecture if use_local else self.model_id
+            self.tokenizer = _get_open_clip().get_tokenizer(tokenizer_id)
         finally:
             # Restore logging levels even if model loading fails midway
             for logger, level in _verbose_loggers:

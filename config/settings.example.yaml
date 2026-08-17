@@ -88,7 +88,8 @@ recognition:
 
   # 本地模型配置
   local:
-    model_type: "bioclip-2"   # 选项: bioclip, bioclip-2 (推荐)
+    # 选项: bioclip, bioclip-2 (推荐), bioclip-2.5-vith14 (实验，约 4GB 权重)
+    model_type: "bioclip-2"
     batch_size: 512            # 文本编码批次大小 (通常不需要修改)
     inference_batch_size: 16   # 图片推理批次大小，显存不足(低于 8G)时请调小
 

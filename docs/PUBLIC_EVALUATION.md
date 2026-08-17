@@ -100,6 +100,8 @@ python scripts/evaluate_public.py `
   --output evaluation_results\cub-bioclip2.json
 ```
 
+`--model bioclip-2.5-vith14` 是实验选项，不会改变生产默认模型。[官方模型卡](https://huggingface.co/imageomics/bioclip-2.5-vith14)标明其为 ViT-H/14、MIT 许可，单个权重文件约 3.94 GB；必须先在 RTX 5060 Laptop 8 GB 上验证峰值显存、吞吐和准确率，再考虑生产启用。模型和 tokenizer 均按官方要求使用相同的 HuggingFace Hub 标识。BioCLIP 与 BioCLIP2 的架构分别以各自的[官方 BioCLIP](https://huggingface.co/imageomics/bioclip)和[官方 BioCLIP2](https://huggingface.co/imageomics/bioclip-2)配置为准。
+
 首次试运行可以添加 `--limit 20`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
 
 当前工具使用 CUB 官方 bbox，而不是运行 WingScribe 的 YOLO 检测器，用来隔离识别器、裁切 margin 和框误差的影响。因此结果仍不代表 WingScribe 完整检测流水线的准确率。

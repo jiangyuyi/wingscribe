@@ -9,6 +9,7 @@ import torch
 from PIL import Image
 
 from src.recognition.inference_local import LocalBirdRecognizer
+from src.recognition.model_registry import get_model_spec
 
 
 class _FakeModel:
@@ -41,6 +42,23 @@ def test_init_sets_hf_mirror_and_falls_back_to_cpu(monkeypatch):
     assert os.environ["HF_ENDPOINT"] == "https://mirror.example"
     assert os.environ["HF_HUB_URL"] == "https://mirror.example"
     assert os.environ["HF_HUB_ENABLE_HF_TRANSFER"] == "1"
+
+
+def test_init_rejects_unknown_model_before_loading(monkeypatch):
+    monkeypatch.setattr(LocalBirdRecognizer, "_load_model", pytest.fail)
+
+    with pytest.raises(ValueError, match="Unsupported local recognition model"):
+        LocalBirdRecognizer(model_name="bioclip-typo", device="cpu")
+
+
+def test_init_marks_bioclip_25_as_experimental(monkeypatch, caplog):
+    monkeypatch.setattr(LocalBirdRecognizer, "_load_model", lambda self: None)
+
+    recognizer = LocalBirdRecognizer(model_name="bioclip-2.5-vith14", device="cpu")
+
+    assert recognizer.model_id == "hf-hub:imageomics/bioclip-2.5-vith14"
+    assert recognizer.model_spec.architecture == "ViT-H-14"
+    assert "experimental" in caplog.text
 
 
 def test_get_text_features_uses_cache(monkeypatch):
@@ -189,6 +207,42 @@ def test_load_model_restores_logging_levels_after_failure(monkeypatch, tmp_path:
         recognizer._load_model()
 
     assert (root_logger.level, factory_logger.level, httpx_logger.level) == original_levels
+
+
+def test_load_model_uses_registered_architecture_for_local_checkpoint(monkeypatch, tmp_path: Path):
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.model_type_slug = "bioclip-2"
+    recognizer.model_id = "hf-hub:imageomics/bioclip-2"
+    recognizer.model_spec = get_model_spec("bioclip-2")
+    model_dir = tmp_path / "data" / "models" / "bioclip-2"
+    model_dir.mkdir(parents=True)
+    checkpoint = model_dir / "open_clip_model.safetensors"
+    checkpoint.write_bytes(b"fixture")
+    calls = {}
+
+    class FakeLoadedModel(_FakeModel):
+        def parameters(self):
+            yield torch.nn.Parameter(torch.ones(1))
+
+    class FakeOpenClip:
+        def create_model_and_transforms(self, architecture, pretrained, **kwargs):
+            calls["model"] = (architecture, pretrained, kwargs)
+            return FakeLoadedModel(), None, object()
+
+        def get_tokenizer(self, model_id):
+            calls["tokenizer"] = model_id
+            return object()
+
+    monkeypatch.setattr("src.recognition.inference_local._get_open_clip", lambda: FakeOpenClip())
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    monkeypatch.chdir(tmp_path)
+
+    recognizer._load_model()
+
+    assert calls["model"][0] == "ViT-L-14"
+    assert calls["model"][1] == str(Path("data/models/bioclip-2/open_clip_model.safetensors"))
+    assert calls["tokenizer"] == "ViT-L-14"
 
 
 def test_do_predict_batch_closes_image_handles(monkeypatch):

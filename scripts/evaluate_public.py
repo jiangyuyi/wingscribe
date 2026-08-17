@@ -16,7 +16,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", choices=["cub"], default="cub")
     parser.add_argument("--root", type=Path, required=True, help="Extracted public dataset directory")
     parser.add_argument("--split", choices=["train", "test", "all"], default="test")
-    parser.add_argument("--model", choices=["bioclip", "bioclip-2"], default="bioclip-2")
+    parser.add_argument(
+        "--model",
+        choices=["bioclip", "bioclip-2", "bioclip-2.5-vith14"],
+        default="bioclip-2",
+    )
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--top-k", type=int, default=5)

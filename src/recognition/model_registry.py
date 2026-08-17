@@ -8,6 +8,7 @@ class ModelSpec:
     architecture: str
     license: str
     experimental: bool = False
+    recommended_eval_batch_size: int = 16
 
 
 MODEL_REGISTRY = {
@@ -29,6 +30,7 @@ MODEL_REGISTRY = {
         architecture="ViT-H-14",
         license="MIT",
         experimental=True,
+        recommended_eval_batch_size=1,
     ),
 }
 

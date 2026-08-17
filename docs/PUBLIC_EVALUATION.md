@@ -100,7 +100,9 @@ python scripts/evaluate_public.py `
   --output evaluation_results\cub-bioclip2.json
 ```
 
-`--model bioclip-2.5-vith14` 是实验选项，不会改变生产默认模型。[官方模型卡](https://huggingface.co/imageomics/bioclip-2.5-vith14)标明其为 ViT-H/14、MIT 许可，单个权重文件约 3.94 GB；必须先在 RTX 5060 Laptop 8 GB 上验证峰值显存、吞吐和准确率，再考虑生产启用。模型和 tokenizer 均按官方要求使用相同的 HuggingFace Hub 标识。BioCLIP 与 BioCLIP2 的架构分别以各自的[官方 BioCLIP](https://huggingface.co/imageomics/bioclip)和[官方 BioCLIP2](https://huggingface.co/imageomics/bioclip-2)配置为准。
+`--model bioclip-2.5-vith14` 是实验选项，不会改变生产默认模型。[官方模型卡](https://huggingface.co/imageomics/bioclip-2.5-vith14)标明其为 ViT-H/14、MIT 许可，单个权重文件约 3.94 GB；必须先在 RTX 5060 Laptop 8 GB 上验证峰值显存、吞吐和准确率，再考虑生产启用。模型和 tokenizer 均按官方要求使用相同的 HuggingFace Hub 标识。BioCLIP 与 BioCLIP2 的架构分别以各自的[官方 BioCLIP](https://huggingface.co/imageomics/bioclip)和[官方 BioCLIP2](https://huggingface.co/imageomics/bioclip-2)配置为准。未指定 `--batch-size` 时，2.5 从保守的 batch 1 开始，其他模型保持 batch 16。
+
+每份报告会记录 Python/PyTorch/CUDA 版本、实际设备、CPU RSS 起止值；CUDA 模式还记录 GPU 名称、总显存，以及评测阶段峰值 allocated/reserved 显存。显存采样在模型加载后重置峰值，因此包含已加载模型的当前占用和后续推理峰值，但不代表模型下载或加载瞬间的系统内存峰值。
 
 首次试运行可以添加 `--limit 20`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
 

@@ -7,8 +7,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.evaluation import CUBCropPreparer, MultiCropPredictor, load_cub_dataset, run_benchmark
+from src.evaluation import (
+    CUBCropPreparer,
+    MultiCropPredictor,
+    begin_hardware_measurement,
+    finish_hardware_measurement,
+    load_cub_dataset,
+    run_benchmark,
+)
 from src.recognition.inference_local import LocalBirdRecognizer
+from src.recognition.model_registry import get_model_spec
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,7 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="bioclip-2",
     )
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        help="Image batch size; defaults to a conservative value for the selected model",
+    )
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument(
         "--image-mode",
@@ -39,6 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    model_spec = get_model_spec(args.model)
+    batch_size = (
+        model_spec.recommended_eval_batch_size
+        if args.batch_size is None
+        else args.batch_size
+    )
+    if batch_size < 1:
+        raise ValueError("--batch-size must be at least 1")
     dataset = load_cub_dataset(args.root, split=args.split)
     if args.limit is not None:
         if args.limit < 1:
@@ -60,6 +80,7 @@ def main() -> int:
             work_root=args.output.parent / ".tmp",
         )
     recognizer = LocalBirdRecognizer(model_name=args.model, device=args.device)
+    hardware_measurement = begin_hardware_measurement(recognizer.device)
     batch_predictor = None
     multicrop_presets = {
         "multicrop-2": ((0.0, 0.15), (0.35, 0.65)),
@@ -72,15 +93,18 @@ def main() -> int:
             margins,
             weights,
             work_root=args.output.parent / ".tmp",
-            encode_batch_size=args.batch_size,
+            encode_batch_size=batch_size,
         )
     result = run_benchmark(
         dataset,
         recognizer,
-        batch_size=args.batch_size,
+        batch_size=batch_size,
         top_k=args.top_k,
         run_metadata={
             "model": args.model,
+            "model_architecture": model_spec.architecture,
+            "model_experimental": model_spec.experimental,
+            "batch_size_was_defaulted": args.batch_size is None,
             "requested_device": args.device,
             "actual_device": recognizer.device,
             "image_mode": args.image_mode,
@@ -94,6 +118,7 @@ def main() -> int:
         image_preparer=image_preparer,
         batch_predictor=batch_predictor,
     )
+    result.run["hardware"] = finish_hardware_measurement(hardware_measurement)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")

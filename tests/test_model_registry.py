@@ -15,6 +15,7 @@ def test_bioclip_25_is_explicitly_experimental():
     assert spec.experimental is True
     assert spec.hub_model_id == "hf-hub:imageomics/bioclip-2.5-vith14"
     assert spec.license == "MIT"
+    assert spec.recommended_eval_batch_size == 1
 
 
 def test_unknown_model_does_not_silently_fall_back():

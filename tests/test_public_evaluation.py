@@ -159,6 +159,7 @@ def test_public_evaluation_script_can_show_help():
     assert completed.returncode == 0
     assert "--dataset" in completed.stdout
     assert "--image-mode" in completed.stdout
+    assert "bioclip-2.5-vith14" in completed.stdout
 
 
 def test_build_crop_box_applies_margin_and_clips_to_image(tmp_path: Path):

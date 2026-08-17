@@ -4,6 +4,7 @@ from .benchmark import BenchmarkPrediction, BenchmarkResult, run_benchmark
 from .compare import ReportFormatError, compare_reports
 from .datasets import EvaluationDataset, EvaluationSample, load_cub_dataset
 from .images import CUBCropPreparer, CUBMultiCropPreparer, build_crop_box
+from .hardware import HardwareMeasurement, begin_hardware_measurement, finish_hardware_measurement
 from .multicrop import MultiCropPredictor
 from .quality import (
     DEFAULT_DEGRADATIONS,
@@ -19,6 +20,7 @@ __all__ = [
     "ReportFormatError",
     "EvaluationDataset",
     "EvaluationSample",
+    "HardwareMeasurement",
     "CUBCropPreparer",
     "CUBMultiCropPreparer",
     "MultiCropPredictor",
@@ -26,6 +28,8 @@ __all__ = [
     "DegradationSpec",
     "apply_degradation",
     "build_crop_box",
+    "begin_hardware_measurement",
+    "finish_hardware_measurement",
     "load_cub_dataset",
     "run_benchmark",
     "run_quality_benchmark",

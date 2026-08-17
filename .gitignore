@@ -8,6 +8,7 @@ data/raw/*
 data/processed/*
 data/db/*.db
 data/models/
+data/evaluation/
 .DS_Store
 *.log
 *.whl

@@ -79,6 +79,13 @@ BIRD1445 覆盖中国 1,445 种鸟类和多种模态，方向上最贴合 WingSc
 
 ## 当前工具
 
+官方数据：
+
+- 页面：https://data.caltech.edu/records/65de6-vp158
+- 文件：`CUB_200_2011.tgz`
+- 官方 MD5：`97eceeb196236b17998738112f37df78`
+- 建议解压位置：`data/evaluation/CUB_200_2011`，该目录已被 Git 忽略。
+
 解压官方 CUB-200-2011 数据后，可以运行首版模型层基线：
 
 ```powershell
@@ -114,6 +121,8 @@ python scripts/evaluate_public.py `
 1. 在公开集上运行 single-crop 与 multi-crop 对比矩阵并确定默认权重。
 2. iNaturalist 中国鸟类固定 manifest 生成器和许可校验。
 3. 任意本地目录上的无标签基线/实验影子比较。
+
+截至 2026-08-17，已尝试从 CaltechDATA 官方地址下载，但当前连接速度约为 10KB/s，预计超过 24 小时，因此已停止。真实对比矩阵仍待取得完整压缩包并通过 MD5 校验后运行；当前单元测试使用合成的小型 CUB 目录，不应被表述为模型准确率实测。
 
 ## 仓库边界
 

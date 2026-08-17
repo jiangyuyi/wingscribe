@@ -269,3 +269,95 @@ def test_do_predict_closes_image_handle(monkeypatch):
 
     assert result[0]["scientific_name"] == "sparrow"
     assert opened[0].closed is True
+
+
+def test_encode_images_returns_normalized_embeddings(tmp_path: Path):
+    first = tmp_path / "first.jpg"
+    second = tmp_path / "second.jpg"
+    Image.new("RGB", (4, 4), color="white").save(first)
+    Image.new("RGB", (4, 4), color="black").save(second)
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.preprocess = lambda image: torch.tensor([1.0, 0.0], dtype=torch.float32)
+    recognizer.model = _FakeModel()
+    recognizer._memory_profile_enabled = False
+
+    features = recognizer.encode_images([str(first), str(second)])
+
+    assert features.shape == (2, 2)
+    assert torch.allclose(features.norm(dim=-1), torch.ones(2))
+
+
+def test_encode_images_rejects_invalid_image(tmp_path: Path):
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.preprocess = lambda image: torch.tensor([1.0, 0.0], dtype=torch.float32)
+    recognizer.model = _FakeModel()
+    recognizer._memory_profile_enabled = False
+
+    with pytest.raises(ValueError, match="Failed to load image"):
+        recognizer.encode_images([str(tmp_path / "missing.jpg")])
+
+
+def test_encode_images_falls_back_to_cpu_on_cuda_error():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cuda"
+    recognizer.model = _FakeModel()
+    recognizer.cached_text_features = object()
+    calls = {"count": 0}
+
+    def fake_encode(image_paths, skip_invalid):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("CUDA encoding failed")
+        return torch.tensor([[1.0, 0.0]]), [0]
+
+    recognizer._encode_image_paths = fake_encode
+
+    features = recognizer.encode_images(["bird.jpg"])
+
+    assert features.tolist() == [[1.0, 0.0]]
+    assert recognizer.device == "cpu"
+    assert recognizer.model.to_calls == ["cpu"]
+    assert recognizer.cached_text_features is None
+
+
+def test_classify_embeddings_supports_single_and_batch_inputs():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer._get_text_features = lambda labels: torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0]],
+        dtype=torch.float32,
+    )
+
+    single = recognizer.classify_embeddings(torch.tensor([3.0, 1.0]), ["sparrow", "robin"], top_k=2)
+    batch = recognizer.classify_embeddings(
+        torch.tensor([[3.0, 1.0], [1.0, 3.0]]),
+        ["sparrow", "robin"],
+        top_k=1,
+    )
+
+    assert single[0][0]["scientific_name"] == "sparrow"
+    assert [result[0]["scientific_name"] for result in batch] == ["sparrow", "robin"]
+
+
+def test_classify_embeddings_handles_empty_candidates():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+
+    assert recognizer.classify_embeddings(torch.tensor([[1.0, 0.0]]), []) == [[]]
+
+
+@pytest.mark.parametrize(
+    "features,top_k",
+    [
+        (torch.ones((1, 1, 2)), 1),
+        (torch.ones((1, 2)), 0),
+    ],
+)
+def test_classify_embeddings_validates_inputs(features, top_k):
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+
+    with pytest.raises(ValueError):
+        recognizer.classify_embeddings(features, ["sparrow"], top_k=top_k)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol, Sequence
@@ -16,6 +17,16 @@ class BatchRecognizer(Protocol):
         candidate_labels: list[str],
         top_k: int = 5,
     ) -> list[list[dict[str, Any]]]: ...
+
+
+class BatchImagePreparer(Protocol):
+    def prepare(self, samples: Sequence[EvaluationSample]): ...
+
+
+class OriginalImagePreparer:
+    @contextmanager
+    def prepare(self, samples: Sequence[EvaluationSample]):
+        yield [str(sample.image_path) for sample in samples]
 
 
 @dataclass(frozen=True)
@@ -110,6 +121,7 @@ def run_benchmark(
     batch_size: int = 16,
     top_k: int = 5,
     run_metadata: dict[str, Any] | None = None,
+    image_preparer: BatchImagePreparer | None = None,
 ) -> BenchmarkResult:
     if batch_size < 1:
         raise ValueError("batch_size must be at least 1")
@@ -119,16 +131,18 @@ def run_benchmark(
     started_at = datetime.now(timezone.utc).isoformat()
     predictions: list[BenchmarkPrediction] = []
     candidates = list(dataset.candidate_labels)
+    preparer = image_preparer or OriginalImagePreparer()
 
     for start in range(0, len(dataset.samples), batch_size):
         batch = dataset.samples[start : start + batch_size]
         started = time.perf_counter()
         try:
-            raw_results = recognizer.predict_batch(
-                [str(sample.image_path) for sample in batch],
-                candidates,
-                top_k,
-            )
+            with preparer.prepare(batch) as prepared_paths:
+                if len(prepared_paths) != len(batch):
+                    raise ValueError(
+                        f"Image preparer returned {len(prepared_paths)} paths for a batch of {len(batch)}"
+                    )
+                raw_results = recognizer.predict_batch(prepared_paths, candidates, top_k)
             elapsed_per_sample = (time.perf_counter() - started) * 1000 / len(batch)
         except Exception as exc:
             elapsed_per_sample = (time.perf_counter() - started) * 1000 / len(batch)

@@ -8,6 +8,7 @@ from PIL import Image
 
 from src.evaluation import EvaluationDataset, EvaluationSample, load_cub_dataset, run_benchmark
 from src.evaluation.datasets import DatasetFormatError
+from src.evaluation.images import CUBCropPreparer, build_crop_box
 
 
 def _write_cub_fixture(root: Path) -> Path:
@@ -155,3 +156,77 @@ def test_public_evaluation_script_can_show_help():
 
     assert completed.returncode == 0
     assert "--dataset" in completed.stdout
+    assert "--image-mode" in completed.stdout
+
+
+def test_build_crop_box_applies_margin_and_clips_to_image(tmp_path: Path):
+    sample = EvaluationSample("one", tmp_path / "one.jpg", "Alpha", "test", (2, 3, 12, 9))
+
+    crop = build_crop_box(sample, (20, 10), margin=0.5)
+
+    assert crop == (0.0, 0.0, 17.0, 10.0)
+
+
+def test_build_crop_box_jitter_is_deterministic_per_sample(tmp_path: Path):
+    sample = EvaluationSample("one", tmp_path / "one.jpg", "Alpha", "test", (20, 20, 80, 80))
+
+    first = build_crop_box(sample, (100, 100), jitter=0.2, seed=7)
+    second = build_crop_box(sample, (100, 100), jitter=0.2, seed=7)
+    different = build_crop_box(sample, (100, 100), jitter=0.2, seed=8)
+
+    assert first == second
+    assert first != different
+
+
+@pytest.mark.parametrize("margin,jitter", [(-0.1, 0.0), (0.0, -0.1), (0.0, 1.0)])
+def test_build_crop_box_validates_parameters(tmp_path: Path, margin: float, jitter: float):
+    sample = EvaluationSample("one", tmp_path / "one.jpg", "Alpha", "test", (1, 1, 5, 5))
+
+    with pytest.raises(ValueError):
+        build_crop_box(sample, (10, 10), margin=margin, jitter=jitter)
+
+
+@pytest.mark.parametrize("margin,jitter", [(-0.1, 0.0), (0.0, -0.1), (0.0, 1.0)])
+def test_cub_crop_preparer_validates_parameters(tmp_path: Path, margin: float, jitter: float):
+    with pytest.raises(ValueError):
+        CUBCropPreparer(margin=margin, jitter=jitter, work_root=tmp_path)
+
+
+def test_cub_crop_preparer_creates_and_cleans_batch_crops(tmp_path: Path):
+    image_path = tmp_path / "source.png"
+    Image.new("RGBA", (20, 10), "white").save(image_path)
+    sample = EvaluationSample("one", image_path, "Alpha", "test", (2, 2, 12, 8))
+    preparer = CUBCropPreparer(work_root=tmp_path / "work")
+
+    with preparer.prepare([sample]) as paths:
+        crop_path = Path(paths[0])
+        assert crop_path.is_file()
+        with Image.open(crop_path) as crop:
+            assert crop.size == (10, 6)
+            assert crop.mode == "RGB"
+
+    assert not crop_path.exists()
+
+
+def test_run_benchmark_uses_image_preparer(tmp_path: Path):
+    class TrackingPreparer:
+        def __init__(self):
+            self.calls = 0
+
+        def prepare(self, samples):
+            from contextlib import nullcontext
+
+            self.calls += 1
+            return nullcontext([f"prepared-{sample.sample_id}.jpg" for sample in samples])
+
+    dataset = _dataset(tmp_path)
+    recognizer = _FakeRecognizer(
+        [[{"scientific_name": label, "confidence": 1.0}] for label in ["Alpha", "Beta", "Gamma"]]
+    )
+    preparer = TrackingPreparer()
+
+    result = run_benchmark(dataset, recognizer, batch_size=2, image_preparer=preparer)
+
+    assert result.metrics["top1_accuracy"] == 1.0
+    assert preparer.calls == 2
+    assert recognizer.calls[0][0] == ["prepared-1.jpg", "prepared-2.jpg"]

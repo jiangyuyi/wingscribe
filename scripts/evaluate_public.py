@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.evaluation import load_cub_dataset, run_benchmark
+from src.evaluation import CUBCropPreparer, load_cub_dataset, run_benchmark
 from src.recognition.inference_local import LocalBirdRecognizer
 
 
@@ -20,6 +20,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--image-mode", choices=["full", "bbox", "bbox-jitter"], default="bbox")
+    parser.add_argument("--bbox-margin", type=float, default=0.15, help="Fraction added around each bbox edge")
+    parser.add_argument("--bbox-jitter", type=float, default=0.10, help="Maximum deterministic bbox perturbation")
+    parser.add_argument("--seed", type=int, default=20260817)
     parser.add_argument("--limit", type=int, help="Evaluate only the first N samples for a smoke test")
     parser.add_argument("--output", type=Path, required=True, help="JSON report path")
     return parser
@@ -38,13 +42,31 @@ def main() -> int:
             metadata={**dataset.metadata, "limit": args.limit},
         )
 
+    image_preparer = None
+    if args.image_mode != "full":
+        jitter = args.bbox_jitter if args.image_mode == "bbox-jitter" else 0.0
+        image_preparer = CUBCropPreparer(
+            margin=args.bbox_margin,
+            jitter=jitter,
+            seed=args.seed,
+            work_root=args.output.parent / ".tmp",
+        )
     recognizer = LocalBirdRecognizer(model_name=args.model, device=args.device)
     result = run_benchmark(
         dataset,
         recognizer,
         batch_size=args.batch_size,
         top_k=args.top_k,
-        run_metadata={"model": args.model, "requested_device": args.device, "actual_device": recognizer.device},
+        run_metadata={
+            "model": args.model,
+            "requested_device": args.device,
+            "actual_device": recognizer.device,
+            "image_mode": args.image_mode,
+            "bbox_margin": args.bbox_margin if image_preparer else None,
+            "bbox_jitter": args.bbox_jitter if args.image_mode == "bbox-jitter" else 0.0,
+            "seed": args.seed,
+        },
+        image_preparer=image_preparer,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

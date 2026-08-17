@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import random
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,64 @@ class EvaluationDataset:
     samples: tuple[EvaluationSample, ...]
     candidate_labels: tuple[str, ...]
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def select_evaluation_subset(
+    dataset: EvaluationDataset,
+    limit: int,
+    *,
+    strategy: str = "stratified",
+    seed: int = 20260817,
+) -> EvaluationDataset:
+    """Select a deterministic subset without concentrating on early classes."""
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    if strategy not in {"stratified", "sequential"}:
+        raise ValueError("strategy must be one of: stratified, sequential")
+
+    if strategy == "sequential":
+        selected = list(dataset.samples[:limit])
+    else:
+        rng = random.Random(seed)
+        grouped: dict[str, list[EvaluationSample]] = defaultdict(list)
+        for sample in dataset.samples:
+            grouped[sample.expected_label].append(sample)
+
+        labels = sorted(grouped)
+        rng.shuffle(labels)
+        queues: dict[str, deque[EvaluationSample]] = {}
+        for label in labels:
+            samples = grouped[label]
+            rng.shuffle(samples)
+            queues[label] = deque(samples)
+
+        selected = []
+        while len(selected) < limit:
+            added = False
+            for label in labels:
+                if queues[label]:
+                    selected.append(queues[label].popleft())
+                    added = True
+                    if len(selected) == limit:
+                        break
+            if not added:
+                break
+
+    return EvaluationDataset(
+        name=dataset.name,
+        samples=tuple(selected),
+        candidate_labels=dataset.candidate_labels,
+        metadata={
+            **dataset.metadata,
+            "sample_selection": {
+                "strategy": strategy,
+                "seed": seed if strategy == "stratified" else None,
+                "requested_limit": limit,
+                "selected_samples": len(selected),
+                "selected_classes": len({sample.expected_label for sample in selected}),
+            },
+        },
+    )
 
 
 def _read_indexed_lines(path: Path) -> dict[int, str]:

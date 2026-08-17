@@ -106,7 +106,7 @@ RTX 5060 Laptop 的 batch 1 烟雾测试已通过：PyTorch 2.10.0/cu128 能原�
 
 每份报告会记录 Python/PyTorch/CUDA 版本、实际设备、CPU RSS 起止值；CUDA 模式还记录 GPU 名称、总显存，以及评测阶段峰值 allocated/reserved 显存。显存采样在模型加载后重置峰值，因此包含已加载模型的当前占用和后续推理峰值，但不代表模型下载或加载瞬间的系统内存峰值。
 
-首次试运行可以添加 `--limit 20`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
+首次试运行可以添加 `--limit 20`。有限样本默认使用由 `--seed` 固定的 `stratified` 分层抽样，先尽量覆盖不同类别，避免按图片编号取前 N 张造成早期类别偏差；需要复现旧的顺序截取时可显式使用 `--sample-strategy sequential`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
 
 当前工具使用 CUB 官方 bbox，而不是运行 WingScribe 的 YOLO 检测器，用来隔离识别器、裁切 margin 和框误差的影响。因此结果仍不代表 WingScribe 完整检测流水线的准确率。
 

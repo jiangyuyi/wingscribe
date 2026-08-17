@@ -7,7 +7,13 @@ import pytest
 import torch
 from PIL import Image
 
-from src.evaluation import EvaluationDataset, EvaluationSample, load_cub_dataset, run_benchmark
+from src.evaluation import (
+    EvaluationDataset,
+    EvaluationSample,
+    load_cub_dataset,
+    run_benchmark,
+    select_evaluation_subset,
+)
 from src.evaluation.datasets import DatasetFormatError
 from src.evaluation.images import CUBCropPreparer, CUBMultiCropPreparer, build_crop_box
 from src.evaluation.multicrop import MultiCropPredictor
@@ -88,6 +94,45 @@ def _dataset(tmp_path: Path) -> EvaluationDataset:
     return EvaluationDataset("fixture", samples, ("Alpha", "Beta", "Gamma"), {"version": "1"})
 
 
+def test_select_evaluation_subset_stratifies_and_is_deterministic(tmp_path: Path):
+    labels = ["Alpha"] * 3 + ["Beta"] * 3 + ["Gamma"] * 3
+    samples = tuple(
+        EvaluationSample(str(index), tmp_path / f"{index}.jpg", label, "test")
+        for index, label in enumerate(labels, 1)
+    )
+    dataset = EvaluationDataset("fixture", samples, tuple(sorted(set(labels))))
+
+    first = select_evaluation_subset(dataset, 3, seed=7)
+    second = select_evaluation_subset(dataset, 3, seed=7)
+
+    assert first.samples == second.samples
+    assert {sample.expected_label for sample in first.samples} == {"Alpha", "Beta", "Gamma"}
+    assert first.metadata["sample_selection"] == {
+        "strategy": "stratified",
+        "seed": 7,
+        "requested_limit": 3,
+        "selected_samples": 3,
+        "selected_classes": 3,
+    }
+
+
+def test_select_evaluation_subset_supports_sequential_and_large_limits(tmp_path: Path):
+    dataset = _dataset(tmp_path)
+
+    sequential = select_evaluation_subset(dataset, 2, strategy="sequential")
+    all_samples = select_evaluation_subset(dataset, 10)
+
+    assert [sample.sample_id for sample in sequential.samples] == ["1", "2"]
+    assert len(all_samples.samples) == 3
+    assert sequential.metadata["sample_selection"]["seed"] is None
+
+
+@pytest.mark.parametrize("limit,strategy", [(0, "stratified"), (1, "unknown")])
+def test_select_evaluation_subset_validates_options(tmp_path: Path, limit: int, strategy: str):
+    with pytest.raises(ValueError):
+        select_evaluation_subset(_dataset(tmp_path), limit, strategy=strategy)
+
+
 def test_run_benchmark_calculates_topk_and_batches(tmp_path: Path):
     recognizer = _FakeRecognizer(
         [
@@ -159,6 +204,7 @@ def test_public_evaluation_script_can_show_help():
     assert completed.returncode == 0
     assert "--dataset" in completed.stdout
     assert "--image-mode" in completed.stdout
+    assert "--sample-strategy" in completed.stdout
     assert "bioclip-2.5-vith14" in completed.stdout
 
 

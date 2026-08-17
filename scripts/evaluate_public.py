@@ -14,6 +14,7 @@ from src.evaluation import (
     finish_hardware_measurement,
     load_cub_dataset,
     run_benchmark,
+    select_evaluation_subset,
 )
 from src.recognition.inference_local import LocalBirdRecognizer
 from src.recognition.model_registry import get_model_spec
@@ -44,7 +45,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bbox-margin", type=float, default=0.15, help="Fraction added around each bbox edge")
     parser.add_argument("--bbox-jitter", type=float, default=0.10, help="Maximum deterministic bbox perturbation")
     parser.add_argument("--seed", type=int, default=20260817)
-    parser.add_argument("--limit", type=int, help="Evaluate only the first N samples for a smoke test")
+    parser.add_argument("--limit", type=int, help="Evaluate a deterministic subset of N samples")
+    parser.add_argument(
+        "--sample-strategy",
+        choices=["stratified", "sequential"],
+        default="stratified",
+        help="Subset selection used with --limit; stratified avoids early-class bias",
+    )
     parser.add_argument("--output", type=Path, required=True, help="JSON report path")
     return parser
 
@@ -61,13 +68,11 @@ def main() -> int:
         raise ValueError("--batch-size must be at least 1")
     dataset = load_cub_dataset(args.root, split=args.split)
     if args.limit is not None:
-        if args.limit < 1:
-            raise ValueError("--limit must be at least 1")
-        dataset = type(dataset)(
-            name=dataset.name,
-            samples=dataset.samples[: args.limit],
-            candidate_labels=dataset.candidate_labels,
-            metadata={**dataset.metadata, "limit": args.limit},
+        dataset = select_evaluation_subset(
+            dataset,
+            args.limit,
+            strategy=args.sample_strategy,
+            seed=args.seed,
         )
 
     image_preparer = None

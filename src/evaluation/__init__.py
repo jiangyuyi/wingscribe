@@ -2,7 +2,12 @@
 
 from .benchmark import BenchmarkPrediction, BenchmarkResult, run_benchmark
 from .compare import ReportFormatError, compare_reports
-from .datasets import EvaluationDataset, EvaluationSample, load_cub_dataset
+from .datasets import (
+    EvaluationDataset,
+    EvaluationSample,
+    load_cub_dataset,
+    select_evaluation_subset,
+)
 from .images import CUBCropPreparer, CUBMultiCropPreparer, build_crop_box
 from .hardware import HardwareMeasurement, begin_hardware_measurement, finish_hardware_measurement
 from .multicrop import MultiCropPredictor
@@ -31,6 +36,7 @@ __all__ = [
     "begin_hardware_measurement",
     "finish_hardware_measurement",
     "load_cub_dataset",
+    "select_evaluation_subset",
     "run_benchmark",
     "run_quality_benchmark",
     "write_quality_report",

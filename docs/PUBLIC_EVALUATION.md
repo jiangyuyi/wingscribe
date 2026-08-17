@@ -93,7 +93,7 @@ python scripts/evaluate_public.py `
   --output evaluation_results\cub-bioclip2.json
 ```
 
-首次试运行可以添加 `--limit 20`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。脚本不会下载或永久复制公共图片；bbox 裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
+首次试运行可以添加 `--limit 20`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
 
 当前工具使用 CUB 官方 bbox，而不是运行 WingScribe 的 YOLO 检测器，用来隔离识别器、裁切 margin 和框误差的影响。因此结果仍不代表 WingScribe 完整检测流水线的准确率。
 
@@ -104,13 +104,14 @@ python scripts/evaluate_public.py `
 - CUB 官方目录和 train/test split 读取。
 - 类别、图片路径、bbox 和 annotation 哈希校验。
 - 官方 bbox 裁切、margin 和确定性框扰动。
+- 两路/三路 multi-crop 批量编码与 embedding 加权融合。
 - 批量评测、失败计数、Top-1、Top-5 和耗时分位数。
 - 包含逐样本结果和运行元数据的 JSON 报告。
 - 不加载模型权重的单元测试和直接运行的命令行入口。
 
 后续按独立提交推进：
 
-1. single-crop 与 multi-crop 对比矩阵。
+1. 在公开集上运行 single-crop 与 multi-crop 对比矩阵并确定默认权重。
 2. iNaturalist 中国鸟类固定 manifest 生成器和许可校验。
 3. 任意本地目录上的无标签基线/实验影子比较。
 

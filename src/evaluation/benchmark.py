@@ -23,6 +23,15 @@ class BatchImagePreparer(Protocol):
     def prepare(self, samples: Sequence[EvaluationSample]): ...
 
 
+class BatchPredictor(Protocol):
+    def predict(
+        self,
+        samples: Sequence[EvaluationSample],
+        candidate_labels: list[str],
+        top_k: int,
+    ) -> list[list[dict[str, Any]]]: ...
+
+
 class OriginalImagePreparer:
     @contextmanager
     def prepare(self, samples: Sequence[EvaluationSample]):
@@ -122,6 +131,7 @@ def run_benchmark(
     top_k: int = 5,
     run_metadata: dict[str, Any] | None = None,
     image_preparer: BatchImagePreparer | None = None,
+    batch_predictor: BatchPredictor | None = None,
 ) -> BenchmarkResult:
     if batch_size < 1:
         raise ValueError("batch_size must be at least 1")
@@ -137,12 +147,15 @@ def run_benchmark(
         batch = dataset.samples[start : start + batch_size]
         started = time.perf_counter()
         try:
-            with preparer.prepare(batch) as prepared_paths:
-                if len(prepared_paths) != len(batch):
-                    raise ValueError(
-                        f"Image preparer returned {len(prepared_paths)} paths for a batch of {len(batch)}"
-                    )
-                raw_results = recognizer.predict_batch(prepared_paths, candidates, top_k)
+            if batch_predictor is not None:
+                raw_results = batch_predictor.predict(batch, candidates, top_k)
+            else:
+                with preparer.prepare(batch) as prepared_paths:
+                    if len(prepared_paths) != len(batch):
+                        raise ValueError(
+                            f"Image preparer returned {len(prepared_paths)} paths for a batch of {len(batch)}"
+                        )
+                    raw_results = recognizer.predict_batch(prepared_paths, candidates, top_k)
             elapsed_per_sample = (time.perf_counter() - started) * 1000 / len(batch)
         except Exception as exc:
             elapsed_per_sample = (time.perf_counter() - started) * 1000 / len(batch)

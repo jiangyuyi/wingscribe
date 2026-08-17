@@ -4,11 +4,13 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 from PIL import Image
 
 from src.evaluation import EvaluationDataset, EvaluationSample, load_cub_dataset, run_benchmark
 from src.evaluation.datasets import DatasetFormatError
-from src.evaluation.images import CUBCropPreparer, build_crop_box
+from src.evaluation.images import CUBCropPreparer, CUBMultiCropPreparer, build_crop_box
+from src.evaluation.multicrop import MultiCropPredictor
 
 
 def _write_cub_fixture(root: Path) -> Path:
@@ -230,3 +232,129 @@ def test_run_benchmark_uses_image_preparer(tmp_path: Path):
     assert result.metrics["top1_accuracy"] == 1.0
     assert preparer.calls == 2
     assert recognizer.calls[0][0] == ["prepared-1.jpg", "prepared-2.jpg"]
+
+
+def test_cub_multicrop_preparer_creates_ordered_views_and_cleans(tmp_path: Path):
+    image_path = tmp_path / "source.jpg"
+    Image.new("RGB", (100, 100), "white").save(image_path)
+    sample = EvaluationSample("one", image_path, "Alpha", "test", (20, 20, 80, 80))
+    preparer = CUBMultiCropPreparer((0.0, 0.25), work_root=tmp_path / "work")
+
+    with preparer.prepare_views([sample]) as paths:
+        crop_paths = [Path(path) for path in paths]
+        with Image.open(crop_paths[0]) as tight, Image.open(crop_paths[1]) as context:
+            assert tight.size == (60, 60)
+            assert context.size == (90, 90)
+
+    assert all(not path.exists() for path in crop_paths)
+
+
+def test_multicrop_predictor_fuses_normalized_embeddings(tmp_path: Path):
+    image_path = tmp_path / "source.jpg"
+    Image.new("RGB", (20, 20), "white").save(image_path)
+    samples = [EvaluationSample("one", image_path, "Alpha", "test", (2, 2, 18, 18))]
+
+    class FakeEmbeddingRecognizer:
+        def __init__(self):
+            self.fused = None
+
+        def encode_images(self, image_paths):
+            assert len(image_paths) == 2
+            return torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+
+        def classify_embeddings(self, features, candidate_labels, top_k):
+            self.fused = features
+            return [[{"scientific_name": "Alpha", "confidence": 1.0}]]
+
+    recognizer = FakeEmbeddingRecognizer()
+    predictor = MultiCropPredictor(
+        recognizer,
+        margins=(0.0, 0.25),
+        weights=(1.0, 3.0),
+        work_root=tmp_path / "work",
+    )
+
+    results = predictor.predict(samples, ["Alpha"], top_k=1)
+
+    expected = torch.tensor([[0.25, 0.75]])
+    expected = expected / expected.norm(dim=-1, keepdim=True)
+    assert results[0][0]["scientific_name"] == "Alpha"
+    assert torch.allclose(recognizer.fused, expected)
+    assert predictor.weights == (0.25, 0.75)
+
+
+@pytest.mark.parametrize(
+    "margins,weights",
+    [
+        ((), ()),
+        ((0.0,), (0.5, 0.5)),
+        ((0.0, 0.1), (0.0, 0.0)),
+        ((0.0, 0.1), (1.0, -1.0)),
+    ],
+)
+def test_multicrop_predictor_validates_configuration(margins, weights):
+    with pytest.raises(ValueError):
+        MultiCropPredictor(object(), margins, weights)
+
+
+def test_multicrop_predictor_validates_encode_batch_size():
+    with pytest.raises(ValueError):
+        MultiCropPredictor(object(), (0.0,), (1.0,), encode_batch_size=0)
+
+
+def test_multicrop_predictor_chunks_view_encoding(tmp_path: Path):
+    image_path = tmp_path / "source.jpg"
+    Image.new("RGB", (20, 20), "white").save(image_path)
+    samples = [
+        EvaluationSample(str(index), image_path, "Alpha", "test", (2, 2, 18, 18))
+        for index in range(2)
+    ]
+
+    class ChunkingRecognizer:
+        def __init__(self):
+            self.batch_sizes = []
+
+        def encode_images(self, image_paths):
+            self.batch_sizes.append(len(image_paths))
+            return torch.tensor([[1.0, 0.0]] * len(image_paths))
+
+        def classify_embeddings(self, features, candidate_labels, top_k):
+            return [[{"scientific_name": "Alpha", "confidence": 1.0}]] * len(features)
+
+    recognizer = ChunkingRecognizer()
+    predictor = MultiCropPredictor(
+        recognizer,
+        (0.0, 0.25),
+        (0.5, 0.5),
+        work_root=tmp_path / "work",
+        encode_batch_size=2,
+    )
+
+    results = predictor.predict(samples, ["Alpha"], 1)
+
+    assert len(results) == 2
+    assert recognizer.batch_sizes == [2, 2]
+
+
+def test_run_benchmark_uses_batch_predictor(tmp_path: Path):
+    class TrackingPredictor:
+        def __init__(self):
+            self.calls = 0
+
+        def predict(self, samples, candidate_labels, top_k):
+            self.calls += 1
+            return [
+                [{"scientific_name": sample.expected_label, "confidence": 1.0}]
+                for sample in samples
+            ]
+
+    predictor = TrackingPredictor()
+    result = run_benchmark(
+        _dataset(tmp_path),
+        _FakeRecognizer([]),
+        batch_size=2,
+        batch_predictor=predictor,
+    )
+
+    assert result.metrics["top1_accuracy"] == 1.0
+    assert predictor.calls == 2

@@ -97,3 +97,37 @@ class CUBCropPreparer:
                     cropped.save(output_path, format="JPEG", quality=95)
                 paths.append(str(output_path))
             yield paths
+
+
+class CUBMultiCropPreparer:
+    def __init__(
+        self,
+        margins: Sequence[float],
+        *,
+        work_root: str | Path | None = None,
+    ):
+        if not margins:
+            raise ValueError("at least one crop margin is required")
+        if any(margin < 0 for margin in margins):
+            raise ValueError("crop margins must not be negative")
+        self.margins = tuple(float(margin) for margin in margins)
+        self.work_root = Path(work_root) if work_root is not None else None
+
+    @contextmanager
+    def prepare_views(self, samples: Sequence[EvaluationSample]) -> Iterator[list[str]]:
+        if self.work_root is not None:
+            self.work_root.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.TemporaryDirectory(prefix="wingscribe-multicrop-", dir=self.work_root) as temp_dir:
+            paths: list[str] = []
+            for sample_index, sample in enumerate(samples):
+                with Image.open(sample.image_path) as image:
+                    for view_index, margin in enumerate(self.margins):
+                        output_path = Path(temp_dir) / f"{sample_index:04d}-{view_index:02d}.jpg"
+                        crop_box = build_crop_box(sample, image.size, margin=margin)
+                        cropped = image.crop(crop_box)
+                        if cropped.mode != "RGB":
+                            cropped = cropped.convert("RGB")
+                        cropped.save(output_path, format="JPEG", quality=95)
+                        paths.append(str(output_path))
+            yield paths

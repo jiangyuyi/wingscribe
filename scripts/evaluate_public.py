@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.evaluation import CUBCropPreparer, load_cub_dataset, run_benchmark
+from src.evaluation import CUBCropPreparer, MultiCropPredictor, load_cub_dataset, run_benchmark
 from src.recognition.inference_local import LocalBirdRecognizer
 
 
@@ -20,7 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument("--image-mode", choices=["full", "bbox", "bbox-jitter"], default="bbox")
+    parser.add_argument(
+        "--image-mode",
+        choices=["full", "bbox", "bbox-jitter", "multicrop-2", "multicrop-3"],
+        default="bbox",
+    )
     parser.add_argument("--bbox-margin", type=float, default=0.15, help="Fraction added around each bbox edge")
     parser.add_argument("--bbox-jitter", type=float, default=0.10, help="Maximum deterministic bbox perturbation")
     parser.add_argument("--seed", type=int, default=20260817)
@@ -43,7 +47,7 @@ def main() -> int:
         )
 
     image_preparer = None
-    if args.image_mode != "full":
+    if args.image_mode in {"bbox", "bbox-jitter"}:
         jitter = args.bbox_jitter if args.image_mode == "bbox-jitter" else 0.0
         image_preparer = CUBCropPreparer(
             margin=args.bbox_margin,
@@ -52,6 +56,20 @@ def main() -> int:
             work_root=args.output.parent / ".tmp",
         )
     recognizer = LocalBirdRecognizer(model_name=args.model, device=args.device)
+    batch_predictor = None
+    multicrop_presets = {
+        "multicrop-2": ((0.0, 0.15), (0.35, 0.65)),
+        "multicrop-3": ((0.0, 0.15, 0.35), (0.25, 0.55, 0.20)),
+    }
+    if args.image_mode in multicrop_presets:
+        margins, weights = multicrop_presets[args.image_mode]
+        batch_predictor = MultiCropPredictor(
+            recognizer,
+            margins,
+            weights,
+            work_root=args.output.parent / ".tmp",
+            encode_batch_size=args.batch_size,
+        )
     result = run_benchmark(
         dataset,
         recognizer,
@@ -65,8 +83,12 @@ def main() -> int:
             "bbox_margin": args.bbox_margin if image_preparer else None,
             "bbox_jitter": args.bbox_jitter if args.image_mode == "bbox-jitter" else 0.0,
             "seed": args.seed,
+            "multicrop_margins": list(batch_predictor.margins) if batch_predictor else None,
+            "multicrop_weights": list(batch_predictor.weights) if batch_predictor else None,
+            "view_encode_batch_size": batch_predictor.encode_batch_size if batch_predictor else None,
         },
         image_preparer=image_preparer,
+        batch_predictor=batch_predictor,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

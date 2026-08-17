@@ -126,7 +126,19 @@ python scripts/compare_evaluation_reports.py `
 - 批量评测、失败计数、Top-1、Top-5 和耗时分位数。
 - 包含逐样本结果和运行元数据的 JSON 报告。
 - 有标签改善/退化和无标签一致性的报告比较工具。
+- 可重复的模糊、降采样、曝光和噪声退化质量回归报告。
 - 不加载模型权重的单元测试和直接运行的命令行入口。
+
+质量指标回归可以对任意公开图片目录运行：
+
+```powershell
+python scripts/evaluate_quality.py `
+  --root D:\Datasets\CUB_200_2011\images `
+  --limit 200 `
+  --output evaluation_results\quality-degradation.json
+```
+
+报告分别保留每种退化的原始子指标和相对基线变化。`quality_decrease_rate` 只是指标方向检查，不代表识别准确率；噪声可能人为抬高梯度类锐度分数，这类反常结果应作为调整质量权重的依据，而不是隐藏或强制判定通过。
 
 后续按独立提交推进：
 

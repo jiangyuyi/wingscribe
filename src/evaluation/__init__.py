@@ -5,6 +5,13 @@ from .compare import ReportFormatError, compare_reports
 from .datasets import EvaluationDataset, EvaluationSample, load_cub_dataset
 from .images import CUBCropPreparer, CUBMultiCropPreparer, build_crop_box
 from .multicrop import MultiCropPredictor
+from .quality import (
+    DEFAULT_DEGRADATIONS,
+    DegradationSpec,
+    apply_degradation,
+    run_quality_benchmark,
+    write_quality_report,
+)
 
 __all__ = [
     "BenchmarkPrediction",
@@ -15,8 +22,13 @@ __all__ = [
     "CUBCropPreparer",
     "CUBMultiCropPreparer",
     "MultiCropPredictor",
+    "DEFAULT_DEGRADATIONS",
+    "DegradationSpec",
+    "apply_degradation",
     "build_crop_box",
     "load_cub_dataset",
     "run_benchmark",
+    "run_quality_benchmark",
+    "write_quality_report",
     "compare_reports",
 ]

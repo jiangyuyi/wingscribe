@@ -1,0 +1,13 @@
+version: 1
+aliases:
+  - match: "天目山"
+    province: "浙江"
+    city: "杭州"
+    district: "临安"
+    site: "天目山"
+  - match: "朝阳公园"
+    parent_matches: ["北京"]
+    province: "北京"
+    city: "北京"
+    district: "朝阳"
+    site: "朝阳公园"

@@ -47,3 +47,20 @@ aliases:
 ```
 
 解析结果包含 `location_raw`、`province`、`city`、`district`、`site`、`source` 和 `confidence`。后续预览接口验证可靠后，再考虑数据库字段和生产流水线接入。
+
+## 只读预览接口
+
+将正式词典保存到以下固定位置后，可以调用 `POST /api/location/preview`：
+
+- `config/dictionaries/china_admin_divisions.csv`
+- `config/dictionaries/location_aliases.yaml`
+
+请求示例：
+
+```json
+{
+  "locations": ["20260101_浙江临安天目山", "北京_朝阳"]
+}
+```
+
+接口一次接受 1-100 项，返回每项的结构化结果，以及词典是否存在、记录数和内容版本。它不接受任意词典路径，不写配置或数据库，也不改变生产识别结果。

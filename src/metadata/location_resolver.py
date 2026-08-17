@@ -57,6 +57,14 @@ class LocationResolver:
         self._cache: dict[tuple[str, str], LocationResult] = {}
         self._cache_lock = threading.Lock()
 
+    @property
+    def admin_record_count(self) -> int:
+        return len(self._admin_records)
+
+    @property
+    def alias_rule_count(self) -> int:
+        return len(self._alias_rules)
+
     @staticmethod
     def normalize(value: str | None) -> str:
         if not value:

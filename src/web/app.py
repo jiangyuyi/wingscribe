@@ -34,6 +34,7 @@ from src.web.config_helpers import (
 )
 from src.web import path_helpers
 from src.web import config_service
+from src.web import location_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -606,6 +607,10 @@ class SaveConfigRequest(BaseModel):
     configs: List[ConfigItem]
     restart: bool = False
 
+
+class LocationPreviewRequest(BaseModel):
+    locations: List[str]
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """Configuration page"""
@@ -615,6 +620,16 @@ async def settings_page(request: Request):
 async def get_config():
     """Get current configuration"""
     return config_service.get_config(BASE_DIR, get_config_definition)
+
+
+@app.post("/api/location/preview")
+async def preview_locations(req: LocationPreviewRequest):
+    """Preview normalized locations without changing photos or configuration."""
+    if not 1 <= len(req.locations) <= 100:
+        raise HTTPException(status_code=400, detail="locations must contain between 1 and 100 items")
+    if any(not location.strip() or len(location) > 500 for location in req.locations):
+        raise HTTPException(status_code=400, detail="each location must contain 1 to 500 characters")
+    return location_service.preview_locations(BASE_DIR, req.locations)
 
 @app.post("/api/config/save")
 async def save_config(req: SaveConfigRequest):

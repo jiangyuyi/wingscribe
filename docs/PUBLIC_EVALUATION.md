@@ -77,6 +77,42 @@ BIRD1445 覆盖中国 1,445 种鸟类和多种模态，方向上最贴合 WingSc
 
 报告不得把一致率称为准确率，也不得因公开集提升而直接宣称所有用户照片都会提升。
 
+## 当前工具
+
+解压官方 CUB-200-2011 数据后，可以运行首版模型层基线：
+
+```powershell
+python scripts/evaluate_public.py `
+  --dataset cub `
+  --root D:\Datasets\CUB_200_2011 `
+  --split test `
+  --model bioclip-2 `
+  --device auto `
+  --batch-size 16 `
+  --output evaluation_results\cub-bioclip2.json
+```
+
+首次试运行可以添加 `--limit 20`。脚本不会下载或复制公共图片，报告目录默认被 Git 忽略。
+
+当前首版直接评估整张图片，用来固化模型、候选标签、批量推理和报告格式。CUB bbox 已由数据适配器读取并保留，但 bbox 裁切、扰动和 multi-crop 对比将在后续独立阶段接入，因此当前结果不代表 WingScribe 完整检测与裁切流水线的准确率。
+
+## 实施状态
+
+已完成：
+
+- CUB 官方目录和 train/test split 读取。
+- 类别、图片路径、bbox 和 annotation 哈希校验。
+- 批量评测、失败计数、Top-1、Top-5 和耗时分位数。
+- 包含逐样本结果和运行元数据的 JSON 报告。
+- 不加载模型权重的单元测试和直接运行的命令行入口。
+
+后续按独立提交推进：
+
+1. CUB bbox 裁切与固定随机种子的检测框扰动。
+2. single-crop 与 multi-crop 对比矩阵。
+3. iNaturalist 中国鸟类固定 manifest 生成器和许可校验。
+4. 任意本地目录上的无标签基线/实验影子比较。
+
 ## 仓库边界
 
 - 不提交公共数据集图片、模型权重或私人照片。

@@ -21,6 +21,8 @@ htmlcov/
 .coverage
 *.cover
 tests/__pycache__/
+evaluation_results/
+.codex-tmp/
 
 # YOLO model files (auto-downloaded by Ultralytics)
 *.pt

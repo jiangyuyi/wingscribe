@@ -49,6 +49,10 @@ def main() -> int:
             max_api_records=args.max_api_records,
             request_delay_seconds=args.request_delay,
         )
+    if source["truncated"]:
+        raise RuntimeError(
+            "iNaturalist species-count aggregation was truncated; increase --max-api-records"
+        )
     prior = build_national_month_prior(
         counts,
         labels,

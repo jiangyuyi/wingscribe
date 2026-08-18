@@ -17,40 +17,59 @@ from src.evaluation.inaturalist_prior import (
 from src.recognition.prior import PriorFormatError, load_prior_provider
 
 
-def _observation(observation_id: int, label: str, observed_on: str = "2021-05-01") -> dict:
-    return {
-        "id": observation_id,
-        "observed_on": observed_on,
-        "taxon": {"rank": "species", "name": label},
-    }
+def _species_count(label: str, count: int) -> dict:
+    return {"count": count, "taxon": {"rank": "species", "name": label}}
 
 
-def test_fetch_species_month_counts_paginates_and_filters_dates():
+def test_fetch_species_month_counts_queries_monthly_aggregates():
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
+        month = int(request.url.params["month"])
         results = (
-            [_observation(1, "Alpha"), _observation(2, "Beta", "2021-06-01")]
-            if len(requests) == 1
-            else [_observation(3, "Alpha", "invalid")]
+            [_species_count("Alpha", 3), _species_count("Beta", 2)]
+            if month == 5
+            else [_species_count("Alpha", 4)]
         )
-        return httpx.Response(200, json={"total_results": 3, "results": results})
+        return httpx.Response(200, json={"total_results": len(results), "results": results})
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         counts, source = fetch_species_month_counts(
             client,
-            max_api_records=3,
+            max_api_records=10,
             request_delay_seconds=0,
             per_page=2,
+            months=(5, 6),
         )
 
-    assert counts == Counter({("Alpha", 5): 1, ("Beta", 6): 1})
-    assert requests[1].url.params["id_above"] == "2"
+    assert counts == Counter({("Alpha", 6): 4, ("Alpha", 5): 3, ("Beta", 5): 2})
+    assert requests[0].url.params["month"] == "5"
+    assert requests[1].url.params["month"] == "6"
     assert requests[0].url.params["rank"] == "species"
-    assert source["api_records_scanned"] == 3
-    assert source["observations_counted"] == 2
+    assert source["species_count_rows_scanned"] == 3
+    assert source["observations_counted"] == 9
+    assert source["reported_species_rows_by_month"] == {"5": 2, "6": 1}
     assert source["truncated"] is False
+
+
+def test_fetch_species_month_counts_marks_truncated_limits():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"total_results": 2, "results": [_species_count("Alpha", 3)]},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        _, source = fetch_species_month_counts(
+            client,
+            max_api_records=1,
+            request_delay_seconds=0,
+            per_page=1,
+            months=(5,),
+        )
+
+    assert source["truncated"] is True
 
 
 def test_build_national_month_prior_normalizes_each_bucket():

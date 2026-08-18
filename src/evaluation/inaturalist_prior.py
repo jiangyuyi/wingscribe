@@ -14,7 +14,7 @@ from src.recognition.prior import PRIOR_SCHEMA_VERSION, PriorFormatError
 from .datasets import DatasetFormatError
 
 
-API_URL = "https://api.inaturalist.org/v1/observations"
+API_URL = "https://api.inaturalist.org/v1/observations/species_counts"
 
 
 def load_manifest_candidate_labels(path: str | Path) -> tuple[str, ...]:
@@ -38,71 +38,75 @@ def fetch_species_month_counts(
     max_api_records: int = 20_000,
     request_delay_seconds: float = 0.1,
     per_page: int = 200,
+    months: Iterable[int] = range(1, 13),
 ) -> tuple[Counter[tuple[str, int]], dict[str, Any]]:
     if max_api_records < 1 or not 1 <= per_page <= 200:
         raise ValueError("API record and page limits are invalid")
     if request_delay_seconds < 0:
         raise ValueError("request_delay_seconds must not be negative")
 
+    queried_months = tuple(months)
+    if (
+        not queried_months
+        or len(queried_months) != len(set(queried_months))
+        or any(not 1 <= month <= 12 for month in queried_months)
+    ):
+        raise ValueError("months must contain unique values between 1 and 12")
+
     counts: Counter[tuple[str, int]] = Counter()
-    seen_observations: set[int] = set()
-    cursor: int | None = None
     scanned = 0
     counted = 0
-    total_results: int | None = None
+    reported_rows_by_month: dict[str, int] = {}
+    truncated = False
 
-    while scanned < max_api_records:
-        params: dict[str, Any] = {
-            "place_id": place_id,
-            "taxon_id": taxon_id,
-            "quality_grade": "research",
-            "rank": "species",
-            "d2": cutoff_date,
-            "order_by": "id",
-            "order": "asc",
-            "locale": "en",
-            "per_page": min(per_page, max_api_records - scanned),
-        }
-        if cursor is not None:
-            params["id_above"] = cursor
-
-        response = client.get(API_URL, params=params)
-        response.raise_for_status()
-        payload = response.json()
-        if total_results is None:
-            total_results = int(payload.get("total_results") or 0)
-        observations = payload.get("results") or []
-        if not observations:
-            break
-
-        page_max_id = cursor or 0
-        for observation in observations:
-            observation_id = int(observation["id"])
-            page_max_id = max(page_max_id, observation_id)
-            if observation_id in seen_observations:
-                continue
-            seen_observations.add(observation_id)
-            scanned += 1
-
-            taxon = observation.get("taxon") or {}
-            observed_on = str(observation.get("observed_on") or "")
-            try:
-                month = int(observed_on[5:7])
-            except (TypeError, ValueError):
-                month = 0
-            if taxon.get("rank") == "species" and taxon.get("name") and 1 <= month <= 12:
-                counts[(str(taxon["name"]), month)] += 1
-                counted += 1
-            if scanned >= max_api_records:
+    for month in queried_months:
+        page = 1
+        month_scanned = 0
+        month_total: int | None = None
+        while scanned < max_api_records:
+            params: dict[str, Any] = {
+                "place_id": place_id,
+                "taxon_id": taxon_id,
+                "quality_grade": "research",
+                "rank": "species",
+                "d2": cutoff_date,
+                "month": month,
+                "locale": "en",
+                "page": page,
+                "per_page": min(per_page, max_api_records - scanned),
+            }
+            response = client.get(API_URL, params=params)
+            response.raise_for_status()
+            payload = response.json()
+            if month_total is None:
+                month_total = int(payload.get("total_results") or 0)
+                reported_rows_by_month[str(month)] = month_total
+            results = payload.get("results") or []
+            if not results:
                 break
 
-        if cursor is not None and page_max_id <= cursor:
-            raise RuntimeError("iNaturalist prior pagination cursor did not advance")
-        cursor = page_max_id
-        if len(observations) < int(params["per_page"]):
+            for item in results:
+                scanned += 1
+                month_scanned += 1
+                taxon = item.get("taxon") or {}
+                count = int(item.get("count") or 0)
+                if taxon.get("rank") == "species" and taxon.get("name") and count > 0:
+                    counts[(str(taxon["name"]), month)] += count
+                    counted += count
+                if scanned >= max_api_records:
+                    break
+
+            if month_total is not None and month_scanned >= month_total:
+                break
+            if len(results) < int(params["per_page"]):
+                break
+            page += 1
+            if request_delay_seconds:
+                time.sleep(request_delay_seconds)
+
+        if month_total is None or month_scanned < month_total:
+            truncated = True
             break
-        if request_delay_seconds:
-            time.sleep(request_delay_seconds)
 
     return counts, {
         "name": "iNaturalist observations",
@@ -113,10 +117,11 @@ def fetch_species_month_counts(
         "rank": "species",
         "cutoff_date": cutoff_date,
         "locale": "en",
-        "reported_total_results": total_results,
-        "api_records_scanned": scanned,
+        "queried_months": list(queried_months),
+        "reported_species_rows_by_month": reported_rows_by_month,
+        "species_count_rows_scanned": scanned,
         "observations_counted": counted,
-        "truncated": bool(total_results is not None and scanned < total_results),
+        "truncated": truncated,
     }
 
 

@@ -164,6 +164,48 @@ def test_run_benchmark_counts_empty_results_as_failures(tmp_path: Path):
     assert result.predictions[0].error == "No predictions returned"
 
 
+def test_run_benchmark_does_not_report_accuracy_for_unlabeled_samples(tmp_path: Path):
+    samples = (
+        EvaluationSample("1", tmp_path / "1.jpg", "", "shadow"),
+        EvaluationSample("2", tmp_path / "2.jpg", "", "shadow"),
+    )
+    dataset = EvaluationDataset("shadow", samples, ("Alpha", "Beta"))
+    recognizer = _FakeRecognizer(
+        [
+            [{"scientific_name": "Alpha", "confidence": 0.8}],
+            [{"scientific_name": "Beta", "confidence": 0.7}],
+        ]
+    )
+
+    result = run_benchmark(dataset, recognizer)
+
+    assert result.metrics["labeled_samples"] == 0
+    assert result.metrics["top1_correct"] is None
+    assert result.metrics["top5_correct"] is None
+    assert result.metrics["top1_accuracy"] is None
+    assert result.metrics["top5_accuracy"] is None
+
+
+def test_run_benchmark_uses_only_labeled_samples_as_accuracy_denominator(tmp_path: Path):
+    samples = (
+        EvaluationSample("1", tmp_path / "1.jpg", "Alpha", "test"),
+        EvaluationSample("2", tmp_path / "2.jpg", "", "shadow"),
+    )
+    dataset = EvaluationDataset("mixed", samples, ("Alpha", "Beta"))
+    recognizer = _FakeRecognizer(
+        [
+            [{"scientific_name": "Alpha", "confidence": 0.8}],
+            [{"scientific_name": "Beta", "confidence": 0.7}],
+        ]
+    )
+
+    result = run_benchmark(dataset, recognizer)
+
+    assert result.metrics["labeled_samples"] == 1
+    assert result.metrics["top1_accuracy"] == 1.0
+    assert result.metrics["top5_accuracy"] == 1.0
+
+
 def test_run_benchmark_records_recognizer_errors(tmp_path: Path):
     class FailingRecognizer:
         def predict_batch(self, image_paths, candidate_labels, top_k):

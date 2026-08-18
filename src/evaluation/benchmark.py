@@ -86,25 +86,30 @@ def _percentile(values: Sequence[float], percentile: float) -> float | None:
 def _summarize(predictions: Sequence[BenchmarkPrediction]) -> dict[str, Any]:
     total = len(predictions)
     succeeded = [prediction for prediction in predictions if prediction.error is None]
+    labeled = [prediction for prediction in predictions if prediction.expected_label]
     top1 = sum(
         bool(prediction.predicted_labels)
         and prediction.predicted_labels[0] == prediction.expected_label
-        for prediction in succeeded
+        for prediction in labeled
+        if prediction.error is None
     )
     top5 = sum(
         prediction.expected_label in prediction.predicted_labels[:5]
-        for prediction in succeeded
+        for prediction in labeled
+        if prediction.error is None
     )
     durations = [prediction.duration_ms for prediction in succeeded]
+    labeled_count = len(labeled)
 
     return {
         "total_samples": total,
         "succeeded_samples": len(succeeded),
         "failed_samples": total - len(succeeded),
-        "top1_correct": top1,
-        "top5_correct": top5,
-        "top1_accuracy": top1 / total if total else 0.0,
-        "top5_accuracy": top5 / total if total else 0.0,
+        "labeled_samples": labeled_count,
+        "top1_correct": top1 if labeled_count else None,
+        "top5_correct": top5 if labeled_count else None,
+        "top1_accuracy": top1 / labeled_count if labeled_count else None,
+        "top5_accuracy": top5 / labeled_count if labeled_count else None,
         "mean_duration_ms": sum(durations) / len(durations) if durations else None,
         "p50_duration_ms": _percentile(durations, 0.50),
         "p95_duration_ms": _percentile(durations, 0.95),

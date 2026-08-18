@@ -33,7 +33,7 @@
     {"region_code": "CN-SN", "province": "陕西", "query": "Shaanxi", "expected_name": "Shaanxi"},
     {"region_code": "CN-SX", "province": "山西", "query": "Shanxi", "expected_name": "Shanxi"},
     {"region_code": "CN-TJ", "province": "天津", "query": "Tianjin", "expected_name": "Tianjin"},
-    {"region_code": "CN-XJ", "province": "新疆", "query": "Xinjiang", "expected_name": "Xinjiang"},
+    {"region_code": "CN-XJ", "province": "新疆", "query": "Xinjiang", "expected_name": "Xinjiang Uygur"},
     {"region_code": "CN-XZ", "province": "西藏", "query": "Xizang", "expected_name": "Xizang"},
     {"region_code": "CN-YN", "province": "云南", "query": "Yunnan", "expected_name": "Yunnan"},
     {"region_code": "CN-ZJ", "province": "浙江", "query": "Zhejiang", "expected_name": "Zhejiang"}

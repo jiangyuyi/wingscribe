@@ -133,6 +133,9 @@ def test_bundled_province_catalog_has_mainland_provincial_divisions():
     ningxia = next(region for region in regions if region.region_code == "CN-NX")
     assert ningxia.query == "Ningxia"
     assert ningxia.expected_name == "Ningxia Hui"
+    xinjiang = next(region for region in regions if region.region_code == "CN-XJ")
+    assert xinjiang.query == "Xinjiang"
+    assert xinjiang.expected_name == "Xinjiang Uygur"
 
 
 def test_resolve_province_places_rejects_unverified_match():

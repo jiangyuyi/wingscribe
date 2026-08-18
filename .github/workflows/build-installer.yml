@@ -10,6 +10,11 @@ on:
         description: 'Version number (e.g., 1.0.0)'
         required: true
         default: '1.0.0'
+      publish_release:
+        description: 'Publish a GitHub Release after building'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -133,6 +138,7 @@ jobs:
 
   release:
     needs: build
+    if: github.event_name == 'push' || inputs.publish_release
     permissions:
       contents: write
     runs-on: windows-latest

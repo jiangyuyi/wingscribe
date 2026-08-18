@@ -36,3 +36,14 @@ def test_pytorch_wheel_source_is_configurable():
     assert '[string]$PyTorchWheelBase = "https://download.pytorch.org/whl"' in build_script
     assert '$PYTORCH_WHEEL_BASE = $PyTorchWheelBase.TrimEnd("/")' in build_script
     assert "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torch-$TORCH_VERSION" in build_script
+
+
+def test_manual_installer_build_does_not_publish_release_by_default():
+    workflow = (
+        PROJECT_ROOT / ".github" / "workflows" / "build-installer.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "publish_release:" in workflow
+    assert "type: boolean" in workflow
+    assert "default: false" in workflow
+    assert "if: github.event_name == 'push' || inputs.publish_release" in workflow

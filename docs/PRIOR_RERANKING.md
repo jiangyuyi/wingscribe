@@ -43,9 +43,8 @@ national 当月 -> national 全年
 各候选概率转为 log-prior，并相对当前候选中的最大值计算非正调整：
 
 ```text
-final_logit = visual_logit + clamp(log_prior - max_log_prior, -max_adjustment, 0)
-                              * weight
-                              * location_confidence
+raw_adjustment = (log_prior - max_log_prior) * weight * location_confidence
+final_logit = visual_logit + clamp(raw_adjustment, -max_adjustment, 0)
 ```
 
 最终调整有硬上限。没有任何匹配、权重为零、地点置信度为零或上限为零时，调整向量全为零，结果与纯视觉排序一致。
@@ -66,3 +65,11 @@ final_logit = visual_logit + clamp(log_prior - max_log_prior, -max_adjustment, 0
 - 任何公共来源都必须记录许可、查询条件、时间截点和聚合方式。原始私人路径和逐图结果不得提交。
 
 当前没有真实先验文件进入仓库或 installer，也没有生产默认权重。真实数据验证通过前，这一功能保持评测专用。
+
+## iNaturalist 首轮验证
+
+首轮数据使用 iNaturalist 官方 `observations/species_counts` 聚合接口生成：限定中国、鸟纲、物种级、research-grade 和观测日期不晚于 2021-12-31，按 12 个月分别聚合，并对评测清单中的 924 个候选物种做 Laplace 平滑。共聚合 6,707 个物种/月结果、54,193 条观测，其中 53,106 条匹配候选分类；生成文件 SHA-256 为 `11de580ba661ed7a84d052227840c6691b905466fb6281e898da6752b8bf1b4a`。先验文件为本地评测产物，不提交仓库或 installer。
+
+冻结的 2022-2025 年 iNaturalist 中国鸟类子集共 450 张。预先固定 `weight=0.25`、`location_confidence=1.0`、`max_adjustment=1.0` 后，BioCLIP2 的 Top-1 从 66.67% 降至 65.56%，Top-5 从 86.44% 降至 86.22%；15 张改变 Top-1，其中 2 张改善、7 张退化，双侧精确配对检验 `p=0.1797`。
+
+该配置没有收益，且全国月度观测频率容易把稀有种压向平台中的高频近似种，因此不接入生产，也不在同一测试子集上反复调权。后续只有在取得独立验证集，或建立许可与行政区映射均可追溯的更细粒度先验后，才重新评估。

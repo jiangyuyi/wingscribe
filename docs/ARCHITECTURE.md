@@ -10,8 +10,8 @@ WingScribe is an automated pipeline for bird photography management. It bridges 
     *   **Orchestrator**: Manages the ETL process.
     *   **Smart Scanning**: Uses `SmartScanner` to walk directories, applying date-based pruning to skip irrelevant folders.
     *   **Processing**:
-        *   **Detection**: Uses `src/core/detector.py` (YOLOv11) to find birds.
-        *   **Quality**: Uses `src/core/quality.py` (Laplacian Variance) to filter blur.
+        *   **Detection**: Uses `src/core/detector.py` (YOLO, with `yolo26n.pt` as the current default) to find birds.
+        *   **Quality**: Uses `src/core/quality.py` to calculate sharpness, exposure, contrast, and noise metrics. `legacy_reject` preserves the historical blur rejection behavior, while `score_only` records scores without rejecting photos.
         *   **Cropping**: Uses `src/core/processor.py` to create standardized crops.
     *   **Recognition**: Delegates to `LocalBirdRecognizer` (BioCLIP), `DongniaoRecognizer`, or `APIBirdRecognizer`.
     *   **Metadata**: Uses `ExifWriter` to inject standard tags (EXIF/IPTC/XMP) into images.
@@ -19,7 +19,7 @@ WingScribe is an automated pipeline for bird photography management. It bridges 
 2.  **Data Management (`src/metadata/`)**:
     *   **IOCManager**: SQLite wrapper. Manages:
         *   `taxonomy`: IOC World Bird List data.
-        *   `photos`: Index of processed images, including `candidates_json` (Top-K results).
+        *   `photos`: Index of processed images, including `candidates_json` (Top-K results), explicit automatic/manual label provenance, and optional quality audit data.
         *   `scan_history`: Execution logs.
     *   **ExifWriter**: Wrapper around `exiftool`. Handles encoding (UTF-8/GBK) and safe writing of complex metadata.
 
@@ -30,6 +30,16 @@ WingScribe is an automated pipeline for bird photography management. It bridges 
         *   **Auto-Renaming**: If species name changes, triggers file move/rename based on `structure_template`.
         *   **Write-back**: Updates EXIF on both processed and original raw files.
     *   **WebSocket**: Streams pipeline logs to the frontend.
+
+4.  **Evaluation (`src/evaluation/`, `scripts/evaluate_*.py`)**:
+    *   Provides repeatable public-dataset and local-directory shadow evaluation.
+    *   Records dataset/candidate fingerprints, hardware metadata, latency, memory, and Top-K metrics where ground truth exists.
+    *   Supports controlled multi-crop, image degradation, and species-prior experiments without changing production defaults.
+
+5.  **Recognition Support (`src/recognition/`)**:
+    *   `model_registry.py` defines supported local BioCLIP models and marks experimental choices.
+    *   `prior.py` implements bounded, auditable reranking primitives; evaluated priors are not enabled in the production pipeline by default.
+    *   `src/metadata/location_resolver.py` and the Web preview endpoint provide conservative location normalization without changing production recognition.
 
 ## Key Data Flows
 
@@ -43,6 +53,7 @@ WingScribe is an automated pipeline for bird photography management. It bridges 
 `User UI` -> `API (/update_label)` -> `DB Update` -> `File Rename` -> `EXIF Write`
 
 *   **Candidates**: User sees Top-5 suggestions from AI.
+*   **Provenance**: A successful correction sets `label_source=manual` and `manual_verified_at`; historical automatic rows are not inferred to be human labels.
 *   **Renaming**: If the new name affects the file path (e.g., moving from `/Sparrow/` to `/Eagle/`), the system handles the move automatically.
 
 ### 3. Taxonomy Filter Flow
@@ -55,8 +66,9 @@ WingScribe is an automated pipeline for bird photography management. It bridges 
 
 *   **Database**: SQLite (`wingscribe.db`).
 *   **AI Models**:
-    *   **Detection**: YOLOv11n (Local).
-    *   **Classification**: BioCLIP (OpenCLIP ViT-B/16) or External APIs.
+    *   **Detection**: YOLO (current packaged default: YOLO26n).
+    *   **Classification**: BioCLIP ViT-B/16, BioCLIP2 ViT-L/14 (production default), experimental BioCLIP 2.5 ViT-H/14, or external APIs.
+    *   **GPU Packaging**: CUDA 12.8 PyTorch supports RTX 50-series Blackwell devices; the CPU package keeps an independent CPU runtime.
 *   **Storage**:
     *   **Local**: Direct file access.
     *   **NAS**: Supported via OS-level mounting (WebDAV/SMB).

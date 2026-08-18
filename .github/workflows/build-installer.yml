@@ -204,12 +204,13 @@ jobs:
 
             **通用要求：**
             - Windows 10 或更高版本
-            - 至少 2GB 可用内存
-            - 至少 2GB 硬盘空间（运行时需要更多空间存储照片和模型）
+            - 建议至少 8GB 内存；高分辨率照片和实验模型建议 16GB 以上
+            - CPU 版建议预留至少 4GB，GPU 版建议至少 10GB；照片、缓存和模型另计
 
             **GPU 版本额外要求：**
-            - NVIDIA 显卡（GTX 1060 或更高）
-            - NVIDIA 驱动版本 >= 450.00
+            - 支持 CUDA 的 NVIDIA 显卡
+            - GPU 包内置 CUDA 12.8 版 PyTorch，并支持 RTX 50 系列
+            - 请安装与显卡及 CUDA 12.8 运行时兼容的较新 NVIDIA 驱动
 
             ### 安装说明
 
@@ -220,15 +221,13 @@ jobs:
 
             ### 首次使用
 
-            首次运行时，AI 模型会自动下载（约 500MB），请耐心等待。
+            首次运行时会下载配置所选的 BioCLIP 模型。不同模型体积差异较大，请保持网络连接并额外预留数 GB 缓存空间。
 
-            ### 更新说明
+            ### 文档
 
-            此版本包含以下改进：
-            - 完整的 Windows 安装包（CPU/GPU 双版本）
-            - 图形化配置向导
-            - CPU 和 GPU 模式支持
-            - 一键启动 Web 服务
+            - [README 与使用说明](https://github.com/jiangyuyi/wingscribe/blob/master/README.md)
+            - [配置指南](https://github.com/jiangyuyi/wingscribe/blob/master/docs/CONFIGURATION.md)
+            - [公共评测与模型边界](https://github.com/jiangyuyi/wingscribe/blob/master/docs/PUBLIC_EVALUATION.md)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

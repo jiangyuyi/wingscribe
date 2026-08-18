@@ -1,4 +1,5 @@
 import pytest
+import json
 import os
 import shutil
 import threading
@@ -9,6 +10,7 @@ from PIL import Image
 
 from src.pipeline_runner import WingScribePipeline
 from src.core.io.local import LocalProvider
+from src.core.quality import QualityResult
 
 # Mocking the pipeline to avoid loading heavy models during init
 class MockPipeline(WingScribePipeline):
@@ -19,6 +21,21 @@ class MockPipeline(WingScribePipeline):
 
 def _make_entry(path: Path):
     return SimpleNamespace(path=str(path), name=path.name, size=path.stat().st_size, is_dir=False)
+
+
+def _quality_result(laplacian_variance=50.0, quality_score=0.6):
+    return QualityResult(
+        valid=True,
+        quality_score=quality_score,
+        laplacian_variance=laplacian_variance,
+        tenengrad=100.0,
+        contrast=0.2,
+        brightness=0.5,
+        underexposed_ratio=0.0,
+        overexposed_ratio=0.0,
+        detector_confidence=0.9,
+        bird_pixel_ratio=0.25,
+    )
 
 def test_file_hash(tmp_path):
     # Create a dummy file
@@ -123,6 +140,174 @@ def test_process_image_keeps_candidate_labels_per_image(tmp_path, monkeypatch):
     pipeline.process_image(provider, entry_b, {"location_tag": "Yunnan", "captured_date": "20260320"})
 
     assert captured_labels == [["candidate:Beijing"], ["candidate:Yunnan"]]
+
+
+def test_quality_legacy_mode_rejects_below_blur_threshold(monkeypatch):
+    pipeline = MockPipeline()
+    pipeline.config = {"processing": {"quality_mode": "legacy_reject", "blur_threshold": 40.0}}
+    calls = []
+
+    def fake_evaluate(path, **kwargs):
+        calls.append((path, kwargs))
+        return _quality_result(laplacian_variance=39.0)
+
+    monkeypatch.setattr("src.pipeline_runner.QualityEvaluator.evaluate", fake_evaluate)
+
+    should_process, result = pipeline._evaluate_crop_quality(
+        "crop.jpg",
+        detection_score=0.9,
+        box=[10, 20, 60, 70],
+        image_width=100,
+        image_height=100,
+    )
+
+    assert should_process is False
+    assert result.laplacian_variance == 39.0
+    assert calls == [("crop.jpg", {"detector_confidence": 0.9, "bird_pixel_ratio": 0.25})]
+
+
+def test_quality_legacy_mode_with_disabled_threshold_skips_evaluation(monkeypatch):
+    pipeline = MockPipeline()
+    pipeline.config = {"processing": {"blur_threshold": 0}}
+    evaluate = pytest.fail
+    monkeypatch.setattr("src.pipeline_runner.QualityEvaluator.evaluate", evaluate)
+
+    assert pipeline._evaluate_crop_quality(
+        "crop.jpg",
+        detection_score=0.9,
+        box=[0, 0, 10, 10],
+        image_width=10,
+        image_height=10,
+    ) == (True, None)
+
+
+def test_quality_score_only_keeps_low_quality_result(monkeypatch):
+    pipeline = MockPipeline()
+    pipeline.config = {"processing": {"quality_mode": "score_only", "blur_threshold": 100.0}}
+    expected = _quality_result(laplacian_variance=1.0, quality_score=0.1)
+    monkeypatch.setattr("src.pipeline_runner.QualityEvaluator.evaluate", lambda *args, **kwargs: expected)
+
+    should_process, result = pipeline._evaluate_crop_quality(
+        "crop.jpg",
+        detection_score=0.2,
+        box=[0, 0, 5, 5],
+        image_width=10,
+        image_height=10,
+    )
+
+    assert should_process is True
+    assert result is expected
+
+
+def test_quality_disabled_mode_skips_evaluation(monkeypatch):
+    pipeline = MockPipeline()
+    pipeline.config = {"processing": {"quality_mode": "disabled"}}
+    monkeypatch.setattr("src.pipeline_runner.QualityEvaluator.evaluate", pytest.fail)
+
+    assert pipeline._evaluate_crop_quality(
+        "crop.jpg",
+        detection_score=0.9,
+        box=[0, 0, 10, 10],
+        image_width=10,
+        image_height=10,
+    ) == (True, None)
+
+
+def test_quality_unknown_mode_falls_back_to_legacy(monkeypatch, caplog):
+    pipeline = MockPipeline()
+    pipeline.config = {"processing": {"quality_mode": "unexpected", "blur_threshold": 40.0}}
+    monkeypatch.setattr(
+        "src.pipeline_runner.QualityEvaluator.evaluate",
+        lambda *args, **kwargs: _quality_result(laplacian_variance=20.0),
+    )
+
+    should_process, _ = pipeline._evaluate_crop_quality(
+        "crop.jpg",
+        detection_score=0.9,
+        box=[0, 0, 10, 10],
+        image_width=10,
+        image_height=10,
+    )
+
+    assert should_process is False
+    assert "falling back to legacy_reject" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("box", "width", "height", "expected"),
+    [
+        ([-10, -10, 50, 50], 100, 100, 0.25),
+        ([80, 80, 120, 120], 100, 100, 0.04),
+        ([0, 0, 10, 10], 0, 100, None),
+    ],
+)
+def test_calculate_bird_pixel_ratio_clips_to_image(box, width, height, expected):
+    result = MockPipeline._calculate_bird_pixel_ratio(box, width, height)
+
+    if expected is None:
+        assert result is None
+    else:
+        assert result == pytest.approx(expected)
+
+
+def test_process_image_passes_quality_metrics_to_recognition(tmp_path, monkeypatch):
+    pipeline = MockPipeline()
+    pipeline.existing_hashes = set()
+    pipeline.db = SimpleNamespace(check_hash_exists=lambda _: False)
+    pipeline._detector = SimpleNamespace(detect=lambda _: [([0, 0, 5, 5], 0.9)])
+    pipeline._detector_loaded = True
+    pipeline._detector_lock = threading.Lock()
+    pipeline.recognizer = object()
+    pipeline.batch_lock = threading.Lock()
+    pipeline.output_root = str(tmp_path / "out")
+    pipeline.config = {
+        "processing": {
+            "target_size": 224,
+            "crop_padding": 0,
+            "blur_threshold": 40.0,
+            "quality_mode": "score_only",
+        }
+    }
+    pipeline._select_candidate_labels = lambda _: ["Passer montanus"]
+    captured_items = []
+    pipeline._recognize_batch = lambda items, _: captured_items.extend(items)
+    expected = _quality_result()
+    monkeypatch.setattr("src.pipeline_runner.QualityEvaluator.evaluate", lambda *args, **kwargs: expected)
+
+    def fake_crop(src, box, dest, target_size, padding):
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(src, dest)
+        return True
+
+    monkeypatch.setattr("src.pipeline_runner.ImageProcessor.crop_and_resize", fake_crop)
+    image_path = tmp_path / "bird.jpg"
+    Image.new("RGB", (10, 10), color="white").save(image_path)
+    provider = LocalProvider(str(tmp_path))
+
+    pipeline.process_image(provider, _make_entry(image_path), {"location_tag": "Beijing"})
+
+    assert len(captured_items) == 1
+    assert captured_items[0]["quality"] == expected.to_dict()
+
+
+def test_quality_storage_fields_preserve_score_and_audit_details():
+    quality = _quality_result(quality_score=0.625).to_dict()
+
+    fields = MockPipeline._quality_storage_fields(quality)
+
+    assert fields["quality_score"] == pytest.approx(0.625)
+    assert json.loads(fields["quality_details_json"]) == quality
+
+
+@pytest.mark.parametrize("quality", [None, {}, "invalid"])
+def test_quality_storage_fields_keep_disabled_or_invalid_results_empty(quality):
+    fields = MockPipeline._quality_storage_fields(quality)
+
+    if quality == {}:
+        assert fields["quality_score"] is None
+        assert json.loads(fields["quality_details_json"]) == {}
+    else:
+        assert fields == {"quality_score": None, "quality_details_json": None}
 
 
 def test_select_candidate_labels_respects_region_filter_modes():

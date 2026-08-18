@@ -107,9 +107,17 @@ def get_config_definition():
                 {
                     "key": "blur_threshold",
                     "label": "模糊阈值",
-                    "description": "模糊照片检测阈值",
+                    "description": "legacy_reject 模式下低于此值的照片会被跳过",
                     "type": "float",
                     "default": 40.0,
+                },
+                {
+                    "key": "quality_mode",
+                    "label": "质量处理模式",
+                    "description": "兼容过滤、仅记录质量分或完全关闭质量计算",
+                    "type": "select",
+                    "options": ["legacy_reject", "score_only", "disabled"],
+                    "default": "legacy_reject",
                 },
                 {
                     "key": "target_size",

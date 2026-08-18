@@ -74,6 +74,7 @@ sources:
 | `yolo_model` | YOLO 检测模型文件名。推荐使用 `yolo26n.pt`（精度最高、推理最快）。 | `yolo26n.pt` |
 | `confidence_threshold` | **检测**鸟类目标的最低置信度 (0-1)。 | `0.5` |
 | `blur_threshold` | 拉普拉斯方差阈值。低于此分数的图片会被标记为模糊并跳过。推荐值 40-100。 | `40.0` |
+| `quality_mode` | 质量处理模式。`legacy_reject` 保持原有模糊过滤；`score_only` 只计算质量指标而不跳过；`disabled` 关闭质量计算。 | `legacy_reject` |
 | `target_size` | 识别前裁切图的缩放尺寸 (像素)。 | `640` |
 | `crop_padding` | 在检测到的鸟类方框周围额外保留的像素。 | `200` |
 
@@ -97,10 +98,13 @@ sources:
 **本地模型 (BioCLIP):**
 ```yaml
 local:
+  # bioclip-2.5-vith14 仅用于实验，完成目标硬件基准前不要替换默认值
   model_type: "bioclip-2"     # 推荐使用 "bioclip-2" 以获得更高精度
   batch_size: 512              # 文本编码批次大小 (通常不需要修改)
   inference_batch_size: 16     # 图片推理批次大小，如果显存不足(低于 8G)请调小
 ```
+
+支持的本地模型为 `bioclip`、`bioclip-2` 和实验性的 `bioclip-2.5-vith14`。未知名称会直接报错，不再静默回退到其他模型。
 
 ---
 
@@ -167,6 +171,7 @@ processing:
   yolo_model: "yolo26n.pt"
   confidence_threshold: 0.5
   blur_threshold: 40.0
+  quality_mode: "legacy_reject"
   target_size: 640
   crop_padding: 200
 
@@ -214,6 +219,7 @@ processing:
   yolo_model: "yolo26n.pt"
   confidence_threshold: 0.5
   blur_threshold: 40.0
+  quality_mode: "legacy_reject"
   target_size: 640
   crop_padding: 200
 

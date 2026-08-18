@@ -1,0 +1,211 @@
+# 公共评测方案
+
+## 目标
+
+WingScribe 的优化功能不应以用户拥有已整理、已标注的鸟类照片为前提。默认评测流程使用公共数据集，并允许在任意用户目录上执行无标签影子比较。
+
+公共评测主要回答：
+
+- 新代码是否造成可重复的识别回归。
+- 裁切、质量评分和软先验在受控条件下是否改善结果。
+- 新旧配置的运行时间、内存和显存成本有何变化。
+
+公共评测不能单独回答“在某位用户自己的照片上提高了多少”。所有报告必须区分有标签准确率和无标签一致性指标。
+
+## 数据集分工
+
+### CUB-200-2011
+
+首阶段公共回归集。它包含 200 类、11,788 张图片，以及每张图片的 bbox 和部位标注。
+
+用途：
+
+- 基础 Top-1、Top-5 回归。
+- 对 bbox 注入平移和缩放扰动，测试裁切容错。
+- 比较 single-crop 与 multi-crop。
+- 施加合成退化，测试质量评分和识别稳定性。
+
+限制：
+
+- 主要是北美鸟类，不能代表中国物种分布。
+- 图片通常比真实历史照片规整。
+- 官方提示图片可能和 ImageNet/Flickr 预训练数据重叠。
+- 图片仅限非商业研究和教育用途，仓库不得重新分发。
+
+官方页面：https://www.vision.caltech.edu/datasets/cub_200_2011/
+
+### iNaturalist 中国鸟类子集
+
+第二阶段真实场景评估。使用公开元数据筛选鸟纲、中国坐标范围、有可靠物种标签和兼容许可的固定样本。
+
+用途：
+
+- 更接近用户拍摄条件的物种识别回归。
+- 地理和月份软先验对候选排名的影响。
+- 长尾类别和复杂背景下的行为变化。
+
+限制：
+
+- BioCLIP 训练包含 iNaturalist 2021，存在数据重叠风险。
+- 类别和照片数量严重不均衡。
+- IOC 与 iNaturalist 分类体系需要版本化映射。
+- 每张图片许可独立，必须保存来源和许可元数据。
+
+官方页面：https://www.inaturalist.org/pages/developers
+
+当前适配器通过官方 API 一次性扫描中国（place id `6903`）的 research-grade 鸟纲观测，只接受 `CC0`、`CC BY` 和 `CC BY-SA` 照片。抽样按物种确定性轮转，清单冻结观测/照片/分类 ID、学名、坐标、日期、许可、署名、来源 URL、本地相对路径和 SHA-256；生成后评测不再访问 API。首次准备命令：
+
+```powershell
+python scripts/prepare_inaturalist_eval.py `
+  --output data\evaluation\inaturalist-china-birds\manifest.json `
+  --sample-count 600 `
+  --max-per-species 3 `
+  --seed 20260818 `
+  --cutoff-date 2025-12-31
+```
+
+图片直接来自 iNaturalist 官方 Open Data S3。脚本逐张验证图片内容并写入哈希，失败最多重试三次；重新运行会复用哈希一致的文件。清单和图片均位于 Git 忽略目录，不随仓库或 installer 分发。
+
+### BIRD1445
+
+BIRD1445 覆盖中国 1,445 种鸟类和多种模态，方向上最贴合 WingScribe。但在确认稳定下载入口、完整评估划分和使用许可前，不作为近期自动评测依赖。
+
+论文页面：https://jeit.ac.cn/article/doi/10.11999/JEIT250647
+
+## 报告规则
+
+有标签评测至少输出：
+
+- 样本数、有效样本数和失败样本数。
+- Top-1、Top-5。
+- 平均和分位数耗时。
+- 数据集版本、manifest 哈希、模型和配置标识。
+
+无标签影子评测至少输出：
+
+- Top-1 一致率和 Top-5 重合率。
+- 置信度、熵和候选排名变化。
+- 分歧最大的样本清单。
+- 平均耗时、CPU 内存和显存峰值。
+
+报告不得把一致率称为准确率，也不得因公开集提升而直接宣称所有用户照片都会提升。
+
+## 当前工具
+
+官方数据：
+
+- 页面：https://data.caltech.edu/records/65de6-vp158
+- 文件：`CUB_200_2011.tgz`
+- 官方 MD5：`97eceeb196236b17998738112f37df78`
+- 建议解压位置：`data/evaluation/CUB_200_2011`，该目录已被 Git 忽略。
+
+解压官方 CUB-200-2011 数据后，可以运行首版模型层基线：
+
+```powershell
+python scripts/evaluate_public.py `
+  --dataset cub `
+  --root D:\Datasets\CUB_200_2011 `
+  --split test `
+  --model bioclip-2 `
+  --device auto `
+  --batch-size 16 `
+  --image-mode bbox `
+  --output evaluation_results\cub-bioclip2.json
+```
+
+`--model bioclip-2.5-vith14` 是实验选项，不会改变生产默认模型。[官方模型卡](https://huggingface.co/imageomics/bioclip-2.5-vith14)标明其为 ViT-H/14、MIT 许可，单个权重文件约 3.94 GB；必须先在 RTX 5060 Laptop 8 GB 上验证峰值显存、吞吐和准确率，再考虑生产启用。模型和 tokenizer 均按官方要求使用相同的 HuggingFace Hub 标识。BioCLIP 与 BioCLIP2 的架构分别以各自的[官方 BioCLIP](https://huggingface.co/imageomics/bioclip)和[官方 BioCLIP2](https://huggingface.co/imageomics/bioclip-2)配置为准。未指定 `--batch-size` 时，2.5 从保守的 batch 1 开始，其他模型保持 batch 16。
+
+RTX 5060 Laptop 的 batch 1 烟雾测试已通过：PyTorch 2.10.0/cu128 能原生识别 `sm_120`，单图编码约 0.75 秒，峰值 allocated/reserved 显存约 3.74/3.82 GiB。PyTorch 2.4.1/cu118 虽能加载模型，但不支持该架构并会在编码阶段长期停滞，因此 GPU installer 必须使用 CUDA 12.8 或更新的兼容构建。这组数据不包含公共集真值，只用于验证运行兼容性和资源需求。
+
+每份报告会记录 Python/PyTorch/CUDA 版本、实际设备、CPU RSS 起止值；CUDA 模式还记录 GPU 名称、总显存，以及评测阶段峰值 allocated/reserved 显存。显存采样在模型加载后重置峰值，因此包含已加载模型的当前占用和后续推理峰值，但不代表模型下载或加载瞬间的系统内存峰值。
+
+首次试运行可以添加 `--limit 20`。有限样本默认使用由 `--seed` 固定的 `stratified` 分层抽样，先尽量覆盖不同类别，避免按图片编号取前 N 张造成早期类别偏差；需要复现旧的顺序截取时可显式使用 `--sample-strategy sequential`。`--image-mode full` 评估整图，`bbox` 使用官方鸟体框和可配置 margin，`bbox-jitter` 进一步加入由 `--seed` 固定的框平移和缩放扰动。`multicrop-2` 使用 `1.0x/1.3x` 两路视野，`multicrop-3` 使用 `1.0x/1.3x/1.7x` 三路视野，并融合归一化 embedding。多路视野按 `--batch-size` 分块编码，避免视野数量成倍放大峰值显存。脚本不会下载或永久复制公共图片；裁切按批次生成并自动清理，报告目录默认被 Git 忽略。
+
+当前工具使用 CUB 官方 bbox，而不是运行 WingScribe 的 YOLO 检测器，用来隔离识别器、裁切 margin 和框误差的影响。因此结果仍不代表 WingScribe 完整检测流水线的准确率。
+
+两个模式运行完成后，可以生成差异报告：
+
+```powershell
+python scripts/compare_evaluation_reports.py `
+  --baseline evaluation_results\cub-bbox.json `
+  --candidate evaluation_results\cub-multicrop-2.json `
+  --output evaluation_results\cub-comparison.json
+```
+
+有标签报告会统计基线/候选 Top-1、准确率差值、逐样本改善和退化，并对配对正确性变化执行双侧精确二项检验；无标签报告只统计 Top-1 一致率、Top-5 Jaccard、置信变化和分歧样本，不生成准确率或显著性结论。
+
+iNaturalist 冻结清单使用整图评测：
+
+```powershell
+python scripts/evaluate_public.py `
+  --dataset inaturalist-manifest `
+  --root data\evaluation\inaturalist-china-birds\manifest.json `
+  --model bioclip-2 `
+  --device cuda `
+  --image-mode full `
+  --output evaluation_results\inat-china-bioclip2.json
+```
+
+清单候选集采用扫描池中的全部物种学名，而非只包含被抽中的物种，避免人为缩小分类难度。当前版本没有 iNaturalist bbox，因此不允许 `bbox` 或 multi-crop 模式；整图结果也不能单独归因于识别模型，因为背景、鸟体大小和照片构图都会影响准确率。
+
+任意本地图片目录可以生成无标签影子报告：
+
+```powershell
+python scripts/evaluate_shadow.py `
+  --root D:\Photos\Birds `
+  --candidate-file config\dictionaries\china_bird_list.txt `
+  --model bioclip-2 `
+  --device auto `
+  --limit 50 `
+  --seed 20260818 `
+  --output evaluation_results\shadow-baseline.json
+```
+
+使用相同目录、候选文件、limit 和 seed 运行实验模型或配置后，通过 `compare_evaluation_reports.py` 比较两份报告。目录适配器递归读取 JPEG/PNG/WebP/BMP/TIFF，以相对路径生成稳定样本 ID，并记录候选集哈希与基于相对路径、大小、修改时间的图片快照哈希；比较工具会拒绝候选集或图片快照不同的两份影子报告。
+
+影子 JSON 包含本地绝对路径，只能保存在被 Git 忽略的 `evaluation_results/` 或其他私人目录，不得提交或公开。无标签报告的 Top-1/Top-5 accuracy 为 `null`；Top-1 一致率和 Top-5 Jaccard 只表示行为相似度，不代表任一配置正确。
+
+## 实施状态
+
+已完成：
+
+- CUB 官方目录和 train/test split 读取。
+- 类别、图片路径、bbox 和 annotation 哈希校验。
+- 官方 bbox 裁切、margin 和确定性框扰动。
+- 两路/三路 multi-crop 批量编码与 embedding 加权融合。
+- 批量评测、失败计数、Top-1、Top-5 和耗时分位数。
+- 包含逐样本结果和运行元数据的 JSON 报告。
+- 有标签改善/退化和无标签一致性的报告比较工具。
+- 可重复的模糊、降采样、曝光和噪声退化质量回归报告。
+- 不加载模型权重的单元测试和直接运行的命令行入口。
+- RTX 5060 Laptop 8 GB 上的 BioCLIP 2.5 batch 1 运行与资源烟雾测试。
+- iNaturalist 中国鸟类许可感知清单生成、下载校验和离线加载。
+- 任意本地图片目录的无标签影子报告及候选集/图片快照一致性校验。
+
+质量指标回归可以对任意公开图片目录运行：
+
+```powershell
+python scripts/evaluate_quality.py `
+  --root D:\Datasets\CUB_200_2011\images `
+  --limit 200 `
+  --output evaluation_results\quality-degradation.json
+```
+
+报告分别保留每种退化的原始子指标和相对基线变化。`quality_decrease_rate` 只是指标方向检查，不代表识别准确率；噪声可能人为抬高梯度类锐度分数，这类反常结果应作为调整质量权重的依据，而不是隐藏或强制判定通过。
+
+后续按独立提交推进：
+
+1. 使用独立数据继续验证省级全年软先验，且必须保留纯视觉结果供审计；月度路线已停止。
+2. 在重新出现的私人照片目录上抽查影子评测分歧样本。
+3. 根据完整 CUB 结果重新设计 multi-crop 视野和融合权重，再决定是否继续实验。
+
+截至 2026-08-18，CUB 原始数据包已通过镜像取得，并以 CaltechDATA 官方 MD5 `97eceeb196236b17998738112f37df78` 校验；适配器核对为 5,994 张训练图、5,794 张测试图和 200 类。完整测试集结果见 `PUBLIC_EVALUATION_RESULTS_2026-08-18.md`。合成小型 CUB 目录仍只用于单元测试，不与真实模型结果混用。
+
+同日生成的 iNaturalist 冻结清单完整扫描 17,428 条观测，从 924 个候选物种中抽取 600 张/600 种，图片总量约 60.8 MB，全部通过内容和 SHA-256 校验。模型对比结果及训练数据重叠边界同样见 `PUBLIC_EVALUATION_RESULTS_2026-08-18.md`。
+
+## 仓库边界
+
+- 不提交公共数据集图片、模型权重或私人照片。
+- 不提交用户本地绝对路径。
+- 可以提交数据适配器、manifest schema、少量虚构示例和匿名汇总。
+- 下载器必须尊重来源许可、署名要求和限速，不通过网页抓取绕过官方数据渠道。

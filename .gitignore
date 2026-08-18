@@ -8,6 +8,7 @@ data/raw/*
 data/processed/*
 data/db/*.db
 data/models/
+data/evaluation/
 .DS_Store
 *.log
 *.whl
@@ -21,6 +22,8 @@ htmlcov/
 .coverage
 *.cover
 tests/__pycache__/
+evaluation_results/
+.codex-tmp/
 
 # YOLO model files (auto-downloaded by Ultralytics)
 *.pt

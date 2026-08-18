@@ -4,6 +4,7 @@ import threading
 from pathlib import Path
 from PIL import Image
 from .bioclip_base import BirdRecognizer
+from .model_registry import get_model_spec
 from typing import List, Dict, Any
 import logging
 
@@ -113,15 +114,17 @@ class LocalBirdRecognizer(BirdRecognizer):
         else:
             self.device = device
 
-        # Map friendly names to HF model IDs
-        model_map = {
-            "bioclip": "hf-hub:imageomics/bioclip",
-            "bioclip-2": "hf-hub:imageomics/bioclip-2"
-        }
-
-        self.model_id = model_map.get(model_name.lower(), model_map["bioclip"])
-        self.model_type_slug = model_name.lower()
+        self.model_spec = get_model_spec(model_name)
+        self.model_id = self.model_spec.hub_model_id
+        self.model_type_slug = self.model_spec.slug
         self.hf_mirror = hf_mirror  # Save for _load_model
+
+        if self.model_spec.experimental:
+            logging.warning(
+                "%s is experimental and has substantially higher memory requirements; "
+                "keep bioclip-2 as the production fallback",
+                self.model_type_slug,
+            )
 
         logging.info(f"Loading {model_name} ({self.model_id}) on {self.device}...")
 
@@ -180,6 +183,7 @@ class LocalBirdRecognizer(BirdRecognizer):
         # Check for local model in specific subfolder
         local_model_root = Path("data/models")
         local_model_path = local_model_root / self.model_type_slug
+        model_spec = getattr(self, "model_spec", None) or get_model_spec(self.model_type_slug)
 
         # RTX 4060/Laptop Fix: Use fp16 for CUDA to reduce bandwidth spike/power surge
         precision = 'fp16' if self.device == 'cuda' else 'fp32'
@@ -194,7 +198,11 @@ class LocalBirdRecognizer(BirdRecognizer):
         }
 
         # Try local path first
-        ckpt_path = local_model_path / "open_clip_pytorch_model.bin"
+        local_checkpoints = (
+            local_model_path / "open_clip_model.safetensors",
+            local_model_path / "open_clip_pytorch_model.bin",
+        )
+        ckpt_path = next((path for path in local_checkpoints if path.exists()), local_checkpoints[-1])
         use_local = ckpt_path.exists()
 
         try:
@@ -202,7 +210,7 @@ class LocalBirdRecognizer(BirdRecognizer):
                 if use_local:
                     logging.info(f"Loading from local checkpoint: {ckpt_path} (Precision: {precision})")
                     self.model, _, self.preprocess = oc.create_model_and_transforms(
-                        'ViT-B-16',
+                        model_spec.architecture,
                         pretrained=str(ckpt_path),
                         **model_kwargs
                     )
@@ -221,7 +229,7 @@ class LocalBirdRecognizer(BirdRecognizer):
                     try:
                         if use_local:
                             self.model, _, self.preprocess = oc.create_model_and_transforms(
-                                'ViT-B-16',
+                                model_spec.architecture,
                                 pretrained=str(ckpt_path),
                                 **model_kwargs
                             )
@@ -236,7 +244,7 @@ class LocalBirdRecognizer(BirdRecognizer):
                         logging.warning(f"open_clip doesn't support 'precision' param: {e2}. Using fp32 default...")
                         model_kwargs.pop("precision", None)
                         self.model, _, self.preprocess = oc.create_model_and_transforms(
-                            self.model_id if not use_local else 'ViT-B-16',
+                            self.model_id if not use_local else model_spec.architecture,
                             pretrained=str(ckpt_path) if use_local else self.model_id
                         )
                         self.model.to(self.device)
@@ -244,7 +252,8 @@ class LocalBirdRecognizer(BirdRecognizer):
                     raise e
 
             # Ensure tokenizer is ready
-            self.tokenizer = _get_open_clip().get_tokenizer('ViT-B-16')
+            tokenizer_id = model_spec.architecture if use_local else self.model_id
+            self.tokenizer = _get_open_clip().get_tokenizer(tokenizer_id)
         finally:
             # Restore logging levels even if model loading fails midway
             for logger, level in _verbose_loggers:
@@ -324,21 +333,35 @@ class LocalBirdRecognizer(BirdRecognizer):
         except RuntimeError as e:
             if "CUDA" in str(e) and self.device != "cpu":
                 logging.warning(f"CUDA batch prediction failed: {e}. Falling back to CPU.")
-                original_device = self.device
-                self.device = "cpu"
-                self.model.to("cpu")
-                self.cached_text_features = None
+                self._move_to_cpu()
                 res = self._do_predict_batch(image_paths, candidate_labels, top_k)
                 return res
             else:
                 logging.error(f"Batch recognition error: {e}")
                 return [[] for _ in image_paths]
 
-    def _do_predict_batch(self, image_paths, candidate_labels, top_k):
-        # 1. Prepare Images
+    def _move_to_cpu(self):
+        self.device = "cpu"
+        self.model.to("cpu")
+        self.cached_text_features = None
+
+    def encode_images(self, image_paths: List[str]) -> torch.Tensor:
+        """Encode a complete image batch into normalized embeddings."""
+        try:
+            features, _ = self._encode_image_paths(image_paths, skip_invalid=False)
+            return features
+        except RuntimeError as e:
+            if "CUDA" in str(e) and self.device != "cpu":
+                logging.warning(f"CUDA image encoding failed: {e}. Falling back to CPU.")
+                self._move_to_cpu()
+                features, _ = self._encode_image_paths(image_paths, skip_invalid=False)
+                return features
+            raise
+
+    def _encode_image_paths(self, image_paths, *, skip_invalid):
         images_tensors = []
         valid_indices = []
-        
+
         for idx, path in enumerate(image_paths):
             try:
                 with Image.open(path) as img:
@@ -346,47 +369,90 @@ class LocalBirdRecognizer(BirdRecognizer):
                 images_tensors.append(tensor)
                 valid_indices.append(idx)
             except Exception as e:
+                if not skip_invalid:
+                    raise ValueError(f"Failed to load image {path}: {e}") from e
                 logging.error(f"Failed to load image for batch {path}: {e}")
-        
+
         if not images_tensors:
-            return [[] for _ in image_paths]
-            
-        # Stack: [B, C, H, W]
+            return torch.empty((0, 0), device=self.device), valid_indices
+
         self._log_memory(f"before_image_stack batch={len(images_tensors)}")
         image_input = torch.stack(images_tensors).to(self.device)
         self._log_memory(f"after_image_stack batch={len(images_tensors)}")
-        
-        # 2. Get Text Features (Cached)
-        text_features = self._get_text_features(candidate_labels)
-        
-        # 3. Inference
+
         device_type = 'cuda' if 'cuda' in self.device else 'cpu'
         with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
             image_features = self.model.encode_image(image_input)
             image_features /= image_features.norm(dim=-1, keepdim=True)
-            
-            # MatMul: [B, Dim] @ [Dim, N_Labels] -> [B, N_Labels]
-            text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
         self._log_memory(f"after_batch_inference batch={len(images_tensors)}")
-            
-        # 4. Process Results
-        batch_results = [[] for _ in image_paths] # Default empty
-        
-        # Get Top K for the whole batch
-        # topk returns values, indices with shape [B, K]
+        return image_features, valid_indices
+
+    def classify_embeddings(
+        self,
+        image_features: torch.Tensor,
+        candidate_labels: List[str],
+        top_k: int = 5,
+    ) -> List[List[Dict[str, Any]]]:
+        """Classify embeddings while preserving the existing softmax result format."""
+        if top_k < 1:
+            raise ValueError("top_k must be at least 1")
+        logits = self.score_embeddings(image_features, candidate_labels)
+        if logits.shape[1] == 0:
+            return [[] for _ in range(logits.shape[0])]
+
+        text_probs = logits.softmax(dim=-1)
         top_probs, top_indices = text_probs.topk(min(top_k, len(candidate_labels)), dim=1)
-        
-        for i, original_idx in enumerate(valid_indices):
-            res_list = []
-            for k in range(top_probs.shape[1]):
-                idx = top_indices[i, k].item()
-                prob = top_probs[i, k].item()
-                res_list.append({
-                    "scientific_name": candidate_labels[idx],
-                    "confidence": prob
-                })
-            batch_results[original_idx] = res_list
-            
+        batch_results = []
+        for row_probs, row_indices in zip(top_probs, top_indices):
+            batch_results.append([
+                {
+                    "scientific_name": candidate_labels[index.item()],
+                    "confidence": probability.item(),
+                }
+                for probability, index in zip(row_probs, row_indices)
+            ])
+        return batch_results
+
+    def score_embeddings(
+        self,
+        image_features: torch.Tensor,
+        candidate_labels: List[str],
+    ) -> torch.Tensor:
+        """Return pre-softmax visual logits for every image and candidate label."""
+        if image_features.ndim == 1:
+            image_features = image_features.unsqueeze(0)
+        if image_features.ndim != 2:
+            raise ValueError("image_features must be a 1D or 2D tensor")
+        if not candidate_labels:
+            return torch.empty(
+                (image_features.shape[0], 0),
+                device=self.device,
+                dtype=image_features.dtype,
+            )
+        if image_features.shape[0] == 0:
+            return torch.empty(
+                (0, len(candidate_labels)),
+                device=self.device,
+                dtype=image_features.dtype,
+            )
+
+        image_features = image_features.to(self.device)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        text_features = self._get_text_features(candidate_labels)
+
+        device_type = 'cuda' if 'cuda' in self.device else 'cpu'
+        with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
+            return 100.0 * image_features @ text_features.T
+
+    def _do_predict_batch(self, image_paths, candidate_labels, top_k):
+        image_features, valid_indices = self._encode_image_paths(image_paths, skip_invalid=True)
+        if not valid_indices:
+            return [[] for _ in image_paths]
+
+        valid_results = self.classify_embeddings(image_features, candidate_labels, top_k)
+        batch_results = [[] for _ in image_paths]
+        for original_idx, result in zip(valid_indices, valid_results):
+            batch_results[original_idx] = result
         return batch_results
 
     def predict(self, image_path: str, candidate_labels: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
@@ -402,49 +468,13 @@ class LocalBirdRecognizer(BirdRecognizer):
         except RuntimeError as e:
             if "CUDA" in str(e) and self.device != "cpu":
                 logging.warning(f"CUDA prediction failed: {e}. Falling back to CPU for this request.")
-                # Temp fallback for this object
-                original_device = self.device
-                self.device = "cpu"
-                self.model.to("cpu")
-                # Clear cache as device changed
-                self.cached_text_features = None
+                self._move_to_cpu()
                 res = self._do_predict(image_path, candidate_labels, top_k)
-                # Restore device (optional, but safer to stay on CPU if CUDA is unstable)
-                # self.device = original_device
-                # self.model.to(original_device)
                 return res
             else:
                 logging.error(f"Recognition error: {e}")
                 return []
 
     def _do_predict(self, image_path, candidate_labels, top_k):
-        with Image.open(image_path) as image:
-            image_input = self.preprocess(image).unsqueeze(0).to(self.device)
-        
-        # Get cached or new text features
-        text_features = self._get_text_features(candidate_labels)
-
-        # Use autocast to handle fp16/fp32 mismatches automatically
-        # This is safer than manual casting for complex models like CLIP
-        device_type = 'cuda' if 'cuda' in self.device else 'cpu'
-        with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
-            image_features = self.model.encode_image(image_input)
-            
-            # Ensure features are normalized for cosine similarity
-            image_features /= image_features.norm(dim=-1, keepdim=True)
-            # Text features are already normalized in _get_text_features
-
-            text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
-
-        # Get top K
-        top_probs, top_indices = text_probs[0].topk(min(top_k, len(candidate_labels)))
-        
-        results = []
-        for prob, idx in zip(top_probs, top_indices):
-            results.append({
-                "scientific_name": candidate_labels[idx.item()],
-                "confidence": prob.item()
-            })
-        
-        return results
+        return self._do_predict_batch([image_path], candidate_labels, top_k)[0]
 

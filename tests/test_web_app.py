@@ -347,7 +347,8 @@ def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monke
     verify_manager = _create_test_manager(db_path, source_root, processed_root)
     try:
         row = verify_manager.conn.execute(
-            "SELECT scientific_name, primary_bird_cn, confidence_score, file_path, filename FROM photos WHERE id = ?",
+            "SELECT scientific_name, primary_bird_cn, confidence_score, file_path, filename, "
+            "label_source, manual_verified_at FROM photos WHERE id = ?",
             (photo_id,),
         ).fetchone()
     finally:
@@ -358,6 +359,8 @@ def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monke
     assert row["confidence_score"] == 1.0
     assert row["file_path"] == "trip/bird_大山雀_100pct.jpg"
     assert row["filename"] == "bird_大山雀_100pct.jpg"
+    assert row["label_source"] == "manual"
+    assert row["manual_verified_at"] is not None
     assert (processed_root / row["file_path"]).exists()
     assert len(exif_writer.calls) == 2
 
@@ -449,7 +452,8 @@ def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp
     verify_manager = _create_test_manager(db_path, source_root, processed_root)
     try:
         row = verify_manager.conn.execute(
-            "SELECT scientific_name, primary_bird_cn, file_path, filename FROM photos WHERE id = ?",
+            "SELECT scientific_name, primary_bird_cn, file_path, filename, "
+            "label_source, manual_verified_at FROM photos WHERE id = ?",
             (photo_id,),
         ).fetchone()
     finally:
@@ -458,6 +462,8 @@ def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp
     assert row["scientific_name"] == "Passer montanus"
     assert row["primary_bird_cn"] == "麻雀"
     assert row["file_path"] == "trip/bird.jpg"
+    assert row["label_source"] == "automatic"
+    assert row["manual_verified_at"] is None
     assert row["filename"] == "bird.jpg"
     assert processed_file.exists()
     assert not (processed_root / "trip" / "bird_大山雀_100pct.jpg").exists()

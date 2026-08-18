@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "source": {
+    "name": "iNaturalist Places API",
+    "api_url": "https://api.inaturalist.org/v1/places/autocomplete",
+    "country_place_id": 6903
+  },
+  "regions": [
+    {"region_code": "CN-AH", "province": "安徽", "query": "Anhui", "expected_name": "Anhui"},
+    {"region_code": "CN-BJ", "province": "北京", "query": "Beijing", "expected_name": "Beijing"},
+    {"region_code": "CN-CQ", "province": "重庆", "query": "Chongqing", "expected_name": "Chongqing"},
+    {"region_code": "CN-FJ", "province": "福建", "query": "Fujian", "expected_name": "Fujian"},
+    {"region_code": "CN-GD", "province": "广东", "query": "Guangdong", "expected_name": "Guangdong"},
+    {"region_code": "CN-GS", "province": "甘肃", "query": "Gansu", "expected_name": "Gansu"},
+    {"region_code": "CN-GX", "province": "广西", "query": "Guangxi", "expected_name": "Guangxi"},
+    {"region_code": "CN-GZ", "province": "贵州", "query": "Guizhou", "expected_name": "Guizhou"},
+    {"region_code": "CN-HA", "province": "河南", "query": "Henan", "expected_name": "Henan"},
+    {"region_code": "CN-HB", "province": "湖北", "query": "Hubei", "expected_name": "Hubei"},
+    {"region_code": "CN-HE", "province": "河北", "query": "Hebei", "expected_name": "Hebei"},
+    {"region_code": "CN-HI", "province": "海南", "query": "Hainan", "expected_name": "Hainan"},
+    {"region_code": "CN-HL", "province": "黑龙江", "query": "Heilongjiang", "expected_name": "Heilongjiang"},
+    {"region_code": "CN-HN", "province": "湖南", "query": "Hunan", "expected_name": "Hunan"},
+    {"region_code": "CN-JL", "province": "吉林", "query": "Jilin", "expected_name": "Jilin"},
+    {"region_code": "CN-JS", "province": "江苏", "query": "Jiangsu", "expected_name": "Jiangsu"},
+    {"region_code": "CN-JX", "province": "江西", "query": "Jiangxi", "expected_name": "Jiangxi"},
+    {"region_code": "CN-LN", "province": "辽宁", "query": "Liaoning", "expected_name": "Liaoning"},
+    {"region_code": "CN-NM", "province": "内蒙古", "query": "Nei Mongol", "expected_name": "Nei Mongol"},
+    {"region_code": "CN-NX", "province": "宁夏", "query": "Ningxia", "expected_name": "Ningxia Hui"},
+    {"region_code": "CN-QH", "province": "青海", "query": "Qinghai", "expected_name": "Qinghai"},
+    {"region_code": "CN-SC", "province": "四川", "query": "Sichuan", "expected_name": "Sichuan"},
+    {"region_code": "CN-SD", "province": "山东", "query": "Shandong", "expected_name": "Shandong"},
+    {"region_code": "CN-SH", "province": "上海", "query": "Shanghai", "expected_name": "Shanghai"},
+    {"region_code": "CN-SN", "province": "陕西", "query": "Shaanxi", "expected_name": "Shaanxi"},
+    {"region_code": "CN-SX", "province": "山西", "query": "Shanxi", "expected_name": "Shanxi"},
+    {"region_code": "CN-TJ", "province": "天津", "query": "Tianjin", "expected_name": "Tianjin"},
+    {"region_code": "CN-XJ", "province": "新疆", "query": "Xinjiang", "expected_name": "Xinjiang Uygur"},
+    {"region_code": "CN-XZ", "province": "西藏", "query": "Xizang", "expected_name": "Xizang"},
+    {"region_code": "CN-YN", "province": "云南", "query": "Yunnan", "expected_name": "Yunnan"},
+    {"region_code": "CN-ZJ", "province": "浙江", "query": "Zhejiang", "expected_name": "Zhejiang"}
+  ]
+}

@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.evaluation import (
     CUBCropPreparer,
     MultiCropPredictor,
+    PriorBatchPredictor,
     begin_hardware_measurement,
     finish_hardware_measurement,
     load_cub_dataset,
@@ -19,6 +21,7 @@ from src.evaluation import (
 )
 from src.recognition.inference_local import LocalBirdRecognizer
 from src.recognition.model_registry import get_model_spec
+from src.recognition.prior import load_prior_provider
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bbox-jitter", type=float, default=0.10, help="Maximum deterministic bbox perturbation")
     parser.add_argument("--seed", type=int, default=20260817)
     parser.add_argument("--limit", type=int, help="Evaluate a deterministic subset of N samples")
+    parser.add_argument("--observed-on-from", help="Inclusive ISO date filter for iNaturalist manifests")
+    parser.add_argument("--prior-file", type=Path, help="Experimental versioned species-prior JSON")
+    parser.add_argument("--prior-weight", type=float, default=0.25)
+    parser.add_argument("--prior-location-confidence", type=float, default=1.0)
+    parser.add_argument("--prior-max-adjustment", type=float, default=1.0)
     parser.add_argument(
         "--sample-strategy",
         choices=["stratified", "sequential"],
@@ -77,7 +85,7 @@ def main() -> int:
     else:
         if args.image_mode != "full":
             raise ValueError("iNaturalist manifests currently require --image-mode full")
-        dataset = load_inaturalist_manifest(args.root)
+        dataset = load_inaturalist_manifest(args.root, observed_on_from=args.observed_on_from)
     if args.limit is not None:
         dataset = select_evaluation_subset(
             dataset,
@@ -111,6 +119,25 @@ def main() -> int:
             work_root=args.output.parent / ".tmp",
             encode_batch_size=batch_size,
         )
+    prior_metadata = None
+    if args.prior_file:
+        if args.dataset != "inaturalist-manifest" or args.image_mode != "full":
+            raise ValueError("Species priors currently require an iNaturalist manifest in full mode")
+        provider = load_prior_provider(args.prior_file)
+        batch_predictor = PriorBatchPredictor(
+            recognizer,
+            provider,
+            weight=args.prior_weight,
+            location_confidence=args.prior_location_confidence,
+            max_adjustment=args.prior_max_adjustment,
+        )
+        prior_metadata = {
+            "file_sha256": hashlib.sha256(args.prior_file.read_bytes()).hexdigest(),
+            "source": provider.source,
+            "weight": args.prior_weight,
+            "location_confidence": args.prior_location_confidence,
+            "max_adjustment": args.prior_max_adjustment,
+        }
     result = run_benchmark(
         dataset,
         recognizer,
@@ -129,7 +156,8 @@ def main() -> int:
             "seed": args.seed,
             "multicrop_margins": list(batch_predictor.margins) if batch_predictor else None,
             "multicrop_weights": list(batch_predictor.weights) if batch_predictor else None,
-            "view_encode_batch_size": batch_predictor.encode_batch_size if batch_predictor else None,
+            "view_encode_batch_size": getattr(batch_predictor, "encode_batch_size", None),
+            "prior": prior_metadata,
         },
         image_preparer=image_preparer,
         batch_predictor=batch_predictor,

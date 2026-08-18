@@ -5,7 +5,7 @@ import json
 import random
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
@@ -337,6 +337,7 @@ def load_inaturalist_manifest(
     path: str | Path,
     *,
     require_images: bool = True,
+    observed_on_from: str | None = None,
 ) -> EvaluationDataset:
     manifest_path = Path(path).expanduser().resolve()
     try:
@@ -355,7 +356,15 @@ def load_inaturalist_manifest(
     samples: list[EvaluationSample] = []
     sample_ids: set[str] = set()
     root = manifest_path.parent.resolve()
+    if observed_on_from:
+        try:
+            date.fromisoformat(observed_on_from)
+        except ValueError as exc:
+            raise ValueError("observed_on_from must be an ISO date") from exc
     for item in manifest.get("samples") or []:
+        observed_on = str(item.get("observed_on") or "")
+        if observed_on_from and observed_on < observed_on_from:
+            continue
         _validate_sample_source(item)
         sample_id = str(item.get("sample_id") or "").strip()
         if not sample_id or sample_id in sample_ids:
@@ -379,6 +388,11 @@ def load_inaturalist_manifest(
                 image_path=image_path,
                 expected_label=expected_label,
                 split="test",
+                metadata={
+                    "observed_on": observed_on,
+                    "month": int(observed_on[5:7]) if len(observed_on) >= 7 else None,
+                    "national": "CN",
+                },
             )
         )
 
@@ -392,6 +406,7 @@ def load_inaturalist_manifest(
             "manifest_sha256": _sha256(manifest_path),
             "source": manifest.get("source") or {},
             "selection": manifest.get("selection") or {},
+            "observed_on_from": observed_on_from,
             "license_notice": "Each photo retains the license and attribution stored in the manifest.",
         },
     )

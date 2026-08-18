@@ -13,6 +13,7 @@ from .hardware import HardwareMeasurement, begin_hardware_measurement, finish_ha
 from .inaturalist import load_inaturalist_manifest
 from .local_directory import load_candidate_labels, load_local_directory
 from .multicrop import MultiCropPredictor
+from .prior import PriorBatchPredictor
 from .quality import (
     DEFAULT_DEGRADATIONS,
     DegradationSpec,
@@ -31,6 +32,7 @@ __all__ = [
     "CUBCropPreparer",
     "CUBMultiCropPreparer",
     "MultiCropPredictor",
+    "PriorBatchPredictor",
     "DEFAULT_DEGRADATIONS",
     "DegradationSpec",
     "apply_degradation",

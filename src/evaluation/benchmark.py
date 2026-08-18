@@ -47,11 +47,13 @@ class BenchmarkPrediction:
     confidences: tuple[float, ...]
     duration_ms: float
     error: str | None = None
+    candidate_details: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["predicted_labels"] = list(self.predicted_labels)
         value["confidences"] = list(self.confidences)
+        value["candidate_details"] = list(self.candidate_details)
         return value
 
 
@@ -182,6 +184,10 @@ def run_benchmark(
 
             labels = tuple(str(item.get("scientific_name") or item.get("label") or "") for item in raw_prediction)
             confidences = tuple(float(item.get("confidence", 0.0)) for item in raw_prediction)
+            has_audit_details = any(
+                set(item) - {"scientific_name", "label", "confidence"}
+                for item in raw_prediction
+            )
             predictions.append(
                 BenchmarkPrediction(
                     sample_id=sample.sample_id,
@@ -190,6 +196,11 @@ def run_benchmark(
                     predicted_labels=labels,
                     confidences=confidences,
                     duration_ms=elapsed_per_sample,
+                    candidate_details=(
+                        tuple(dict(item) for item in raw_prediction)
+                        if has_audit_details
+                        else ()
+                    ),
                 )
             )
 

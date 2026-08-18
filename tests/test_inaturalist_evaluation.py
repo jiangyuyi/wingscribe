@@ -264,6 +264,31 @@ def test_load_inaturalist_manifest_requires_checksum(tmp_path: Path):
         load_inaturalist_manifest(manifest_path)
 
 
+def test_load_inaturalist_manifest_filters_observation_dates(tmp_path: Path):
+    records = [_record(1, "A"), _record(2, "B")]
+    records[0]["observed_on"] = "2021-12-31"
+    records[1]["observed_on"] = "2022-01-01"
+    manifest = build_manifest(records, {}, sample_count=2)
+    manifest_path = tmp_path / "manifest.json"
+    write_manifest(manifest, manifest_path)
+
+    dataset = load_inaturalist_manifest(
+        manifest_path,
+        require_images=False,
+        observed_on_from="2022-01-01",
+    )
+
+    assert len(dataset.samples) == 1
+    assert dataset.samples[0].metadata == {
+        "observed_on": "2022-01-01",
+        "month": 1,
+        "national": "CN",
+    }
+
+    with pytest.raises(ValueError, match="ISO date"):
+        load_inaturalist_manifest(manifest_path, require_images=False, observed_on_from="2022")
+
+
 def test_prepare_inaturalist_script_can_show_help():
     completed = subprocess.run(
         [sys.executable, "scripts/prepare_inaturalist_eval.py", "--help"],

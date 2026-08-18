@@ -19,6 +19,7 @@ class EvaluationSample:
     expected_label: str
     split: str
     bbox: tuple[float, float, float, float] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

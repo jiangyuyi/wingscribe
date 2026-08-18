@@ -572,6 +572,8 @@ class WingScribePipeline:
                 'primary_bird_cn': cn_name,
                 'scientific_name': sci_name,
                 'confidence_score': confidence,
+                'label_source': 'automatic',
+                'manual_verified_at': None,
                 'width': img_width,
                 'height': img_height,
                 'candidates_json': json.dumps(candidates_data, ensure_ascii=False)

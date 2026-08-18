@@ -19,6 +19,36 @@ def test_init_db(db_manager):
     tables = [row[0] for row in cursor.fetchall()]
     assert "taxonomy" in tables
     assert "photos" in tables
+    photo_columns = {
+        row[1]: row for row in db_manager.conn.execute("PRAGMA table_info(photos)").fetchall()
+    }
+    assert photo_columns["label_source"][3] == 1
+    assert photo_columns["label_source"][4] == "'automatic'"
+    assert "manual_verified_at" in photo_columns
+
+
+def test_init_db_migrates_legacy_photo_label_provenance(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE photos (id INTEGER PRIMARY KEY, scientific_name TEXT, confidence_score REAL)"
+    )
+    conn.execute(
+        "INSERT INTO photos (scientific_name, confidence_score) VALUES (?, ?)",
+        ("Passer montanus", 0.8),
+    )
+    conn.commit()
+    conn.close()
+
+    manager = IOCManager(str(db_path))
+    try:
+        row = manager.conn.execute(
+            "SELECT label_source, manual_verified_at FROM photos"
+        ).fetchone()
+        assert row["label_source"] == "automatic"
+        assert row["manual_verified_at"] is None
+    finally:
+        manager.close()
 
 def test_add_and_search_photo(db_manager):
     record = {
@@ -38,6 +68,8 @@ def test_add_and_search_photo(db_manager):
     cursor.execute("SELECT * FROM photos WHERE filename='test.jpg'")
     row = cursor.fetchone()
     assert row["primary_bird_cn"] == "麻雀"
+    assert row["label_source"] == "automatic"
+    assert row["manual_verified_at"] is None
 
 def test_taxonomy_search(db_manager):
     # Manually insert taxonomy using conn directly
@@ -252,7 +284,8 @@ def test_update_photo_species_updates_photo_and_species_stats(seeded_db_manager)
     seeded_db_manager.update_photo_species(photo_id, "Passer montanus", "楹婚泙")
 
     updated_photo = seeded_db_manager.conn.execute(
-        "SELECT scientific_name, primary_bird_cn, confidence_score FROM photos WHERE id = ?",
+        "SELECT scientific_name, primary_bird_cn, confidence_score, "
+        "label_source, manual_verified_at FROM photos WHERE id = ?",
         (photo_id,),
     ).fetchone()
     stats = seeded_db_manager.get_species_stats_fast()
@@ -263,6 +296,8 @@ def test_update_photo_species_updates_photo_and_species_stats(seeded_db_manager)
     assert updated_photo["scientific_name"] == "Passer montanus"
     assert updated_photo["primary_bird_cn"] == "楹婚泙"
     assert updated_photo["confidence_score"] == 1.0
+    assert updated_photo["label_source"] == "manual"
+    assert updated_photo["manual_verified_at"] is not None
     assert stats_by_sci["Passer montanus"]["photo_count"] == 3
     assert "Parus minor" not in stats_by_sci
     assert all_stats_by_sci["Parus minor"]["photo_count"] == 0

@@ -121,6 +121,8 @@ class IOCManager:
                 primary_bird_cn TEXT,
                 scientific_name TEXT,
                 confidence_score REAL,
+                label_source TEXT NOT NULL DEFAULT 'automatic',
+                manual_verified_at TEXT,
                 width INTEGER,
                 height INTEGER
             )
@@ -162,6 +164,26 @@ class IOCManager:
             try: self.conn.execute("ALTER TABLE photos ADD COLUMN web_raw_path TEXT")
             except: pass
 
+        # Human-confirmed labels are the only safe source for future visual prototypes.
+        try:
+            self.conn.execute("SELECT label_source, manual_verified_at FROM photos LIMIT 1")
+        except sqlite3.OperationalError:
+            logging.info("Migrating database: Adding photo label provenance columns...")
+            try:
+                self.conn.execute(
+                    "ALTER TABLE photos ADD COLUMN label_source TEXT NOT NULL DEFAULT 'automatic'"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE photos ADD COLUMN manual_verified_at TEXT")
+            except sqlite3.OperationalError:
+                pass
+        self.conn.execute(
+            "UPDATE photos SET label_source = 'automatic' "
+            "WHERE label_source IS NULL OR label_source = ''"
+        )
+
         # Migration - Taxonomy table (add genus, family_sci, order_sci, english_name)
         try:
             self.conn.execute("SELECT genus_cn, genus_sci, family_sci, order_sci, english_name FROM taxonomy LIMIT 1")
@@ -193,6 +215,13 @@ class IOCManager:
         except: pass
         try: self.conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_date ON photos(captured_date)")
         except: pass
+        try:
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_photos_label_source "
+                "ON photos(label_source, scientific_name)"
+            )
+        except sqlite3.OperationalError:
+            pass
 
         # Species Stats Table (for fast taxonomy tree queries)
         self.conn.execute('''
@@ -814,7 +843,8 @@ class IOCManager:
 
             conn.execute('''
                 UPDATE photos
-                SET scientific_name = ?, primary_bird_cn = ?, confidence_score = 1.0
+                SET scientific_name = ?, primary_bird_cn = ?, confidence_score = 1.0,
+                    label_source = 'manual', manual_verified_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (scientific_name, chinese_name, photo_id))
 

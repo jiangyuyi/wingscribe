@@ -563,7 +563,9 @@ def update_label(req: UpdateLabelRequest):
         manager.conn.execute(
             '''
             UPDATE photos
-            SET scientific_name = ?, primary_bird_cn = ?, confidence_score = ?, file_path = ?, filename = ?
+            SET scientific_name = ?, primary_bird_cn = ?, confidence_score = ?,
+                file_path = ?, filename = ?, label_source = 'manual',
+                manual_verified_at = CURRENT_TIMESTAMP
             WHERE id = ?
             ''',
             (

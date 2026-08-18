@@ -393,26 +393,14 @@ class LocalBirdRecognizer(BirdRecognizer):
         candidate_labels: List[str],
         top_k: int = 5,
     ) -> List[List[Dict[str, Any]]]:
-        """Classify one or more normalized image embeddings against candidate labels."""
-        if image_features.ndim == 1:
-            image_features = image_features.unsqueeze(0)
-        if image_features.ndim != 2:
-            raise ValueError("image_features must be a 1D or 2D tensor")
+        """Classify embeddings while preserving the existing softmax result format."""
         if top_k < 1:
             raise ValueError("top_k must be at least 1")
-        if not candidate_labels:
-            return [[] for _ in range(image_features.shape[0])]
-        if image_features.shape[0] == 0:
-            return []
+        logits = self.score_embeddings(image_features, candidate_labels)
+        if logits.shape[1] == 0:
+            return [[] for _ in range(logits.shape[0])]
 
-        image_features = image_features.to(self.device)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        text_features = self._get_text_features(candidate_labels)
-
-        device_type = 'cuda' if 'cuda' in self.device else 'cpu'
-        with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
-            text_probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)
-
+        text_probs = logits.softmax(dim=-1)
         top_probs, top_indices = text_probs.topk(min(top_k, len(candidate_labels)), dim=1)
         batch_results = []
         for row_probs, row_indices in zip(top_probs, top_indices):
@@ -424,6 +412,37 @@ class LocalBirdRecognizer(BirdRecognizer):
                 for probability, index in zip(row_probs, row_indices)
             ])
         return batch_results
+
+    def score_embeddings(
+        self,
+        image_features: torch.Tensor,
+        candidate_labels: List[str],
+    ) -> torch.Tensor:
+        """Return pre-softmax visual logits for every image and candidate label."""
+        if image_features.ndim == 1:
+            image_features = image_features.unsqueeze(0)
+        if image_features.ndim != 2:
+            raise ValueError("image_features must be a 1D or 2D tensor")
+        if not candidate_labels:
+            return torch.empty(
+                (image_features.shape[0], 0),
+                device=self.device,
+                dtype=image_features.dtype,
+            )
+        if image_features.shape[0] == 0:
+            return torch.empty(
+                (0, len(candidate_labels)),
+                device=self.device,
+                dtype=image_features.dtype,
+            )
+
+        image_features = image_features.to(self.device)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        text_features = self._get_text_features(candidate_labels)
+
+        device_type = 'cuda' if 'cuda' in self.device else 'cpu'
+        with torch.no_grad(), torch.amp.autocast(device_type=device_type, enabled=(device_type == 'cuda')):
+            return 100.0 * image_features @ text_features.T
 
     def _do_predict_batch(self, image_paths, candidate_labels, top_k):
         image_features, valid_indices = self._encode_image_paths(image_paths, skip_invalid=True)

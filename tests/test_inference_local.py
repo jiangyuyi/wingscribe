@@ -402,6 +402,48 @@ def test_classify_embeddings_handles_empty_candidates():
     assert recognizer.classify_embeddings(torch.tensor([[1.0, 0.0]]), []) == [[]]
 
 
+def test_score_embeddings_returns_pre_softmax_logits_for_all_candidates():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer._get_text_features = lambda labels: torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0]],
+        dtype=torch.float32,
+    )
+
+    logits = recognizer.score_embeddings(
+        torch.tensor([[3.0, 4.0], [0.0, 2.0]]),
+        ["sparrow", "robin"],
+    )
+
+    assert logits.shape == (2, 2)
+    assert torch.allclose(logits, torch.tensor([[60.0, 80.0], [0.0, 100.0]]))
+
+
+def test_score_embeddings_handles_single_empty_and_zero_batch_inputs():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer._get_text_features = lambda labels: torch.eye(2)
+
+    single = recognizer.score_embeddings(torch.tensor([1.0, 0.0]), ["sparrow", "robin"])
+    no_candidates = recognizer.score_embeddings(torch.ones((2, 2)), [])
+    no_images = recognizer.score_embeddings(torch.empty((0, 2)), ["sparrow", "robin"])
+
+    assert single.shape == (1, 2)
+    assert no_candidates.shape == (2, 0)
+    assert no_images.shape == (0, 2)
+
+
+def test_classify_embeddings_uses_visual_logits_before_softmax():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+    recognizer.score_embeddings = lambda features, labels: torch.tensor([[1.0, 3.0]])
+
+    result = recognizer.classify_embeddings(torch.tensor([1.0, 0.0]), ["sparrow", "robin"], top_k=2)
+
+    assert [item["scientific_name"] for item in result[0]] == ["robin", "sparrow"]
+    assert result[0][0]["confidence"] == pytest.approx(torch.softmax(torch.tensor([1.0, 3.0]), 0)[1].item())
+
+
 @pytest.mark.parametrize(
     "features,top_k",
     [
@@ -415,3 +457,11 @@ def test_classify_embeddings_validates_inputs(features, top_k):
 
     with pytest.raises(ValueError):
         recognizer.classify_embeddings(features, ["sparrow"], top_k=top_k)
+
+
+def test_score_embeddings_validates_feature_dimensions():
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.device = "cpu"
+
+    with pytest.raises(ValueError, match="1D or 2D"):
+        recognizer.score_embeddings(torch.ones((1, 1, 2)), ["sparrow"])

@@ -148,6 +148,23 @@ python scripts/evaluate_public.py `
 
 清单候选集采用扫描池中的全部物种学名，而非只包含被抽中的物种，避免人为缩小分类难度。当前版本没有 iNaturalist bbox，因此不允许 `bbox` 或 multi-crop 模式；整图结果也不能单独归因于识别模型，因为背景、鸟体大小和照片构图都会影响准确率。
 
+任意本地图片目录可以生成无标签影子报告：
+
+```powershell
+python scripts/evaluate_shadow.py `
+  --root D:\Photos\Birds `
+  --candidate-file config\dictionaries\china_bird_list.txt `
+  --model bioclip-2 `
+  --device auto `
+  --limit 50 `
+  --seed 20260818 `
+  --output evaluation_results\shadow-baseline.json
+```
+
+使用相同目录、候选文件、limit 和 seed 运行实验模型或配置后，通过 `compare_evaluation_reports.py` 比较两份报告。目录适配器递归读取 JPEG/PNG/WebP/BMP/TIFF，以相对路径生成稳定样本 ID，并记录候选集哈希与基于相对路径、大小、修改时间的图片快照哈希；比较工具会拒绝候选集或图片快照不同的两份影子报告。
+
+影子 JSON 包含本地绝对路径，只能保存在被 Git 忽略的 `evaluation_results/` 或其他私人目录，不得提交或公开。无标签报告的 Top-1/Top-5 accuracy 为 `null`；Top-1 一致率和 Top-5 Jaccard 只表示行为相似度，不代表任一配置正确。
+
 ## 实施状态
 
 已完成：
@@ -163,6 +180,7 @@ python scripts/evaluate_public.py `
 - 不加载模型权重的单元测试和直接运行的命令行入口。
 - RTX 5060 Laptop 8 GB 上的 BioCLIP 2.5 batch 1 运行与资源烟雾测试。
 - iNaturalist 中国鸟类许可感知清单生成、下载校验和离线加载。
+- 任意本地图片目录的无标签影子报告及候选集/图片快照一致性校验。
 
 质量指标回归可以对任意公开图片目录运行：
 
@@ -177,8 +195,8 @@ python scripts/evaluate_quality.py `
 
 后续按独立提交推进：
 
-1. 任意本地目录上的无标签基线/实验影子比较。
-2. 基于冻结清单验证省市/月度软先验，且必须保留纯视觉结果供审计。
+1. 基于冻结清单验证省市/月度软先验，且必须保留纯视觉结果供审计。
+2. 在重新出现的私人照片目录上抽查影子评测分歧样本。
 3. 根据完整 CUB 结果重新设计 multi-crop 视野和融合权重，再决定是否继续实验。
 
 截至 2026-08-18，CUB 原始数据包已通过镜像取得，并以 CaltechDATA 官方 MD5 `97eceeb196236b17998738112f37df78` 校验；适配器核对为 5,994 张训练图、5,794 张测试图和 200 类。完整测试集结果见 `PUBLIC_EVALUATION_RESULTS_2026-08-18.md`。合成小型 CUB 目录仍只用于单元测试，不与真实模型结果混用。

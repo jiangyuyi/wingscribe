@@ -25,7 +25,7 @@
     {"region_code": "CN-JX", "province": "江西", "query": "Jiangxi", "expected_name": "Jiangxi"},
     {"region_code": "CN-LN", "province": "辽宁", "query": "Liaoning", "expected_name": "Liaoning"},
     {"region_code": "CN-NM", "province": "内蒙古", "query": "Nei Mongol", "expected_name": "Nei Mongol"},
-    {"region_code": "CN-NX", "province": "宁夏", "query": "Ningxia", "expected_name": "Ningxia"},
+    {"region_code": "CN-NX", "province": "宁夏", "query": "Ningxia", "expected_name": "Ningxia Hui"},
     {"region_code": "CN-QH", "province": "青海", "query": "Qinghai", "expected_name": "Qinghai"},
     {"region_code": "CN-SC", "province": "四川", "query": "Sichuan", "expected_name": "Sichuan"},
     {"region_code": "CN-SD", "province": "山东", "query": "Shandong", "expected_name": "Shandong"},

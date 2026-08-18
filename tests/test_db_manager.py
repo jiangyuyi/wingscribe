@@ -25,6 +25,8 @@ def test_init_db(db_manager):
     assert photo_columns["label_source"][3] == 1
     assert photo_columns["label_source"][4] == "'automatic'"
     assert "manual_verified_at" in photo_columns
+    assert "quality_score" in photo_columns
+    assert "quality_details_json" in photo_columns
 
 
 def test_init_db_migrates_legacy_photo_label_provenance(tmp_path):
@@ -43,10 +45,13 @@ def test_init_db_migrates_legacy_photo_label_provenance(tmp_path):
     manager = IOCManager(str(db_path))
     try:
         row = manager.conn.execute(
-            "SELECT label_source, manual_verified_at FROM photos"
+            "SELECT label_source, manual_verified_at, quality_score, quality_details_json "
+            "FROM photos"
         ).fetchone()
         assert row["label_source"] == "automatic"
         assert row["manual_verified_at"] is None
+        assert row["quality_score"] is None
+        assert row["quality_details_json"] is None
     finally:
         manager.close()
 

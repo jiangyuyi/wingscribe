@@ -123,6 +123,8 @@ class IOCManager:
                 confidence_score REAL,
                 label_source TEXT NOT NULL DEFAULT 'automatic',
                 manual_verified_at TEXT,
+                quality_score REAL,
+                quality_details_json TEXT,
                 width INTEGER,
                 height INTEGER
             )
@@ -183,6 +185,19 @@ class IOCManager:
             "UPDATE photos SET label_source = 'automatic' "
             "WHERE label_source IS NULL OR label_source = ''"
         )
+
+        try:
+            self.conn.execute("SELECT quality_score, quality_details_json FROM photos LIMIT 1")
+        except sqlite3.OperationalError:
+            logging.info("Migrating database: Adding photo quality columns...")
+            try:
+                self.conn.execute("ALTER TABLE photos ADD COLUMN quality_score REAL")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE photos ADD COLUMN quality_details_json TEXT")
+            except sqlite3.OperationalError:
+                pass
 
         # Migration - Taxonomy table (add genus, family_sci, order_sci, english_name)
         try:

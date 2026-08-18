@@ -470,6 +470,7 @@ class WingScribePipeline:
         img_width = item['width']
         img_height = item['height']
         file_hash = item['file_hash']
+        quality_fields = self._quality_storage_fields(item.get('quality'))
 
         # Initialize default values
         is_low_conf = False
@@ -574,6 +575,7 @@ class WingScribePipeline:
                 'confidence_score': confidence,
                 'label_source': 'automatic',
                 'manual_verified_at': None,
+                **quality_fields,
                 'width': img_width,
                 'height': img_height,
                 'candidates_json': json.dumps(candidates_data, ensure_ascii=False)
@@ -592,6 +594,20 @@ class WingScribePipeline:
             # Log more details for debugging
             import traceback
             logging.debug(traceback.format_exc())
+
+    @staticmethod
+    def _quality_storage_fields(quality) -> dict:
+        if not isinstance(quality, dict):
+            return {"quality_score": None, "quality_details_json": None}
+        score = quality.get("quality_score")
+        try:
+            normalized_score = float(score) if score is not None else None
+        except (TypeError, ValueError):
+            normalized_score = None
+        return {
+            "quality_score": normalized_score,
+            "quality_details_json": json.dumps(quality, ensure_ascii=False, sort_keys=True),
+        }
 
     def process_image(self, provider, entry, meta):
         # 1. Deduplication

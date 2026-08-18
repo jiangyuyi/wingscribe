@@ -1,4 +1,5 @@
 import pytest
+import json
 import os
 import shutil
 import threading
@@ -287,6 +288,26 @@ def test_process_image_passes_quality_metrics_to_recognition(tmp_path, monkeypat
 
     assert len(captured_items) == 1
     assert captured_items[0]["quality"] == expected.to_dict()
+
+
+def test_quality_storage_fields_preserve_score_and_audit_details():
+    quality = _quality_result(quality_score=0.625).to_dict()
+
+    fields = MockPipeline._quality_storage_fields(quality)
+
+    assert fields["quality_score"] == pytest.approx(0.625)
+    assert json.loads(fields["quality_details_json"]) == quality
+
+
+@pytest.mark.parametrize("quality", [None, {}, "invalid"])
+def test_quality_storage_fields_keep_disabled_or_invalid_results_empty(quality):
+    fields = MockPipeline._quality_storage_fields(quality)
+
+    if quality == {}:
+        assert fields["quality_score"] is None
+        assert json.loads(fields["quality_details_json"]) == {}
+    else:
+        assert fields == {"quality_score": None, "quality_details_json": None}
 
 
 def test_select_candidate_labels_respects_region_filter_modes():

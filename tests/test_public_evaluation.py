@@ -7,6 +7,8 @@ import pytest
 import torch
 from PIL import Image
 
+from scripts.evaluate_public import _batch_predictor_metadata
+
 from src.evaluation import (
     EvaluationDataset,
     EvaluationSample,
@@ -250,6 +252,27 @@ def test_public_evaluation_script_can_show_help():
     assert "--sample-strategy" in completed.stdout
     assert "--prior-file" in completed.stdout
     assert "bioclip-2.5-vith14" in completed.stdout
+
+
+def test_batch_predictor_metadata_supports_prior_and_multicrop_predictors():
+    class PriorLike:
+        pass
+
+    class MultiCropLike:
+        margins = (0.0, 0.2)
+        weights = (0.4, 0.6)
+        encode_batch_size = 8
+
+    assert _batch_predictor_metadata(PriorLike()) == {
+        "multicrop_margins": None,
+        "multicrop_weights": None,
+        "view_encode_batch_size": None,
+    }
+    assert _batch_predictor_metadata(MultiCropLike()) == {
+        "multicrop_margins": [0.0, 0.2],
+        "multicrop_weights": [0.4, 0.6],
+        "view_encode_batch_size": 8,
+    }
 
 
 def test_build_crop_box_applies_margin_and_clips_to_image(tmp_path: Path):

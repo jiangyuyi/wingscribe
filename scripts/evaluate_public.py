@@ -24,6 +24,22 @@ from src.recognition.model_registry import get_model_spec
 from src.recognition.prior import load_prior_provider
 
 
+def _batch_predictor_metadata(batch_predictor) -> dict:
+    return {
+        "multicrop_margins": (
+            list(batch_predictor.margins)
+            if getattr(batch_predictor, "margins", None) is not None
+            else None
+        ),
+        "multicrop_weights": (
+            list(batch_predictor.weights)
+            if getattr(batch_predictor, "weights", None) is not None
+            else None
+        ),
+        "view_encode_batch_size": getattr(batch_predictor, "encode_batch_size", None),
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a repeatable WingScribe public-dataset benchmark.")
     parser.add_argument("--dataset", choices=["cub", "inaturalist-manifest"], default="cub")
@@ -138,6 +154,7 @@ def main() -> int:
             "location_confidence": args.prior_location_confidence,
             "max_adjustment": args.prior_max_adjustment,
         }
+    predictor_metadata = _batch_predictor_metadata(batch_predictor)
     result = run_benchmark(
         dataset,
         recognizer,
@@ -154,9 +171,7 @@ def main() -> int:
             "bbox_margin": args.bbox_margin if image_preparer else None,
             "bbox_jitter": args.bbox_jitter if args.image_mode == "bbox-jitter" else 0.0,
             "seed": args.seed,
-            "multicrop_margins": list(batch_predictor.margins) if batch_predictor else None,
-            "multicrop_weights": list(batch_predictor.weights) if batch_predictor else None,
-            "view_encode_batch_size": getattr(batch_predictor, "encode_batch_size", None),
+            **predictor_metadata,
             "prior": prior_metadata,
         },
         image_preparer=image_preparer,

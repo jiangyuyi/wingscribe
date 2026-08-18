@@ -1,4 +1,6 @@
-# WingScribe Windows 安装包制作计划
+# WingScribe Windows 安装包制作计划（历史方案）
+
+> 本文记录早期 CPU-only 安装包的设计过程，不代表当前发布能力。当前项目已提供 CPU/GPU 双安装包，GPU 包使用 CUDA 12.8 版 PyTorch 并支持 RTX 50 系列；请以 [安装器构建指南](../installer/README.md) 和 [README](../README.md) 为准。
 
 ## 项目概述
 

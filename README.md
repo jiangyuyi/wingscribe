@@ -1,15 +1,15 @@
 # WingScribe (飞羽志) - 智能鸟类摄影管理系统
 
-**版本:** 2.0.0
-**状态:** 新版发布
+**版本:** 2.3.0
+**状态:** 稳定版
 
-WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它利用计算机视觉 (YOLOv11) 和多模态大模型 (BioCLIP) 技术，自动完成照片的**检测、筛选、物种识别、元数据注入**以及**层级归档**，并提供一个支持人工校对的本地 Web 界面。
+WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它利用计算机视觉 (YOLO) 和多模态大模型 (BioCLIP) 技术，自动完成照片的**检测、筛选、物种识别、元数据注入**以及**层级归档**，并提供一个支持人工校对的本地 Web 界面。
 
 本项目是我个人的第一个从零开始完全使用Vibe Coding的项目，使用了Gemini CLI 、Claude Code with MiniMax2.5，作为一个观鸟爱好者，图片库的识别和整理一直是我的一大痛点，这个项目也算是圆了几年前的一个小梦想。
 
 本项目支持**本地 GPU/CPU 识别**和**云平台 API 识别**两种模式。
 
-[查看更新日志](docs/CHANGELOG_v1.6_zh.md) | [架构文档](docs/ARCHITECTURE.md) | [云端识别方案](docs/云端识别与分离部署方案.md)
+[最新版本](https://github.com/jiangyuyi/wingscribe/releases/latest) | [架构文档](docs/ARCHITECTURE.md) | [配置指南](docs/CONFIGURATION.md) | [公共评测](docs/PUBLIC_EVALUATION.md)
 
 ---
 
@@ -19,10 +19,15 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
   * **智能扫描**: 递归扫描文件夹，支持按日期范围过滤，极大提升处理效率。
   * **混合解析**: 支持标准的父目录格式 (`yyyyMMdd-...`) 和基于正则的子目录解析。
 * **🧠 多引擎识别**:
-  * **本地引擎**: BioCLIP v1/v2 (支持 GPU/CPU)
+  * **本地引擎**: BioCLIP、BioCLIP2（默认）及实验性 BioCLIP 2.5 (支持 GPU/CPU)
   * **云平台**: HuggingFace, 魔搭 (ModelScope), 懂鸟 (Dongniao), 阿里云, 百度智能云
   * **Top-K 候选**: 自动保存 AI 的前 5 个预测结果供人工复核。
   * **智能建议**: Web 界面提供"AI 备选"下拉菜单，一键修正物种。
+  * **可审计结果**: 区分自动识别与人工确认标签，并保留 Top-K 候选。
+* **🔬 质量与评测**:
+  * **质量模式**: 支持兼容旧行为的模糊过滤、仅评分和完全关闭三种模式。
+  * **质量审计**: 新处理照片可保存综合质量分及子指标，不默认改变识别排序或删除行为。
+  * **可重复评测**: 提供公共数据集、图像退化、多裁切、软先验及本地目录影子评测工具。
 * **📦 批量识别 API**:
   * **REST API**: 提供标准化的批量识别接口
   * **异步处理**: 支持大批量图片的异步识别
@@ -56,7 +61,7 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
 
 * **操作系统**: Windows 10/11, macOS, 或 Linux。
 * **Python**: 3.11, 不推荐使用Python 3.13, 环境配置会遇到很多问题。
-* **GPU (可选)**: 推荐使用 NVIDIA RTX 系列显卡以加速本地 BioCLIP 推理（需要 CUDA 12.1+）。
+* **GPU (可选)**: 推荐使用 NVIDIA RTX 系列显卡以加速本地 BioCLIP 推理。GPU 安装包内含 CUDA 12.8 版 PyTorch，支持 RTX 50 系列；请安装与显卡及该 CUDA 运行时兼容的较新 NVIDIA 驱动。
 
 ---
 
@@ -68,7 +73,10 @@ WingScribe 提供 Windows 安装包，包含所有依赖，无需手动配置 Py
 
 #### 下载安装包
 
-从 [GitHub Releases](https://github.com/jiangyuyi/wingscribe/releases) 下载最新的 `WingScribe-Setup-x.x.x.exe`
+从 [GitHub Releases](https://github.com/jiangyuyi/wingscribe/releases) 下载最新安装包：
+
+- `WingScribe-Setup-CPU-<版本>.exe`：兼容性优先，无 NVIDIA 显卡也可使用。
+- `WingScribe-Setup-GPU-<版本>.exe`：面向支持 CUDA 的 NVIDIA 显卡，包含 CUDA 版 PyTorch。
 
 #### 安装步骤
 
@@ -104,9 +112,9 @@ cd "C:\Users\用户名\WingScribe"
 #### 系统要求
 
 - **操作系统**: Windows 10 或更高版本
-- **内存**: 至少 2GB 可用内存
-- **硬盘**: 至少 2GB 可用空间（运行时需要更多空间存储照片和模型）
-- **网络**: 首次运行时需要网络连接下载 AI 模型（约 500MB）
+- **内存**: 建议至少 8GB；处理高分辨率照片、提高批次或使用实验模型时建议 16GB 以上
+- **硬盘**: CPU 版建议预留至少 4GB，GPU 版建议至少 10GB；照片、缓存和模型另计
+- **网络**: 首次运行需要下载所选 BioCLIP 模型；不同模型体积差异较大，请额外预留数 GB 缓存空间
 
 #### 安装包内容
 
@@ -115,13 +123,22 @@ cd "C:\Users\用户名\WingScribe"
 | 组件 | 说明 |
 |------|------|
 | Python 3.11 | Python 运行环境 |
-| PyTorch CPU | 深度学习框架（CPU 版本） |
-| YOLOv11 | 鸟类检测模型 |
-| BioCLIP | 鸟类识别模型（首次运行时下载） |
+| PyTorch | CPU 包内置 CPU 版；GPU 包内置 CUDA 12.8 版 |
+| YOLO26 | 预置鸟类检测模型 |
+| BioCLIP | 鸟类识别模型（按配置在首次运行时下载） |
 | ExifTool | 元数据写入工具 |
 | WingScribe | 主程序和 Web 界面 |
 
-> **注意**: 安装包仅支持 CPU 模式，适合没有 NVIDIA 显卡的用户。如需 GPU 加速，请使用源码部署方式。
+> **选择建议**: 没有 NVIDIA 显卡时使用 CPU 包；RTX 20/30/40/50 系列优先使用 GPU 包。AMD Radeon 780M 等非 CUDA 后端尚未纳入本阶段安装包支持。
+
+### 🧪 识别优化状态
+
+- 生产默认模型仍为 BioCLIP2；BioCLIP 2.5 是可选实验模型，尚未替换默认值。
+- 地点标准化目前提供只读预览，不会自动改变生产识别结果。
+- 全国月度先验已因验证结果不佳停止；省级全年先验仅保留为离线候选能力，默认不启用。
+- 多裁切融合、质量评分和软先验均有独立评测边界，不会静默改变现有流水线行为。
+
+详细说明见 [公共评测指南](docs/PUBLIC_EVALUATION.md)、[评测结果](docs/PUBLIC_EVALUATION_RESULTS_2026-08-18.md)、[地点标准化](docs/LOCATION_RESOLUTION.md) 和 [先验重排](docs/PRIOR_RERANKING.md)。
 
 ---
 

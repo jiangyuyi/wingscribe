@@ -53,6 +53,19 @@ WingScribe 的优化功能不应以用户拥有已整理、已标注的鸟类照
 
 官方页面：https://www.inaturalist.org/pages/developers
 
+当前适配器通过官方 API 一次性扫描中国（place id `6903`）的 research-grade 鸟纲观测，只接受 `CC0`、`CC BY` 和 `CC BY-SA` 照片。抽样按物种确定性轮转，清单冻结观测/照片/分类 ID、学名、坐标、日期、许可、署名、来源 URL、本地相对路径和 SHA-256；生成后评测不再访问 API。首次准备命令：
+
+```powershell
+python scripts/prepare_inaturalist_eval.py `
+  --output data\evaluation\inaturalist-china-birds\manifest.json `
+  --sample-count 600 `
+  --max-per-species 3 `
+  --seed 20260818 `
+  --cutoff-date 2025-12-31
+```
+
+图片直接来自 iNaturalist 官方 Open Data S3。脚本逐张验证图片内容并写入哈希，失败最多重试三次；重新运行会复用哈希一致的文件。清单和图片均位于 Git 忽略目录，不随仓库或 installer 分发。
+
 ### BIRD1445
 
 BIRD1445 覆盖中国 1,445 种鸟类和多种模态，方向上最贴合 WingScribe。但在确认稳定下载入口、完整评估划分和使用许可前，不作为近期自动评测依赖。
@@ -121,6 +134,20 @@ python scripts/compare_evaluation_reports.py `
 
 有标签报告会统计基线/候选 Top-1、准确率差值、逐样本改善和退化，并对配对正确性变化执行双侧精确二项检验；无标签报告只统计 Top-1 一致率、Top-5 Jaccard、置信变化和分歧样本，不生成准确率或显著性结论。
 
+iNaturalist 冻结清单使用整图评测：
+
+```powershell
+python scripts/evaluate_public.py `
+  --dataset inaturalist-manifest `
+  --root data\evaluation\inaturalist-china-birds\manifest.json `
+  --model bioclip-2 `
+  --device cuda `
+  --image-mode full `
+  --output evaluation_results\inat-china-bioclip2.json
+```
+
+清单候选集采用扫描池中的全部物种学名，而非只包含被抽中的物种，避免人为缩小分类难度。当前版本没有 iNaturalist bbox，因此不允许 `bbox` 或 multi-crop 模式；整图结果也不能单独归因于识别模型，因为背景、鸟体大小和照片构图都会影响准确率。
+
 ## 实施状态
 
 已完成：
@@ -135,6 +162,7 @@ python scripts/compare_evaluation_reports.py `
 - 可重复的模糊、降采样、曝光和噪声退化质量回归报告。
 - 不加载模型权重的单元测试和直接运行的命令行入口。
 - RTX 5060 Laptop 8 GB 上的 BioCLIP 2.5 batch 1 运行与资源烟雾测试。
+- iNaturalist 中国鸟类许可感知清单生成、下载校验和离线加载。
 
 质量指标回归可以对任意公开图片目录运行：
 
@@ -149,11 +177,13 @@ python scripts/evaluate_quality.py `
 
 后续按独立提交推进：
 
-1. iNaturalist 中国鸟类固定 manifest 生成器和许可校验。
-2. 任意本地目录上的无标签基线/实验影子比较。
+1. 任意本地目录上的无标签基线/实验影子比较。
+2. 基于冻结清单验证省市/月度软先验，且必须保留纯视觉结果供审计。
 3. 根据完整 CUB 结果重新设计 multi-crop 视野和融合权重，再决定是否继续实验。
 
 截至 2026-08-18，CUB 原始数据包已通过镜像取得，并以 CaltechDATA 官方 MD5 `97eceeb196236b17998738112f37df78` 校验；适配器核对为 5,994 张训练图、5,794 张测试图和 200 类。完整测试集结果见 `PUBLIC_EVALUATION_RESULTS_2026-08-18.md`。合成小型 CUB 目录仍只用于单元测试，不与真实模型结果混用。
+
+同日生成的 iNaturalist 冻结清单完整扫描 17,428 条观测，从 924 个候选物种中抽取 600 张/600 种，图片总量约 60.8 MB，全部通过内容和 SHA-256 校验。模型对比结果及训练数据重叠边界同样见 `PUBLIC_EVALUATION_RESULTS_2026-08-18.md`。
 
 ## 仓库边界
 

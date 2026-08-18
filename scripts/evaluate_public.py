@@ -13,6 +13,7 @@ from src.evaluation import (
     begin_hardware_measurement,
     finish_hardware_measurement,
     load_cub_dataset,
+    load_inaturalist_manifest,
     run_benchmark,
     select_evaluation_subset,
 )
@@ -22,8 +23,13 @@ from src.recognition.model_registry import get_model_spec
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a repeatable WingScribe public-dataset benchmark.")
-    parser.add_argument("--dataset", choices=["cub"], default="cub")
-    parser.add_argument("--root", type=Path, required=True, help="Extracted public dataset directory")
+    parser.add_argument("--dataset", choices=["cub", "inaturalist-manifest"], default="cub")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        required=True,
+        help="Extracted CUB directory or frozen iNaturalist manifest path",
+    )
     parser.add_argument("--split", choices=["train", "test", "all"], default="test")
     parser.add_argument(
         "--model",
@@ -66,7 +72,12 @@ def main() -> int:
     )
     if batch_size < 1:
         raise ValueError("--batch-size must be at least 1")
-    dataset = load_cub_dataset(args.root, split=args.split)
+    if args.dataset == "cub":
+        dataset = load_cub_dataset(args.root, split=args.split)
+    else:
+        if args.image_mode != "full":
+            raise ValueError("iNaturalist manifests currently require --image-mode full")
+        dataset = load_inaturalist_manifest(args.root)
     if args.limit is not None:
         dataset = select_evaluation_subset(
             dataset,

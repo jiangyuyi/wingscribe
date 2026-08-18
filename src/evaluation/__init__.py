@@ -10,6 +10,7 @@ from .datasets import (
 )
 from .images import CUBCropPreparer, CUBMultiCropPreparer, build_crop_box
 from .hardware import HardwareMeasurement, begin_hardware_measurement, finish_hardware_measurement
+from .inaturalist import load_inaturalist_manifest
 from .multicrop import MultiCropPredictor
 from .quality import (
     DEFAULT_DEGRADATIONS,
@@ -36,6 +37,7 @@ __all__ = [
     "begin_hardware_measurement",
     "finish_hardware_measurement",
     "load_cub_dataset",
+    "load_inaturalist_manifest",
     "select_evaluation_subset",
     "run_benchmark",
     "run_quality_benchmark",

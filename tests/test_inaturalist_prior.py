@@ -9,9 +9,16 @@ import pytest
 
 from src.evaluation.datasets import DatasetFormatError
 from src.evaluation.inaturalist_prior import (
+    ProvinceRegion,
+    build_province_annual_prior,
     build_national_month_prior,
+    fetch_observation_province_assignments,
+    fetch_species_province_counts,
     fetch_species_month_counts,
     load_manifest_candidate_labels,
+    load_province_catalog,
+    resolve_province_places,
+    write_province_assignments,
     write_prior_file,
 )
 from src.recognition.prior import PriorFormatError, load_prior_provider
@@ -72,6 +79,133 @@ def test_fetch_species_month_counts_marks_truncated_limits():
     assert source["truncated"] is True
 
 
+def test_load_and_resolve_province_catalog(tmp_path: Path):
+    catalog = tmp_path / "provinces.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source": {"country_place_id": 6903},
+                "regions": [
+                    {
+                        "region_code": "CN-ZJ",
+                        "province": "浙江",
+                        "query": "Zhejiang",
+                        "expected_name": "Zhejiang",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    source, regions = load_province_catalog(catalog)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["q"] == "Zhejiang"
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 53098,
+                        "name": "Zhejiang",
+                        "admin_level": 10,
+                        "ancestor_place_ids": [97395, 6903, 53098],
+                    }
+                ]
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        resolved = resolve_province_places(client, source, regions, request_delay_seconds=0)
+
+    assert resolved[0].place_id == 53098
+    assert resolved[0].region_code == "CN-ZJ"
+
+
+def test_resolve_province_places_rejects_unverified_match():
+    region = ProvinceRegion("CN-ZJ", "浙江", "Zhejiang", "Zhejiang")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 1,
+                        "name": "Zhejiang",
+                        "admin_level": 10,
+                        "ancestor_place_ids": [999],
+                    }
+                ]
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(DatasetFormatError, match="Expected one"):
+            resolve_province_places(
+                client,
+                {"country_place_id": 6903},
+                [region],
+                request_delay_seconds=0,
+            )
+
+
+def test_fetch_species_province_counts_queries_annual_aggregates():
+    regions = (
+        ProvinceRegion("CN-ZJ", "浙江", "Zhejiang", "Zhejiang", 10),
+        ProvinceRegion("CN-SC", "四川", "Sichuan", "Sichuan", 20),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "month" not in request.url.params
+        place_id = int(request.url.params["place_id"])
+        results = [_species_count("Alpha", 3 if place_id == 10 else 5)]
+        return httpx.Response(200, json={"total_results": 1, "results": results})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        counts, source = fetch_species_province_counts(
+            client,
+            regions,
+            request_delay_seconds=0,
+        )
+
+    assert counts == Counter({("Alpha", "CN-SC"): 5, ("Alpha", "CN-ZJ"): 3})
+    assert source["observations_counted"] == 8
+    assert source["truncated"] is False
+
+
+def test_fetch_observation_province_assignments_uses_place_ids_only():
+    regions = (ProvinceRegion("CN-ZJ", "浙江", "Zhejiang", "Zhejiang", 53098),)
+    samples = [
+        {"sample_id": "one", "observation_id": 1},
+        {"sample_id": "two", "observation_id": 2},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 1, "place_ids": [6903, 53098]},
+                    {"id": 2, "place_ids": [6903]},
+                ]
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assignments, source = fetch_observation_province_assignments(
+            client,
+            samples,
+            regions,
+            request_delay_seconds=0,
+        )
+
+    assert assignments == {"one": "CN-ZJ"}
+    assert source["assigned_observations"] == 1
+    assert source["unassigned_observations"] == 1
+
+
 def test_build_national_month_prior_normalizes_each_bucket():
     counts = Counter({("Alpha", 1): 3, ("Beta", 1): 1, ("Alpha", 2): 2, ("Outside", 1): 10})
     source = {"observations_counted": 16}
@@ -85,6 +219,45 @@ def test_build_national_month_prior_normalizes_each_bucket():
     assert sum(record["probability"] for record in january) == pytest.approx(1.0)
     assert payload["source"]["matched_candidate_observations"] == 6
     assert payload["source"]["excluded_taxonomy_observations"] == 10
+
+
+def test_build_province_annual_prior_normalizes_without_month_records():
+    regions = (
+        ProvinceRegion("CN-ZJ", "浙江", "Zhejiang", "Zhejiang", 10),
+        ProvinceRegion("CN-SC", "四川", "Sichuan", "Sichuan", 20),
+    )
+    counts = Counter(
+        {
+            ("Alpha", "CN-ZJ"): 3,
+            ("Beta", "CN-ZJ"): 1,
+            ("Beta", "CN-SC"): 2,
+            ("Outside", "CN-ZJ"): 10,
+        }
+    )
+    payload = build_province_annual_prior(
+        counts,
+        ["Alpha", "Beta"],
+        regions,
+        {"observations_counted": 16},
+    )
+
+    assert len(payload["records"]) == 6
+    assert all(record["month"] is None for record in payload["records"])
+    for code in ("CN", "CN-ZJ", "CN-SC"):
+        bucket = [record for record in payload["records"] if record["region_code"] == code]
+        assert sum(record["probability"] for record in bucket) == pytest.approx(1.0)
+    assert payload["source"]["aggregation"] == "province_annual_species_frequency"
+    assert payload["source"]["excluded_taxonomy_observations"] == 10
+
+
+def test_write_province_assignments_creates_versioned_sidecar(tmp_path: Path):
+    path = tmp_path / "assignments.json"
+    write_province_assignments({"sample-1": "CN-ZJ"}, {"name": "fixture"}, "a" * 64, path)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["manifest_sha256"] == "a" * 64
+    assert payload["assignments"] == {"sample-1": "CN-ZJ"}
 
 
 def test_generated_prior_can_be_loaded(tmp_path: Path):
@@ -124,3 +297,5 @@ def test_prepare_inaturalist_prior_script_can_show_help():
     assert completed.returncode == 0
     assert "--candidate-manifest" in completed.stdout
     assert "--cutoff-date" in completed.stdout
+    assert "--region-mode" in completed.stdout
+    assert "--province-assignment-output" in completed.stdout

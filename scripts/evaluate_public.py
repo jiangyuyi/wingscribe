@@ -72,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=20260817)
     parser.add_argument("--limit", type=int, help="Evaluate a deterministic subset of N samples")
     parser.add_argument("--observed-on-from", help="Inclusive ISO date filter for iNaturalist manifests")
+    parser.add_argument(
+        "--province-assignments",
+        type=Path,
+        help="Versioned sample-to-province sidecar bound to the iNaturalist manifest",
+    )
     parser.add_argument("--prior-file", type=Path, help="Experimental versioned species-prior JSON")
     parser.add_argument("--prior-weight", type=float, default=0.25)
     parser.add_argument("--prior-location-confidence", type=float, default=1.0)
@@ -101,7 +106,11 @@ def main() -> int:
     else:
         if args.image_mode != "full":
             raise ValueError("iNaturalist manifests currently require --image-mode full")
-        dataset = load_inaturalist_manifest(args.root, observed_on_from=args.observed_on_from)
+        dataset = load_inaturalist_manifest(
+            args.root,
+            observed_on_from=args.observed_on_from,
+            province_assignments_path=args.province_assignments,
+        )
     if args.limit is not None:
         dataset = select_evaluation_subset(
             dataset,

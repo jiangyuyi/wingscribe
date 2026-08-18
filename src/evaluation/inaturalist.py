@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 import time
 from collections import defaultdict, deque
 from datetime import date, datetime, timezone
@@ -20,6 +21,7 @@ API_URL = "https://api.inaturalist.org/v1/observations"
 ALLOWED_LICENSES = frozenset({"cc0", "cc-by", "cc-by-sa"})
 ALLOWED_IMAGE_HOSTS = frozenset({"inaturalist-open-data.s3.amazonaws.com"})
 MANIFEST_SCHEMA_VERSION = 1
+PROVINCE_ASSIGNMENT_SCHEMA_VERSION = 1
 
 
 def _medium_photo_url(url: str) -> str:
@@ -333,11 +335,42 @@ def write_manifest(manifest: dict[str, Any], path: str | Path) -> None:
     temporary.replace(output)
 
 
+def _load_province_assignments(
+    path: str | Path,
+    *,
+    manifest_sha256: str,
+    manifest_sample_ids: set[str],
+) -> tuple[dict[str, str], dict[str, Any]]:
+    assignment_path = Path(path).expanduser().resolve()
+    try:
+        payload = json.loads(assignment_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DatasetFormatError(f"Unable to read province assignments: {assignment_path}") from exc
+    if payload.get("schema_version") != PROVINCE_ASSIGNMENT_SCHEMA_VERSION:
+        raise DatasetFormatError("Unsupported province assignment schema version")
+    if payload.get("manifest_sha256") != manifest_sha256:
+        raise DatasetFormatError("Province assignments do not match the iNaturalist manifest")
+    raw_assignments = payload.get("assignments")
+    if not isinstance(raw_assignments, dict):
+        raise DatasetFormatError("Province assignments must be an object")
+    assignments = {
+        str(sample_id).strip(): str(region_code).strip()
+        for sample_id, region_code in raw_assignments.items()
+    }
+    if (
+        any(not sample_id or sample_id not in manifest_sample_ids for sample_id in assignments)
+        or any(not re.fullmatch(r"CN-[A-Z]{2}", code) for code in assignments.values())
+    ):
+        raise DatasetFormatError("Province assignments contain an invalid sample or region code")
+    return assignments, dict(payload.get("source") or {})
+
+
 def load_inaturalist_manifest(
     path: str | Path,
     *,
     require_images: bool = True,
     observed_on_from: str | None = None,
+    province_assignments_path: str | Path | None = None,
 ) -> EvaluationDataset:
     manifest_path = Path(path).expanduser().resolve()
     try:
@@ -353,6 +386,19 @@ def load_inaturalist_manifest(
     if len(candidates) != len(set(candidates)):
         raise DatasetFormatError("Manifest candidate_labels contains duplicates")
     candidate_set = set(candidates)
+    manifest_hash = _sha256(manifest_path)
+    manifest_sample_ids = {
+        str(item.get("sample_id") or "").strip()
+        for item in manifest.get("samples") or []
+    }
+    province_assignments: dict[str, str] = {}
+    province_assignment_source: dict[str, Any] | None = None
+    if province_assignments_path is not None:
+        province_assignments, province_assignment_source = _load_province_assignments(
+            province_assignments_path,
+            manifest_sha256=manifest_hash,
+            manifest_sample_ids=manifest_sample_ids,
+        )
     samples: list[EvaluationSample] = []
     sample_ids: set[str] = set()
     root = manifest_path.parent.resolve()
@@ -391,6 +437,7 @@ def load_inaturalist_manifest(
                 metadata={
                     "observed_on": observed_on,
                     "month": int(observed_on[5:7]) if len(observed_on) >= 7 else None,
+                    "province": province_assignments.get(sample_id, ""),
                     "national": "CN",
                 },
             )
@@ -403,10 +450,17 @@ def load_inaturalist_manifest(
         samples=tuple(samples),
         candidate_labels=candidates,
         metadata={
-            "manifest_sha256": _sha256(manifest_path),
+            "manifest_sha256": manifest_hash,
             "source": manifest.get("source") or {},
             "selection": manifest.get("selection") or {},
             "observed_on_from": observed_on_from,
+            "province_assignments": {
+                "path": str(Path(province_assignments_path).resolve()),
+                "assigned_samples": len(province_assignments),
+                "source": province_assignment_source,
+            }
+            if province_assignments_path is not None
+            else None,
             "license_notice": "Each photo retains the license and attribution stored in the manifest.",
         },
     )

@@ -217,6 +217,43 @@ def test_load_inaturalist_manifest_validates_and_loads_offline_dataset(tmp_path:
     assert len(dataset.metadata["manifest_sha256"]) == 64
 
 
+def test_load_inaturalist_manifest_applies_hash_bound_province_assignments(tmp_path: Path):
+    manifest = build_manifest([_record(1, "A")], {}, sample_count=1)
+    manifest_path = tmp_path / "manifest.json"
+    write_manifest(manifest, manifest_path)
+    sidecar = tmp_path / "provinces.json"
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                "source": {"name": "fixture"},
+                "assignments": {manifest["samples"][0]["sample_id"]: "CN-ZJ"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    dataset = load_inaturalist_manifest(
+        manifest_path,
+        require_images=False,
+        province_assignments_path=sidecar,
+    )
+
+    assert dataset.samples[0].metadata["province"] == "CN-ZJ"
+    assert dataset.metadata["province_assignments"]["assigned_samples"] == 1
+
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload["manifest_sha256"] = "0" * 64
+    sidecar.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(DatasetFormatError, match="do not match"):
+        load_inaturalist_manifest(
+            manifest_path,
+            require_images=False,
+            province_assignments_path=sidecar,
+        )
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -282,6 +319,7 @@ def test_load_inaturalist_manifest_filters_observation_dates(tmp_path: Path):
     assert dataset.samples[0].metadata == {
         "observed_on": "2022-01-01",
         "month": 1,
+        "province": "",
         "national": "CN",
     }
 

@@ -75,3 +75,28 @@ def test_prior_batch_predictor_rejects_score_row_mismatch(tmp_path: Path):
 
     with pytest.raises(ValueError, match="score rows"):
         predictor.predict([sample], ["Alpha", "Beta"], top_k=1)
+
+
+def test_prior_batch_predictor_prefers_province_annual_over_national_month(tmp_path: Path):
+    provider = SpeciesPriorProvider(
+        [
+            PriorRecord("Alpha", "province", "CN-ZJ", None, 0.8),
+            PriorRecord("Beta", "province", "CN-ZJ", None, 0.2),
+            PriorRecord("Alpha", "national", "CN", 5, 0.1),
+            PriorRecord("Beta", "national", "CN", 5, 0.9),
+        ]
+    )
+    predictor = PriorBatchPredictor(_Recognizer(), provider, weight=1.0, max_adjustment=2.0)
+    sample = EvaluationSample(
+        "1",
+        tmp_path / "bird.jpg",
+        "Alpha",
+        "test",
+        metadata={"province": "CN-ZJ", "national": "CN", "month": 5},
+    )
+
+    results = predictor.predict([sample], ["Alpha", "Beta"], top_k=2)
+
+    assert results[0][0]["scientific_name"] == "Alpha"
+    assert results[0][0]["prior_source"]["region_level"] == "province"
+    assert results[0][0]["prior_source"]["month"] is None

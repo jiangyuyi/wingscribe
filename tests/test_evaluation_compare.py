@@ -132,6 +132,20 @@ def test_compare_reports_validates_disagreement_limit():
         compare_reports({"predictions": []}, {"predictions": []}, disagreement_limit=-1)
 
 
+@pytest.mark.parametrize("field", ["candidate_labels_sha256", "image_snapshot_sha256"])
+def test_compare_reports_rejects_different_shadow_fingerprints(field: str):
+    baseline = {"dataset": {field: "a"}, "predictions": []}
+    candidate = {"dataset": {field: "b"}, "predictions": []}
+
+    with pytest.raises(ReportFormatError, match=field):
+        compare_reports(baseline, candidate)
+
+
+def test_compare_reports_rejects_invalid_dataset_metadata():
+    with pytest.raises(ReportFormatError, match="dataset metadata"):
+        compare_reports({"dataset": "invalid"}, {"predictions": []})
+
+
 def test_compare_reports_respects_disagreement_limit():
     baseline = {
         "predictions": [

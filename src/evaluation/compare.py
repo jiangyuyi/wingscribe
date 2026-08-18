@@ -80,6 +80,20 @@ def compare_reports(
     if disagreement_limit < 0:
         raise ValueError("disagreement_limit must not be negative")
 
+    baseline_dataset = baseline_report.get("dataset") or {}
+    candidate_dataset = candidate_report.get("dataset") or {}
+    if not isinstance(baseline_dataset, dict) or not isinstance(candidate_dataset, dict):
+        raise ReportFormatError("dataset metadata must be an object")
+    for field in ("candidate_labels_sha256", "image_snapshot_sha256"):
+        baseline_fingerprint = baseline_dataset.get(field)
+        candidate_fingerprint = candidate_dataset.get(field)
+        if (
+            baseline_fingerprint
+            and candidate_fingerprint
+            and baseline_fingerprint != candidate_fingerprint
+        ):
+            raise ReportFormatError(f"Reports use different {field}")
+
     baseline = _prediction_index(baseline_report, "baseline")
     candidate = _prediction_index(candidate_report, "candidate")
     common_ids = sorted(baseline.keys() & candidate.keys())

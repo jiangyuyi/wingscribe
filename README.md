@@ -49,11 +49,24 @@ WingScribe 是一个专为鸟类摄影师打造的自动化管理流水线。它
 
 ## 📸 Web 界面预览
 
-![WebUI Preview](docs/webui_screenshot_placeholder.png)
+### 照片画廊与分类浏览
 
-![WebUI Preview](docs/webui_screenshot_placeholder2.png)
+![WingScribe 照片画廊、分类树与原图对比](docs/screenshots/gallery-overview.png)
 
-*支持物种分类筛选、动态翻页和原图对比功能。*
+按日期、物种分类和关键词快速筛选照片；卡片中可切换裁切图与原图，并直接查看识别结果、置信度及拍摄信息。
+
+### AI 候选与人工校对
+
+![WingScribe AI 候选物种与人工校对](docs/screenshots/species-correction.png)
+
+保留 Top-K 识别候选及置信度，既可一键采用 AI 备选，也可搜索 IOC 名录手动纠正；确认后自动同步分类、文件名与元数据。
+
+### 批处理与可视化配置
+
+| 批处理管理 | 系统配置 |
+| --- | --- |
+| ![WingScribe 批处理任务与实时日志](docs/screenshots/pipeline-admin.png) | ![WingScribe 本地 Web 配置界面](docs/screenshots/settings.png) |
+| 按日期范围或文件夹启动流水线，查看图库统计、任务状态和实时日志。 | 通过图形界面配置照片目录、输出目录及 Web 服务参数，无需手动编辑 YAML。 |
 
 ---
 

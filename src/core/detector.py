@@ -3,6 +3,7 @@ from ultralytics import YOLO
 import logging
 import torch
 import os
+import threading
 
 def _check_cuda_stable(max_retries: int = 3) -> bool:
     """
@@ -44,6 +45,8 @@ class BirdDetector:
         self.model_path = model_path  # Store for reloading
         self.reload_count = 0  # Track reloads to avoid infinite loop
         self._model = None  # Lazy load
+        self._model_lock = threading.Lock()
+        self._predict_lock = threading.Lock()
 
         # Determine device with careful checking
         if device == "auto":
@@ -74,7 +77,9 @@ class BirdDetector:
     def model(self):
         """Lazy load the model on first access."""
         if self._model is None:
-            self._load_model()
+            with self._model_lock:
+                if self._model is None:
+                    self._load_model()
         return self._model
 
     def _load_model(self):
@@ -94,35 +99,39 @@ class BirdDetector:
         _ = self.model
 
         try:
-            results = self.model.predict(
-                source=image_path,
-                conf=self.confidence,
-                verbose=False,
-                device=self.device
-            )
+            with self._predict_lock:
+                results = self.model.predict(
+                    source=image_path,
+                    conf=self.confidence,
+                    verbose=False,
+                    device=self.device
+                )
         except Exception as e:
             error_str = str(e)
             # Handle model compatibility errors - reload model once
             if "Conv" in error_str and "bn" in error_str:
                 if self.reload_count < 2:  # Limit reload attempts
                     self.reload_count += 1
-                    self._load_model()
-                    results = self.model.predict(
-                        source=image_path,
-                        conf=self.confidence,
-                        verbose=False,
-                        device=self.device
-                    )
+                    with self._model_lock:
+                        self._load_model()
+                    with self._predict_lock:
+                        results = self.model.predict(
+                            source=image_path,
+                            conf=self.confidence,
+                            verbose=False,
+                            device=self.device
+                        )
                 else:
                     return []
             elif "CUDA" in error_str and self.device != "cpu":
                 self.device = "cpu"
-                results = self.model.predict(
-                    source=image_path,
-                    conf=self.confidence,
-                    verbose=False,
-                    device="cpu"
-                )
+                with self._predict_lock:
+                    results = self.model.predict(
+                        source=image_path,
+                        conf=self.confidence,
+                        verbose=False,
+                        device="cpu"
+                    )
             else:
                 return []
 

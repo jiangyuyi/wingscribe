@@ -72,6 +72,7 @@ def test_recognize_batch_uses_supplied_candidate_labels(tmp_path):
 
     pipeline = MockPipeline()
     pipeline.recognizer = FakeRecognizer()
+    pipeline._recognizer_inference_lock = threading.Lock()
     pipeline.config = {"recognition": {"top_k": 3, "alternatives_threshold": 70, "low_confidence_threshold": 60}}
 
     archived = []
@@ -94,6 +95,21 @@ def test_recognize_batch_uses_supplied_candidate_labels(tmp_path):
     assert pipeline.recognizer.calls == [([str(crop_a), str(crop_b)], ["label-a", "label-b"], 3)]
     assert len(archived) == 2
     assert all(entry[2:] == (70, 60) for entry in archived)
+
+
+def test_drain_futures_counts_worker_failures(caplog):
+    class SuccessfulFuture:
+        def result(self):
+            return None
+
+    class FailedFuture:
+        def result(self):
+            raise RuntimeError("worker failed")
+
+    failures = MockPipeline._drain_futures([SuccessfulFuture(), FailedFuture()])
+
+    assert failures == 1
+    assert "Image processing worker failed" in caplog.text
 
 
 def test_process_image_keeps_candidate_labels_per_image(tmp_path, monkeypatch):
@@ -452,7 +468,7 @@ def test_run_processes_valid_entries_and_records_scan_history(tmp_path, monkeypa
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
@@ -528,7 +544,7 @@ def test_run_by_folders_uses_recursive_scanner_and_records_history(tmp_path, mon
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
@@ -611,7 +627,7 @@ def test_run_stops_submitting_new_tasks_when_stop_requested(tmp_path, monkeypatc
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
@@ -690,7 +706,7 @@ def test_run_by_folders_stops_submitting_new_tasks_when_stop_requested(tmp_path,
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)

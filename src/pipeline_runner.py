@@ -207,6 +207,8 @@ class WingScribePipeline:
         
         # Recognizer init lock
         self.batch_lock = threading.Lock()
+        self._recognizer_inference_lock = threading.Lock()
+        self._recognizer_init_error = None
         self.inference_batch_size = self.config.get('recognition', {}).get('local', {}).get('inference_batch_size', 16)
 
         # Existing hashes for fast deduplication (loaded on demand)
@@ -441,13 +443,17 @@ class WingScribePipeline:
             top_k = self.config.get('recognition', {}).get('top_k', 5)
             self._log_memory(f"before_recognize_batch items={len(items)} labels={len(candidate_labels)}")
 
-            if hasattr(self.recognizer, 'predict_batch'):
-                batch_results = self.recognizer.predict_batch(image_paths, candidate_labels, top_k=top_k)
-            else:
-                batch_results = [
-                    self.recognizer.predict(p, candidate_labels, top_k=top_k)
-                    for p in image_paths
-                ]
+            # The model and its cached text features are shared by worker threads.
+            # Serialize inference because OpenCLIP backends are not guaranteed to
+            # be thread-safe and concurrent CUDA calls can trigger reinitialization.
+            with self._recognizer_inference_lock:
+                if hasattr(self.recognizer, 'predict_batch'):
+                    batch_results = self.recognizer.predict_batch(image_paths, candidate_labels, top_k=top_k)
+                else:
+                    batch_results = [
+                        self.recognizer.predict(p, candidate_labels, top_k=top_k)
+                        for p in image_paths
+                    ]
             self._log_memory(f"after_recognize_batch items={len(items)} labels={len(candidate_labels)}")
 
             alt_threshold = self.config.get('recognition', {}).get('alternatives_threshold', 70)
@@ -460,6 +466,7 @@ class WingScribePipeline:
             for item in items:
                 try: os.remove(item['crop_path'])
                 except: pass
+            raise
 
     def _archive_item(self, item, results, alt_threshold, low_conf_threshold):
         entry = item['entry']
@@ -630,14 +637,27 @@ class WingScribePipeline:
             detections = self.detector.detect(local_source_path)
         except Exception as e:
             logging.error(f"Detection failed for {entry.name}: {e}")
-            return
+            raise
             
         if not detections: return
         
         # Init recognizer if needed (double check locking if lazily init)
         if self.recognizer is None: 
             with self.batch_lock:
-                if self.recognizer is None: self._init_recognizer()
+                if self.recognizer is None:
+                    if self._recognizer_init_error is not None:
+                        raise RuntimeError(
+                            "Recognizer initialization previously failed in this pipeline run"
+                        ) from self._recognizer_init_error
+                    try:
+                        self._init_recognizer()
+                    except Exception as exc:
+                        self._recognizer_init_error = exc
+                        logging.error(
+                            "Recognizer initialization failed; remaining images will be skipped",
+                            exc_info=True,
+                        )
+                        raise
 
         # 3. Candidate labels for this image only.
         location_tag = meta.get('location_tag', 'Unknown')
@@ -750,6 +770,18 @@ class WingScribePipeline:
         return True, result
 
     @staticmethod
+    def _drain_futures(futures) -> int:
+        """Collect worker exceptions so a scan cannot report false success."""
+        failures = 0
+        for future in futures:
+            try:
+                future.result()
+            except Exception:
+                failures += 1
+                logging.error("Image processing worker failed", exc_info=True)
+        return failures
+
+    @staticmethod
     def _calculate_bird_pixel_ratio(box, image_width: int, image_height: int) -> float | None:
         if image_width <= 0 or image_height <= 0 or box is None or len(box) < 4:
             return None
@@ -763,6 +795,7 @@ class WingScribePipeline:
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
         stop_requested = False
+        worker_failures = 0
 
         # Use provided hashes or load from database
         if existing_hashes is not None:
@@ -885,6 +918,7 @@ class WingScribePipeline:
                     # Prevent memory explosion from too many futures
                     if len(futures) > 500:
                         done, not_done = wait(futures, timeout=0.1)
+                        worker_failures += self._drain_futures(done)
                         futures = list(not_done)
 
                 if stop_requested:
@@ -893,6 +927,7 @@ class WingScribePipeline:
             # Wait for all tasks to complete
             if futures:
                 wait(futures)
+                worker_failures += self._drain_futures(futures)
 
         t_end = time.time()
         duration = t_end - t_start
@@ -905,10 +940,19 @@ class WingScribePipeline:
             'range_end': end_date or "All",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
-            'status': 'Stopped' if stop_requested else 'Completed'
+            'status': (
+                'Stopped'
+                if stop_requested
+                else ('Failed' if worker_failures else 'Completed')
+            )
         })
         if stop_requested:
             logging.info(f"Pipeline stopped by request. Processed: {processed_count}. Duration: {duration:.2f}s")
+        elif worker_failures:
+            logging.error(
+                f"Pipeline failed for {worker_failures} image task(s). "
+                f"Submitted: {processed_count}. Duration: {duration:.2f}s"
+            )
         else:
             logging.info(f"Pipeline completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 
@@ -924,6 +968,7 @@ class WingScribePipeline:
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
         stop_requested = False
+        worker_failures = 0
 
         # Ensure existing_hashes is loaded
         if self.existing_hashes is None:
@@ -1050,6 +1095,7 @@ class WingScribePipeline:
                     # Prevent memory explosion
                     if len(futures) > 500:
                         done, not_done = wait(futures, timeout=0.1)
+                        worker_failures += self._drain_futures(done)
                         futures = list(not_done)
 
                 if stop_requested:
@@ -1058,6 +1104,7 @@ class WingScribePipeline:
             # Wait for all tasks to complete
             if futures:
                 wait(futures)
+                worker_failures += self._drain_futures(futures)
 
         t_end = time.time()
         duration = t_end - t_start
@@ -1070,10 +1117,19 @@ class WingScribePipeline:
             'range_end': "",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
-            'status': 'Stopped' if stop_requested else 'Completed'
+            'status': (
+                'Stopped'
+                if stop_requested
+                else ('Failed' if worker_failures else 'Completed')
+            )
         })
         if stop_requested:
             logging.info(f"Pipeline (by folders) stopped by request. Processed: {processed_count}. Duration: {duration:.2f}s")
+        elif worker_failures:
+            logging.error(
+                f"Pipeline (by folders) failed for {worker_failures} image task(s). "
+                f"Submitted: {processed_count}. Duration: {duration:.2f}s"
+            )
         else:
             logging.info(f"Pipeline (by folders) completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 

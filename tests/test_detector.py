@@ -11,6 +11,8 @@ Tests cover:
 import sys
 import os
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 import pytest
 from PIL import Image
 from unittest.mock import patch, MagicMock
@@ -94,6 +96,25 @@ class TestBirdDetector:
             assert detector._model is None
             # Accessing .model property should trigger load
             # Note: This will attempt to load YOLO model, which may download weights
+
+    def test_lazy_load_model_is_thread_safe(self):
+        """Concurrent first access should initialize the detector only once."""
+        with patch('torch.cuda.is_available', return_value=False):
+            detector = BirdDetector("yolo26n.pt")
+
+        load_calls = []
+
+        def fake_load_model():
+            time.sleep(0.02)
+            load_calls.append(True)
+            detector._model = object()
+
+        with patch.object(detector, '_load_model', side_effect=fake_load_model):
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                models = list(executor.map(lambda _: detector.model, range(4)))
+
+        assert len(load_calls) == 1
+        assert len({id(model) for model in models}) == 1
 
     @patch('torch.cuda.is_available')
     def test_confidence_threshold(self, mock_is_available):

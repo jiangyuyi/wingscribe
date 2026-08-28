@@ -93,11 +93,8 @@ class LocalBirdRecognizer(BirdRecognizer):
         if hf_mirror:
             os.environ['HF_ENDPOINT'] = hf_mirror
             os.environ['HF_HUB_URL'] = hf_mirror
-            # Also try the newer HFTransfer method
-            try:
-                os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
-            except:
-                pass
+            # Use the current Xet transfer switch when supported by huggingface_hub.
+            os.environ['HF_XET_HIGH_PERFORMANCE'] = '1'
             logging.info(f"Using HuggingFace mirror: {hf_mirror}")
 
         if device is None or device == "auto":
@@ -154,6 +151,34 @@ class LocalBirdRecognizer(BirdRecognizer):
             self.device,
         )
 
+    def _resolve_hf_checkpoint(self, local_dir: Path) -> Path | None:
+        """Materialize a Hub checkpoint locally, avoiding Windows cache symlinks."""
+        if not self.model_id.startswith("hf-hub:"):
+            return None
+
+        from huggingface_hub import hf_hub_download
+
+        repo_id = self.model_id[len("hf-hub:"):]
+        errors = []
+        for filename in ("open_clip_model.safetensors", "open_clip_pytorch_model.bin"):
+            kwargs = {
+                "repo_id": repo_id,
+                "filename": filename,
+                "local_dir": str(local_dir),
+            }
+            if getattr(self, "hf_mirror", None):
+                kwargs["endpoint"] = self.hf_mirror
+
+            try:
+                checkpoint = Path(hf_hub_download(**kwargs))
+                if not checkpoint.is_file() or checkpoint.stat().st_size <= 0:
+                    raise OSError(f"Downloaded checkpoint is not a usable file: {checkpoint}")
+                return checkpoint
+            except Exception as exc:
+                errors.append(f"{filename}: {exc}")
+
+        raise OSError("; ".join(errors))
+
     def _load_model(self):
         import gc
         # Pre-emptive cleanup to avoid VRAM fragmentation causing spikes
@@ -204,6 +229,22 @@ class LocalBirdRecognizer(BirdRecognizer):
         )
         ckpt_path = next((path for path in local_checkpoints if path.exists()), local_checkpoints[-1])
         use_local = ckpt_path.exists()
+
+        if not use_local:
+            try:
+                cached_checkpoint = self._resolve_hf_checkpoint(local_model_path)
+                if cached_checkpoint is not None:
+                    ckpt_path = cached_checkpoint
+                    use_local = True
+                    logging.info(
+                        f"Loading cached Hub checkpoint locally: {ckpt_path} "
+                        f"(Precision: {precision})"
+                    )
+            except Exception as e:
+                logging.warning(
+                    "Could not resolve a local Hub checkpoint; falling back to open_clip HF loading: %s",
+                    e,
+                )
 
         try:
             try:

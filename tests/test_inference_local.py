@@ -41,7 +41,33 @@ def test_init_sets_hf_mirror_and_falls_back_to_cpu(monkeypatch):
     assert recognizer.model_id == "hf-hub:imageomics/bioclip-2"
     assert os.environ["HF_ENDPOINT"] == "https://mirror.example"
     assert os.environ["HF_HUB_URL"] == "https://mirror.example"
-    assert os.environ["HF_HUB_ENABLE_HF_TRANSFER"] == "1"
+    assert os.environ["HF_XET_HIGH_PERFORMANCE"] == "1"
+
+
+def test_resolve_hf_checkpoint_materializes_local_file(monkeypatch, tmp_path: Path):
+    recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
+    recognizer.model_id = "hf-hub:imageomics/bioclip-2"
+    recognizer.hf_mirror = "https://mirror.example"
+    calls = {}
+
+    def fake_download(**kwargs):
+        calls.update(kwargs)
+        checkpoint = Path(kwargs["local_dir"]) / kwargs["filename"]
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_bytes(b"weights")
+        return str(checkpoint)
+
+    monkeypatch.setattr("huggingface_hub.hf_hub_download", fake_download)
+
+    checkpoint = recognizer._resolve_hf_checkpoint(tmp_path / "model")
+
+    assert checkpoint == tmp_path / "model" / "open_clip_model.safetensors"
+    assert calls == {
+        "repo_id": "imageomics/bioclip-2",
+        "filename": "open_clip_model.safetensors",
+        "local_dir": str(tmp_path / "model"),
+        "endpoint": "https://mirror.example",
+    }
 
 
 def test_init_rejects_unknown_model_before_loading(monkeypatch):
@@ -200,6 +226,7 @@ def test_load_model_restores_logging_levels_after_failure(monkeypatch, tmp_path:
             raise RuntimeError("boom")
 
     monkeypatch.setattr("src.recognition.inference_local._get_open_clip", lambda: FakeOpenClip())
+    monkeypatch.setattr(recognizer, "_resolve_hf_checkpoint", lambda local_dir: None)
     monkeypatch.setattr("torch.cuda.is_available", lambda: False)
     monkeypatch.chdir(tmp_path)
 

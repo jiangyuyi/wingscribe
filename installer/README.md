@@ -23,12 +23,14 @@
 
 ## 标准构建流程
 
+以下 `1.0.0` 仅为示例，构建与编译必须替换成相同的目标版本。直接运行 `iscc` 不会自动读取 `version.txt`，须显式传 `/DAppVersion`。
+
 ### CPU
 
 ```powershell
 cd installer
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode cpu -Version 1.0.0
-iscc .\installer.iss
+iscc /DAppVersion=1.0.0 .\installer.iss
 ```
 
 产物：`Output/WingScribe-Setup-CPU-<version>.exe`
@@ -38,7 +40,7 @@ iscc .\installer.iss
 ```powershell
 cd installer
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode gpu -Version 1.0.0
-iscc .\installer-gpu.iss
+iscc /DAppVersion=1.0.0 .\installer-gpu.iss
 ```
 
 产物：`Output/WingScribe-Setup-GPU-<version>.exe`
@@ -106,3 +108,11 @@ GPU 包包含 CUDA 版 PyTorch 及相关运行时，体积显著大于 CPU 包�
 - `build.ps1 -Version <x.y.z>` 会写入 `installer/version.txt`
 - `.iss` 通过 `AppVersion` 生成同版本文件名
 - 需保证构建参数版本号与发布版本一致（本地/CI 同规则）
+
+## 发布与素材
+
+CPU/GPU 共用 [发布验收清单](../docs/development/release-checklist.md)。当前运行时是 embedded Python 加预装依赖，不打包开发机 venv。
+
+快捷方式图标引用 `src/web/static/favicon.ico`；现有 `.iss` 未引用旧素材说明中的 `assets/app-icon.ico`、`wizard-side.bmp` 或 `wizard-small.bmp`，这些不作为构建必需文件。
+
+根 README 的完整文档在 [项目仓库](https://github.com/jiangyuyi/wingscribe/tree/master/docs)，当前构建未打包整个 docs 目录。

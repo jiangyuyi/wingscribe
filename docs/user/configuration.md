@@ -1,6 +1,6 @@
 # WingScribe 配置指南
 
-本文档详细介绍了 WingScribe 的各项配置选项。系统主要使用 `config/` 目录下的两个 YAML 文件进行配置：
+核对日期：2026-10-16。以下以代码实际读取为准；表中数值是配置示例，不保证所有缺省回退相同。系统主要使用 `config/` 目录下的两个 YAML 文件进行配置：
 
 1.  `settings.yaml`: 主配置文件，包含路径、处理逻辑和应用行为设置。
 2.  `secrets.yaml`: 安全配置文件，用于存储 API 密钥（此文件不会被 Git 追踪）。
@@ -13,9 +13,9 @@
 
 控制 WingScribe 从哪里读取图片以及将结果保存到何处。
 
-**重要变更**：自某个版本起，路径配置进行了简化：
+**路径约定**：所有命令在项目根目录运行：
 - `sources.path` 和 `output.root_dir` 使用**绝对路径**
-- 其他相对路径（`references_path`, `ioc_list_path`, `model_cache_dir`）相对于**项目根目录**（即 `start_web.bat` 所在目录）
+- 其他相对路径（`references_path`, `ioc_list_path`, `model_cache_dir`）相对于**项目根目录**（包含 `src/` 与 `config/` 的目录）
 - 移除了 `base_dir` 配置项
 
 | 参数 | 描述 | 默认值 / 示例 |
@@ -36,30 +36,33 @@
     *   *默认*: 使用内部逻辑猜测 `YYYYMMDD_地点` 格式。
     *   *自定义*: 使用命名组 `(?P<date>...)` 和 `(?P<location>...)`。
 
+以下片段应放在 `paths` 下：
+
 ```yaml
-sources:
-  - path: "D:/Photos/Birds/2026"
-    recursive: true
-    enabled: true
-    # 示例：匹配 "2024-01-27 [奥森公园]" 这样的文件夹
-    structure_pattern: "(?P<date>\\d{4}-\\d{2}-\\d{2}) \\[(?P<location>.*)\\]"
+paths:
+  sources:
+    - path: "D:/Photos/Birds/2026"
+      recursive: true
+      enabled: true
 ```
+
+自定义正则的日期输出须与路径解析逻辑匹配，先用测试目录验证。
 
 #### 输出配置 (`paths.output`)
 
 | 参数 | 描述 |
 | :--- | :--- |
 | `root_dir` | 处理后图片的保存目录（**必填，绝对路径**，如 `D:/Photos/Birds/Output`）。 |
-| `write_back_to_source` | `true`: 将 EXIF 数据直接写回**源文件**。`false` (默认): 仅修改复制到 `root_dir` 的文件。 |
+| `write_back_to_source` | `true`: 将 EXIF 数据直接写回**源文件**。`false` (默认): 自动流水线不写原图。人工校对当前仍会写原图，详见 [项目状态](../development/status.md)。 |
 | `structure_template` | 定义处理后图片的文件夹结构和文件名格式。 |
 
 **模板变量:**
-*   `{date}`, `{year}`, `{month}`, `{day}`: 从文件夹名或 EXIF 获取的日期。
+*   `{date}`, `{year}`, `{month}`, `{day}`: 路径解析元数据中的日期；不要据此假定已经采集秒级 EXIF 时间。
 *   `{location}`: 从文件夹名获取的地点。
 *   `{species_cn}`: 鸟种中文名 (例如 "麻雀")。
 *   `{species_sci}`: 拉丁学名 (例如 "Passer montanus")。
-*   `{confidence}`: 识别置信度 (0-100)。
-*   `{filename}`: 原始文件名。
+*   `{confidence}`: 置信度字符串，例如 `85pct`。
+*   `{filename}`: 原始文件名的主干，不含扩展名。
 *   `{source_structure}`: 保留源目录的相对层级结构。
 
 ---
@@ -71,14 +74,14 @@ sources:
 | 参数 | 描述 | 默认值 |
 | :--- | :--- | :--- |
 | `device` | 硬件加速。选项: `cuda` (NVIDIA GPU), `cpu`, `auto` (自动检测)。 | `auto` |
-| `yolo_model` | YOLO 检测模型文件名。推荐使用 `yolo26n.pt`（精度最高、推理最快）。 | `yolo26n.pt` |
+| `yolo_model` | YOLO 检测模型路径，不作跨模型性能保证。 | `data/models/yolo26n.pt` |
 | `confidence_threshold` | **检测**鸟类目标的最低置信度 (0-1)。 | `0.5` |
-| `blur_threshold` | 拉普拉斯方差阈值。低于此分数的图片会被标记为模糊并跳过。推荐值 40-100。 | `40.0` |
+| `blur_threshold` | 拉普拉斯方差阈值。仅在 `legacy_reject` 下用于跳过模糊图片；小于等于 0 时该模式不计算质量。 | `40.0` |
 | `quality_mode` | 质量处理模式。`legacy_reject` 保持原有模糊过滤；`score_only` 只计算质量指标而不跳过；`disabled` 关闭质量计算。 | `legacy_reject` |
 | `target_size` | 识别前裁切图的缩放尺寸 (像素)。 | `640` |
 | `crop_padding` | 在检测到的鸟类方框周围额外保留的像素。 | `200` |
 
-在 `legacy_reject` 和 `score_only` 模式下，新处理照片会把综合质量分及完整子指标保存到数据库，便于后续审计；`disabled` 及升级前的历史照片保持空值。当前质量分不会参与物种排序，也不会额外删除照片。
+在启用质量计算的 `legacy_reject`（阈值大于 0）和 `score_only` 模式下，新处理照片会把综合质量分及完整子指标保存到数据库，便于后续审计；`disabled` 及升级前的历史照片保持空值。当前质量分不会参与物种排序，也不会额外删除照片。
 
 ---
 
@@ -88,7 +91,7 @@ sources:
 
 | 参数 | 描述 | 选项 |
 | :--- | :--- | :--- |
-| `mode` | 使用的识别引擎。 | `local` (BioCLIP 本地), `api` (HuggingFace API), `dongniao` (懂鸟 API) |
+| `mode` | 使用的识别引擎。 | `local` (BioCLIP 本地), `api` (旧式 API 客户端，需配置 URL/key), `dongniao` (懂鸟 API) |
 | `region_filter` | 候选词过滤器。`auto` 会根据文件夹名关键词自动切换。 | `null` (全球), `china` (仅中国分布), `auto` |
 | `top_k` | 保存的备选物种数量。 | `5` |
 | `alternatives_threshold` | 如果首选结果置信度高于此值 (0-100)，Web 界面将不显示备选建议（认为非常可信）。 | `70` |
@@ -99,14 +102,16 @@ sources:
 
 **本地模型 (BioCLIP):**
 ```yaml
-local:
-  # bioclip-2.5-vith14 仅用于实验，完成目标硬件基准前不要替换默认值
-  model_type: "bioclip-2"     # 推荐使用 "bioclip-2" 以获得更高精度
-  batch_size: 512              # 文本编码批次大小 (通常不需要修改)
-  inference_batch_size: 16     # 图片推理批次大小，如果显存不足(低于 8G)请调小
+recognition:
+  local:
+    # 2.5 保持实验选项；显式指定模型，避免缺省回退差异
+    model_type: "bioclip-2"
+    inference_batch_size: 16
 ```
 
-支持的本地模型为 `bioclip`、`bioclip-2` 和实验性的 `bioclip-2.5-vith14`。未知名称会直接报错，不再静默回退到其他模型。
+支持的本地模型为 `bioclip`、`bioclip-2` 和实验性的 `bioclip-2.5-vith14`。未知名称会直接报错。请显式设置 `recognition.local.model_type`：样例使用 `bioclip-2`，但流水线缺少该项时回退 `bioclip`。样例中的 `local.batch_size` 暂未接入读取，文本编码批次在代码中固定为 512。
+
+进一步代码核查发现：`local.inference_batch_size` 虽被读取，当前流水线没有使用它切分批次。因此不能承诺调小此值可降低显存；示例保留该配置，但其实现缺口见 [项目状态](../development/status.md)。
 
 ---
 
@@ -124,24 +129,23 @@ local:
 
 此文件保存您的 API 密钥。默认情况下不存在此文件，您需要手动创建。
 
-### 结构
+### 流水线密钥结构
 
 ```yaml
-# HuggingFace API (仅当 recognition.mode 为 'api' 时需要)
-hf_api_key: "hf_..."
-
-# 懂鸟 API (仅当 recognition.mode 为 'dongniao' 时需要)
-dongniao_api_key: "your_key..."
+recognition:
+  api:
+    key: "填写服务密钥"
+    url: "填写与旧式 API 客户端协议匹配的服务 URL"
+  dongniao:
+    key: "填写懂鸟密钥"
+    url: "填写实际懂鸟服务 URL"
 ```
 
----
+根据所选模式只填写所需部分。旧 secrets 样例中的顶层 `hf_api_key` 和 `dongniao_api_key` 不供流水线实际读取。统一 REST 云适配器使用 `cloud.*` 结构，见 [识别 API](../reference/recognition-api.md)。
 
-## 3. 环境变量
+## 3. 启动参数
 
-您也可以使用环境变量覆盖部分设置（适用于 Docker/云环境）：
-
-*   `WS_PORT`: Web 服务器端口 (默认: 8000)
-*   `WS_HOST`: Web 服务器主机 (默认: 0.0.0.0)
+Web 入口支持 `python src/web/app.py --host 127.0.0.1 --port 8000`，命令行参数优先于 `web.host/port`。当前代码没有读取 `WS_HOST` / `WS_PORT`，不再将其列为可用覆盖方式。
 
 ---
 
@@ -186,7 +190,6 @@ recognition:
   hf_mirror: "https://hf-mirror.com"
   local:
     model_type: "bioclip-2"
-    batch_size: 512
     inference_batch_size: 16
 
 web:
@@ -234,7 +237,6 @@ recognition:
   hf_mirror: "https://hf-mirror.com"
   local:
     model_type: "bioclip-2"
-    batch_size: 512
     inference_batch_size: 16
 
 web:

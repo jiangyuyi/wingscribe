@@ -25,6 +25,9 @@ tests/__pycache__/
 evaluation_results/
 .codex-tmp/
 
+# Personal AI conversation exports are local research material, not project docs.
+docs/archive/conversations/
+
 # YOLO model files (auto-downloaded by Ultralytics)
 *.pt
 !installer/models/

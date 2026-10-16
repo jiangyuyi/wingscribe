@@ -1,3 +1,5 @@
+> 历史档案：保留当时的判断、计划和测试记录，不代表当前状态。现行边界与待办见 [项目状态](../../development/status.md)。历史命令、行号和路径不作为操作指南。
+
 # Code Audit Progress 2026-03-23
 
 ## This round

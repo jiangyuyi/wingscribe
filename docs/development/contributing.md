@@ -1,6 +1,6 @@
 # 开发、测试与文档维护
 
-协作约定以根目录 [AGENTS.md](../../AGENTS.md) 为准。使用 Python 3.11 环境，在仓库根目录安装 `requirements.txt` 后运行：
+协作约定以根目录 [AGENTS.md](../../AGENTS.md) 为准。先按 [环境说明](environment.md) 安装锁定依赖并激活对应 Python 环境，在仓库根目录运行：
 
 ```powershell
 python -m pytest

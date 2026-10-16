@@ -1,0 +1,21 @@
+{
+  "version": "AviList-v2025b",
+  "species_count": 11131,
+  "source_url": "https://www.avilist.org/wp-content/uploads/2026/06/AviList-v2025b-10Jun2026-extended.xlsx",
+  "source_sha256": "2e1fd3374e23af732b04115b033dd9d97fc53ba275c312d02ef5d12cfb85c988",
+  "catalogue_sha256": "291535dc1a196ba281340c917c64f4470c8a5c92dcbb7d87b5fe3bc9753d0984",
+  "citation": "AviList Core Team. 2026. AviList: The Global Avian Checklist, v2025b. https://doi.org/10.2173/avilist.v2025b",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "name_sources_sha256": {
+    "Multiling IOC 15.1_d.xlsx": "9311efc37dea484c4230e49fdb705a9ce4ac0f509d2a5f3d4bc6652d268d2d61",
+    "bird_order_mapping_complete.csv": "901da666f6097e832712d5177f1ff4560092db8889e15b3899573577fdc56f26",
+    "bird_family_mapping_complete.csv": "2a6bcefb54fe8ea556bbb632bb226c5a2415b1e3e69a01768f26b40d6e35df89",
+    "bird_genus_mapping_complete.csv": "b14487628064000a0e496103b8dd93df951f0fe92115d72892d622a8a8517799"
+  },
+  "name_status_counts": {
+    "IOC-15.1 Chinese; exact-name alias; concept unverified": 10983,
+    "scientific-name fallback": 148
+  },
+  "transform": "species rows only; original order; IOC same-name Chinese display aliases; existing Chinese rank CSVs; no photo-label equivalence inferred"
+}

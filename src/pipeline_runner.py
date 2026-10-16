@@ -16,6 +16,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(PROJECT_ROOT)
 
 from src.metadata.ioc_manager import IOCManager
+from src.metadata.taxonomy_catalogue import ensure_taxonomy, current_release
 from src.core.detector import BirdDetector
 from src.core.quality import QualityEvaluator, QualityResult
 from src.core.processor import ImageProcessor
@@ -329,47 +330,9 @@ class WingScribePipeline:
         return f"{size}_{sha256.hexdigest()}"
 
     def _get_taxonomy_labels(self):
-        # Check if DB is empty
-        cursor = self.db.conn.execute("SELECT count(*) FROM taxonomy")
-        count = cursor.fetchone()[0]
-
-        if count == 0:
-            logging.warning("Taxonomy table is empty! Attempting auto-import from Excel...")
-
-            # Try to find IOC Excel file
-            refs_dir = Path(self.config['paths'].get('references_path', 'data/references'))
-            excel_file = None
-
-            # First try configured path (with quotes handling for spaces)
-            configured_path = self.config['paths'].get('ioc_list_path', '')
-            if configured_path:
-                p = Path(configured_path)
-                if p.exists():
-                    excel_file = p
-                    logging.info(f"Using configured IOC file: {excel_file}")
-
-            # If not found, search in references directory for Multiling IOC file
-            if excel_file is None and refs_dir.exists():
-                for f in sorted(refs_dir.glob("*.xlsx")):
-                    # Look for Multiling IOC files (they have the correct format)
-                    name_lower = f.name.lower()
-                    if 'multiling' in name_lower and 'ioc' in name_lower:
-                        excel_file = f
-                        logging.info(f"Found IOC file: {excel_file}")
-                        break
-
-            if excel_file and excel_file.exists():
-                try:
-                    refs_dir = str(self.config['paths'].get('references_path', 'data/references'))
-                    self.db.import_from_excel(str(excel_file), refs_dir=refs_dir)
-                    # Verify import
-                    cursor = self.db.conn.execute("SELECT count(*) FROM taxonomy")
-                    count = cursor.fetchone()[0]
-                    logging.info(f"Auto-import completed. Taxonomy count: {count}")
-                except Exception as e:
-                    logging.error(f"Failed to import Excel: {e}")
-            else:
-                logging.error(f"IOC Excel file not found. Searched: {refs_dir}")
+        ensure_taxonomy(self.db, self.config)
+        release = current_release(self.db.conn)
+        self.taxonomy_version = release["version"] if release else "legacy-unversioned"
 
         # Fetch all scientific names from taxonomy table
         cursor = self.db.conn.execute("SELECT scientific_name FROM taxonomy")
@@ -379,6 +342,13 @@ class WingScribePipeline:
 
     def _select_candidate_labels(self, location_tag: str):
         mode = self.config.get('recognition', {}).get('region_filter')
+        if (mode in {'china', 'auto'}
+                and getattr(self, 'taxonomy_version', '').startswith('AviList-')
+                and self.config.get('paths', {}).get('china_list_taxonomy_version') != self.taxonomy_version):
+            if not getattr(self, '_warned_unversioned_china_list', False):
+                logging.warning("China allowlist has no matching taxonomy version; using full AviList candidates to avoid excluding renamed/split species")
+                self._warned_unversioned_china_list = True
+            return self.all_labels
         
         if mode == 'china':
             if not self.china_allowlist:

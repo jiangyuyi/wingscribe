@@ -9,7 +9,7 @@
 | 安装、启动、首次处理、排错 | [安装与使用](user/getting-started.md) |
 | 配置字段、路径与写回行为 | [配置指南](user/configuration.md) |
 | 网络照片目录 | [NAS 设置](user/nas.md) |
-| IOC 名录与中文目科属 | [分类数据](user/taxonomy.md) |
+| AviList 名录与中文显示名 | [分类数据](user/taxonomy.md) |
 | 模块职责与数据流 | [架构](development/architecture.md) |
 | 当前能力、实现缺口、后续事项 | [项目状态](development/status.md) |
 | 是否重写与分阶段改造 | [工程评估与改造计划](development/modernization-plan-2026-10-16.md) |

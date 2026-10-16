@@ -11,7 +11,7 @@
 | `src/core/io/` | 文件访问、路径解析与生成、临时文件管理 |
 | `src/recognition/inference_*.py` | 流水线使用的本地和旧式 API 识别器 |
 | `src/recognition/cloud/`、`protocol.py`、`batch.py` | 统一请求协议、云适配器和批任务服务 |
-| `src/metadata/` | IOC/SQLite、ExifTool 写入、地点解析 |
+| `src/metadata/` | AviList/旧 IOC 数据、SQLite、ExifTool 写入、地点解析 |
 | `src/web/app.py` | FastAPI 入口、路由、人工校对逻辑 |
 | `src/web/*_service.py` | 配置、任务、管理、分类查询、地点预览服务 |
 | `src/web/path_helpers.py` | 多源原图和处理图的 Web 路径解析 |

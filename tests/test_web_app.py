@@ -668,6 +668,12 @@ def test_reset_system_clears_processed_and_reimports_taxonomy(tmp_path, monkeypa
             self.closed = True
 
     manager = StubManager()
+    def bootstrap_taxonomy(mgr, config, root):
+        assert mgr is manager
+        assert root == base_dir
+        mgr.import_calls.append("AviList")
+
+    monkeypatch.setattr("src.web.admin_service.ensure_taxonomy", bootstrap_taxonomy)
     monkeypatch.setattr(web_app, "BASE_DIR", base_dir)
     monkeypatch.setattr(web_app, "processed_dir", processed_root)
     monkeypatch.setattr(web_app, "db_path", db_file)
@@ -689,12 +695,7 @@ def test_reset_system_clears_processed_and_reimports_taxonomy(tmp_path, monkeypa
 
     assert result == {"status": "success"}
     assert init_calls == ["called"]
-    assert manager.import_calls == [
-        (
-            str(base_dir / "data/references/ioc.xlsx"),
-            str(base_dir / "data/references"),
-        )
-    ]
+    assert manager.import_calls == ["AviList"]
     assert manager.closed is True
     assert list(processed_root.iterdir()) == []
     assert not db_file.exists()

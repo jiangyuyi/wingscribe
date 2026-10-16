@@ -2,6 +2,7 @@ import gc
 import os
 import shutil
 from pathlib import Path
+from src.metadata.taxonomy_catalogue import ensure_taxonomy
 
 
 def admin_dashboard(request, templates, is_paths_configured, get_stats):
@@ -93,12 +94,7 @@ def reset_system(config, base_dir, db_path, processed_dir, init_app_db, create_d
 
         mgr = create_db_manager()
         try:
-            if mgr.conn.execute("SELECT count(*) FROM taxonomy").fetchone()[0] == 0:
-                refs_dir = str(base_dir / config["paths"]["references_path"])
-                mgr.import_from_excel(
-                    str(base_dir / config["paths"]["ioc_list_path"]),
-                    refs_dir=refs_dir,
-                )
+            ensure_taxonomy(mgr, config, base_dir)
         finally:
             mgr.close()
 

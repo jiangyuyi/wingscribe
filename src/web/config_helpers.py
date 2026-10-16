@@ -49,13 +49,13 @@ def get_config_definition():
                 {
                     "key": "references_path",
                     "label": "参考数据目录",
-                    "description": "IOC 鸟类名录等参考文件",
+                    "description": "AviList 名录及中文显示名来源文件",
                     "type": "directory",
                 },
                 {
-                    "key": "ioc_list_path",
-                    "label": "IOC 鸟类名录",
-                    "description": "Excel 格式的鸟类分类数据",
+                    "key": "taxonomy_catalogue_path",
+                    "label": "AviList 物种名录",
+                    "description": "固定版本 CSV 及同名 JSON 校验文件；留空使用内置名录",
                     "type": "file",
                 },
                 {

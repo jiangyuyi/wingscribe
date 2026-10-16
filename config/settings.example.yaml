@@ -32,7 +32,8 @@ paths:
   # db_path: "data/db/wingscribe.db"
 
   # IOC 鸟类分类数据 Excel 文件路径（相对于项目根目录）
-  ioc_list_path: "data/references/Multiling IOC 15.1_d.xlsx"
+  taxonomy_catalogue_path: "data/references/avilist-v2025b.csv"
+  # Legacy IOC files are retained only as name sources and for historical research.
 
   # 模型缓存目录（相对于项目根目录）
   # 存放下载的 YOLO、BioCLIP 等模型文件

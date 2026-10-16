@@ -15,7 +15,7 @@
 
 **路径约定**：所有命令在项目根目录运行：
 - `sources.path` 和 `output.root_dir` 使用**绝对路径**
-- 其他相对路径（`references_path`, `ioc_list_path`, `model_cache_dir`）相对于**项目根目录**（包含 `src/` 与 `config/` 的目录）
+- 其他相对路径（`references_path`, `taxonomy_catalogue_path`, `model_cache_dir`）相对于**项目根目录**（包含 `src/` 与 `config/` 的目录）
 - 移除了 `base_dir` 配置项
 
 | 参数 | 描述 | 默认值 / 示例 |
@@ -24,7 +24,7 @@
 | `output.root_dir` | 处理后图片的保存目录（**必填，绝对路径**）。 | `D:/Photos/Birds/Output` |
 | `references_path` | 参考数据目录（相对于项目根目录）。 | `data/references` |
 | `db_path` | SQLite 数据库文件路径（相对于项目根目录）。 | `data/db/wingscribe.db` |
-| `ioc_list_path` | IOC 世界鸟类名录 Excel 文件路径（相对于项目根目录）。 | `data/references/Multiling IOC 15.1_d.xlsx` |
+| `taxonomy_catalogue_path` | 固定版本 AviList CSV 名录路径（相对于项目根目录）。 | `data/references/avilist-v2025b.csv` |
 | `model_cache_dir` | 模型缓存目录，存放下载的 YOLO、BioCLIP 等模型文件（相对于项目根目录）。 | `data/models` |
 
 #### 源目录定义 (`sources`)
@@ -169,7 +169,7 @@ paths:
   # 以下路径相对于项目根目录
   references_path: data/references
   db_path: data/db/wingscribe.db
-  ioc_list_path: data/references/Multiling IOC 15.1_d.xlsx
+  taxonomy_catalogue_path: data/references/avilist-v2025b.csv
   model_cache_dir: data/models
 
 processing:
@@ -216,7 +216,7 @@ paths:
   # 以下路径相对于项目根目录
   references_path: data/references
   db_path: data/db/wingscribe.db
-  ioc_list_path: data/references/Multiling IOC 15.1_d.xlsx
+  taxonomy_catalogue_path: data/references/avilist-v2025b.csv
   model_cache_dir: data/models
 
 processing:

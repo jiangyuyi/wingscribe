@@ -2,6 +2,19 @@
 
 依赖定义在 `pyproject.toml`，精确版本及下载校验在 `uv.lock`。本阶段支持 Python 3.11/3.12、Windows/Linux；本机实际使用 Python 3.12.10。CPU 与 NVIDIA CUDA 环境必须显式选择，不能同时启用。
 
+本机已准备两套可直接使用的环境：`.venv` 为 Python 3.12.10 / CPU；`.venv-gpu` 为独立 Python 3.11.17 / CUDA 12.8。GPU 环境复用了 `installer/wheels-gpu` 中与官方锁文件 SHA-256 一致的包。Python 3.11 由 uv 安装在项目内 `.codex-tmp/python`，因此清理该目录前需重建 GPU 环境，不能把它视为可随时删除的普通临时文件。
+
+```powershell
+# 本机 GPU 启动，保持 CPU 环境独立
+$env:EXIFTOOL_PATH = (Resolve-Path installer/tools/exiftool.exe).Path
+.\.venv-gpu\Scripts\python.exe src/web/app.py --host 127.0.0.1 --port 8000
+
+# 用同一锁文件重建 GPU 环境（uv 已安装时）
+$env:UV_PROJECT_ENVIRONMENT = ".venv-gpu"
+uv sync --locked --extra cu128 --python 3.11
+Remove-Item Env:UV_PROJECT_ENVIRONMENT
+```
+
 安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 后，在仓库根目录执行：
 
 ```powershell

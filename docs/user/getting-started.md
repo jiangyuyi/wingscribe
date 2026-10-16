@@ -1,6 +1,6 @@
 # 安装与使用
 
-所有源码命令从仓库根目录执行。使用 Python 3.11；Windows 安装包内置 Python，无需另建虚拟环境。
+所有源码命令从仓库根目录执行。使用 Python 3.11/3.12；Windows 安装包内置 Python，无需另建虚拟环境。
 
 ## Windows 安装包
 
@@ -15,16 +15,15 @@
 ```powershell
 git clone https://github.com/jiangyuyi/wingscribe.git
 cd wingscribe
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+uv sync --locked --extra cpu
+.\.venv\Scripts\Activate.ps1
 ```
 
-Linux/macOS 激活环境使用 `source venv/bin/activate`，其余 Python 命令相同。ExifTool 可通过所在系统的软件管理工具安装。
+先安装 uv。NVIDIA GPU 可选择 `uv sync --locked --extra cu128`；本机已准备的 CPU/GPU 环境及启动方式见 [环境说明](../development/environment.md)。Linux 激活环境使用 `source .venv/bin/activate`。当前锁文件只覆盖 Windows/Linux，macOS 尚未验证。
 
 当前源码在启动时就校验配置：没有 `config/settings.yaml` 时，先从 `config/settings.example.yaml` 复制，按 [配置指南](configuration.md) 填入照片源和独立输出目录的合法绝对路径。不要覆盖已有配置。然后执行 `python src/web/app.py --host 127.0.0.1 --port 8000`，打开 `http://127.0.0.1:8000/settings` 继续调整。未配置直接进入设置页的启动流程仍需修正。
 
-名录缺失时先按 [分类数据指南](taxonomy.md) 准备 IOC Excel 和数据库路径，再运行 `python scripts/import_ioc_data.py`。模型预下载入口为 `python scripts/download_model.py`；所下载模型与生产选择应分别核对。
+新空库使用随项目附带的 AviList v2025b 名录；已有 IOC 库按 [分类数据指南](taxonomy.md) 先预览、备份，再显式迁移。模型预下载入口为 `python scripts/download_model.py`；所下载模型与生产选择应分别核对。
 
 ## 首次处理
 

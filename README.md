@@ -9,7 +9,7 @@
 ## 当前能力
 
 - 按日期或目录扫描、YOLO 检测、裁切和可配置质量检查。
-- 本地 BioCLIP 识别、Top-K 候选、IOC 分类及人工确认记录。配置样例选用 BioCLIP2；BioCLIP 2.5 保持实验选项。
+- 本地 BioCLIP 识别、Top-K 候选、AviList 分类及人工确认记录。配置样例选用 BioCLIP2；BioCLIP 2.5 保持实验选项。
 - 图库筛选、原图/裁切图对照、人工校对、按模板归档和 EXIF/IPTC/XMP 写入。
 - 本地磁盘及操作系统挂载的 NAS；SQLite 数据库。
 - 独立识别 API 和云适配器已存在，但与照片流水线使用不同接口，限制见 [识别 API](docs/reference/recognition-api.md)。
@@ -18,15 +18,14 @@
 
 Windows 安装包入口：[GitHub Releases](https://github.com/jiangyuyi/wingscribe/releases)。选择 CPU 或 NVIDIA GPU 包，安装后通过快捷方式启动，在 `/settings` 配置照片源和输出目录。
 
-源码运行使用 Python 3.11 环境，并安装可在命令行调用的 ExifTool。在仓库根目录执行：
+源码运行使用 Python 3.11/3.12、uv 和 ExifTool，具体环境见 [锁定开发环境](docs/development/environment.md)。在仓库根目录执行：
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+uv sync --locked --extra cpu
+.\.venv\Scripts\Activate.ps1
 ```
 
-首次启动前从配置样例准备 `config/settings.yaml` 并填写合法路径，已有配置不需覆盖。执行 `python src/web/app.py --host 127.0.0.1 --port 8000` 后，访问 `http://127.0.0.1:8000/settings` 调整配置。首次使用、名录导入和 Linux/macOS 操作见 [安装与使用](docs/user/getting-started.md)。
+首次启动前从配置样例准备 `config/settings.yaml` 并填写合法路径，已有配置不需覆盖。执行 `python src/web/app.py --host 127.0.0.1 --port 8000` 后，访问 `http://127.0.0.1:8000/settings` 调整配置。首次使用、名录导入和 Linux 操作见 [安装与使用](docs/user/getting-started.md)。
 
 人工校对当前会尝试修改原图元数据；`write_back_to_source: false` 只约束自动流水线。首次验证建议使用照片副本。Web 和识别 API 尚无有效访问认证，使用范围见 [项目状态](docs/development/status.md)。
 
@@ -47,4 +46,4 @@ python -m pip install -r requirements.txt
 - 研究：[公共评测](docs/research/evaluation.md)、[2026-08-18 结果](docs/research/results-2026-08-18.md)、[软先验](docs/research/prior-reranking.md)。
 - 历史：[归档说明](docs/archive/README.md)、[本次文档整理清单](docs/maintenance/document-inventory.md)。
 
-项目使用 [MIT 许可证](LICENSE)。感谢 IOC World Bird List、BioCLIP、Ultralytics 及相关开源项目。
+项目使用 [MIT 许可证](LICENSE)。感谢 AviList、IOC World Bird List、BioCLIP、Ultralytics 及相关开源项目。

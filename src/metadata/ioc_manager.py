@@ -7,6 +7,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Dict, Optional
+from .taxonomy_catalogue import current_release
 
 class IOCManager:
     def __init__(
@@ -129,6 +130,11 @@ class IOCManager:
                 height INTEGER
             )
         ''')
+
+        # Label provenance for legacy and newly analyzed photos.
+        photo_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(photos)")}
+        if "taxonomy_version" not in photo_columns:
+            self.conn.execute("ALTER TABLE photos ADD COLUMN taxonomy_version TEXT NOT NULL DEFAULT 'legacy-unversioned'")
 
         # Scan History Table
         self.conn.execute('''
@@ -416,6 +422,8 @@ class IOCManager:
             refs_dir: Optional references directory for loading CSV mappings
         """
         logging.info(f"Importing taxonomy from {excel_path}...")
+        if current_release(self.conn):
+            raise ValueError("Cannot overwrite a versioned catalogue with legacy IOC data")
 
         # Auto-load CSV mappings if not provided and refs_dir exists
         if refs_dir:
@@ -835,12 +843,13 @@ class IOCManager:
         if 'original_path' in record and record['original_path']:
             record['original_path'] = self.to_storage_original_path(record['original_path'])
 
-        keys = ', '.join(record.keys())
-        placeholders = ', '.join(['?'] * len(record))
-        values = tuple(record.values())
-
-        sql = f"INSERT INTO photos ({keys}) VALUES ({placeholders})"
         with self._operation_connection(write=True) as conn:
+            release = current_release(conn)
+            record.setdefault("taxonomy_version", release["version"] if release else "legacy-unversioned")
+            keys = ', '.join(record.keys())
+            placeholders = ', '.join(['?'] * len(record))
+            values = tuple(record.values())
+            sql = f"INSERT INTO photos ({keys}) VALUES ({placeholders})"
             cursor = conn.execute(sql, values)
 
             # Update species stats in the same transaction to keep photo/stat changes aligned
@@ -851,6 +860,8 @@ class IOCManager:
 
     def update_photo_species(self, photo_id: int, scientific_name: str, chinese_name: str):
         with self._operation_connection(write=True) as conn:
+            release = current_release(conn)
+            taxonomy_version = release["version"] if release else "legacy-unversioned"
             # Get old scientific_name before update
             cursor = conn.execute("SELECT scientific_name FROM photos WHERE id = ?", (photo_id,))
             row = cursor.fetchone()
@@ -859,9 +870,10 @@ class IOCManager:
             conn.execute('''
                 UPDATE photos
                 SET scientific_name = ?, primary_bird_cn = ?, confidence_score = 1.0,
-                    label_source = 'manual', manual_verified_at = CURRENT_TIMESTAMP
+                    label_source = 'manual', manual_verified_at = CURRENT_TIMESTAMP,
+                    taxonomy_version = ?
                 WHERE id = ?
-            ''', (scientific_name, chinese_name, photo_id))
+            ''', (scientific_name, chinese_name, taxonomy_version, photo_id))
 
             # Update species stats for both old and new species in the same transaction
             if old_sci_name:

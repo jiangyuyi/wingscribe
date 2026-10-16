@@ -6,6 +6,7 @@ import hashlib
 import time
 import json
 import threading
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 from datetime import datetime
@@ -29,6 +30,7 @@ from src.core.io.local import LocalProvider # Import to access IGNORED_DIRS
 from src.core.io.temp_manager import TempFileManager
 from src.core.io.path_generator import PathGenerator
 from src.core.io.path_parser import PathParser
+from src.core.io.path_utils import is_within_directory
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -112,7 +114,7 @@ class SmartScanner:
                     # 不使用 resolve()，避免 UNC 路径问题
                     entry_path = Path(entry.path)
                     if self.exclude_dirs:
-                        if any(str(entry_path).startswith(str(ex)) for ex in self.exclude_dirs):
+                        if any(is_within_directory(entry_path, ex) for ex in self.exclude_dirs):
                             logging.debug(f"Excluding output dir: {entry.name}")
                             continue
 
@@ -653,49 +655,50 @@ class WingScribePipeline:
 
         image_batch_items = []
 
-        for i, (box, score) in enumerate(detections):
-            # Use output_root for temp directory (which is now resolved to absolute path)
-            temp_dir = Path(self.output_root) / "temp"
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            temp_crop_path = temp_dir / f"temp_{entry.name}_{i}.jpg" 
-            
-            success = ImageProcessor.crop_and_resize(
-                local_source_path, box, str(temp_crop_path), 
-                target_size=self.config['processing']['target_size'],
-                padding=self.config['processing']['crop_padding']
-            )
-            
-            if success:
-                # 5. Quality evaluation. The default mode preserves the legacy blur filter.
-                should_process, quality_result = self._evaluate_crop_quality(
-                    str(temp_crop_path),
-                    detection_score=score,
-                    box=box,
-                    image_width=img_width,
-                    image_height=img_height,
+        temp_root = Path(self.output_root) / "temp"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        # Each invocation owns its crops until synchronous recognition finishes.
+        with tempfile.TemporaryDirectory(prefix="image-", dir=temp_root) as image_temp_dir:
+            for i, (box, score) in enumerate(detections):
+                temp_crop_path = Path(image_temp_dir) / f"detection_{i}.jpg"
+
+                success = ImageProcessor.crop_and_resize(
+                    local_source_path, box, str(temp_crop_path),
+                    target_size=self.config['processing']['target_size'],
+                    padding=self.config['processing']['crop_padding']
                 )
-                if not should_process:
-                    try:
-                        os.remove(str(temp_crop_path))
-                    except OSError:
-                        pass
-                    continue
 
-                batch_item = {
-                    'entry': entry,
-                    'meta': meta,
-                    'crop_path': str(temp_crop_path),
-                    'file_hash': file_hash,
-                    'width': img_width,
-                    'height': img_height,
-                    'detection_index': i,
-                    'detections_count': len(detections)
-                }
-                if quality_result is not None:
-                    batch_item['quality'] = quality_result.to_dict()
-                image_batch_items.append(batch_item)
+                if success:
+                    # 5. Quality evaluation. The default mode preserves the legacy blur filter.
+                    should_process, quality_result = self._evaluate_crop_quality(
+                        str(temp_crop_path),
+                        detection_score=score,
+                        box=box,
+                        image_width=img_width,
+                        image_height=img_height,
+                    )
+                    if not should_process:
+                        try:
+                            os.remove(str(temp_crop_path))
+                        except OSError:
+                            pass
+                        continue
 
-        self._recognize_batch(image_batch_items, candidates)
+                    batch_item = {
+                        'entry': entry,
+                        'meta': meta,
+                        'crop_path': str(temp_crop_path),
+                        'file_hash': file_hash,
+                        'width': img_width,
+                        'height': img_height,
+                        'detection_index': i,
+                        'detections_count': len(detections)
+                    }
+                    if quality_result is not None:
+                        batch_item['quality'] = quality_result.to_dict()
+                    image_batch_items.append(batch_item)
+
+            self._recognize_batch(image_batch_items, candidates)
 
     def _evaluate_crop_quality(
         self,
@@ -837,9 +840,7 @@ class WingScribePipeline:
                         try:
                             entry_path_obj = Path(entry_path)
                             output_path_obj = Path(self.output_root)
-                            entry_norm = os.path.normpath(str(entry_path_obj))
-                            output_norm = os.path.normpath(str(output_path_obj))
-                            if entry_norm.startswith(output_norm):
+                            if is_within_directory(entry_path_obj, output_path_obj):
                                 logging.debug(f"Skipping output file: {entry_name}")
                                 continue
                         except:
@@ -955,29 +956,28 @@ class WingScribePipeline:
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = []
 
-            provider = LocalProvider(base_dir=self.source_dir)
-
             for path_str in resolved_paths:
                 if self._should_stop():
                     stop_requested = True
                     logging.info("Stop requested before scanning next folder, stopping pipeline submission")
                     break
 
-                if not provider.exists(path_str):
-                    logging.warning(f"Folder path not found: {path_str}")
-                    continue
-
                 # Find the correct source_root for PathParser
                 # Use the longest matching source root
                 source_root_abs = None
-                for src_root in source_roots:
-                    if path_str.startswith(src_root) or (src_root and Path(path_str).parent.startswith(src_root)):
+                for src_root in sorted(source_roots, key=lambda root: len(Path(root).parts), reverse=True):
+                    if src_root and is_within_directory(path_str, src_root):
                         source_root_abs = Path(src_root)
                         break
 
                 if source_root_abs is None:
                     # Fallback: use source_dir or path_str itself
                     source_root_abs = Path(self.source_dir) if self.source_dir else Path(path_str)
+
+                provider = LocalProvider(base_dir=str(source_root_abs))
+                if not provider.exists(path_str):
+                    logging.warning(f"Folder path not found or outside source: {path_str}")
+                    continue
 
                 parser = PathParser(source_root_abs, None)
 
@@ -1007,9 +1007,7 @@ class WingScribePipeline:
                         try:
                             entry_path_obj = Path(entry_path)
                             output_path_obj = Path(self.output_root)
-                            entry_norm = os.path.normpath(str(entry_path_obj))
-                            output_norm = os.path.normpath(str(output_path_obj))
-                            if entry_norm.startswith(output_norm):
+                            if is_within_directory(entry_path_obj, output_path_obj):
                                 logging.debug(f"Skipping output file: {entry_name}")
                                 continue
                         except:
@@ -1094,7 +1092,7 @@ class WingScribePipeline:
                     should_exclude = False
                     if exclude_dirs:
                         for excl in exclude_dirs:
-                            if entry_path.startswith(os.path.normpath(excl)):
+                            if is_within_directory(entry_path, excl):
                                 should_exclude = True
                                 break
 

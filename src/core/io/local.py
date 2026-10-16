@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Generator, Optional, List
 from .provider import StorageProvider, FileEntry
+from .path_utils import is_within_directory
 
 class SecurityViolationError(Exception):
     pass
@@ -30,30 +31,8 @@ class LocalProvider(StorageProvider):
     def _validate_path(self, path_str: str) -> Path:
         # 不使用 resolve()，避免将 Y:/ 转换为 UNC 路径
         path = Path(path_str)
-        if self.base_dir:
-            # 检查路径是否在 base_dir 内
-            # 尝试多种比较方式：原始路径、规范化路径、解析后的路径
-            path_str_normalized = os.path.normpath(str(path))
-            base_str_normalized = os.path.normpath(str(self.base_dir))
-            try:
-                # 方法1: 原始路径相对比较
-                path.relative_to(self.base_dir)
-            except ValueError:
-                try:
-                    # 方法2: 规范化路径比较 (处理 Y:/ vs Y:\ 的情况)
-                    if path_str_normalized.startswith(base_str_normalized):
-                        pass  # 允许
-                    else:
-                        # 方法3: 解析后的路径比较 (处理符号链接等情况)
-                        try:
-                            resolved = Path(path_str).resolve()
-                            resolved.relative_to(Path(self.base_dir).resolve())
-                        except:
-                            raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
-                except SecurityViolationError:
-                    raise
-                except:
-                    raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
+        if self.base_dir and not is_within_directory(path, self.base_dir):
+            raise SecurityViolationError(f"Access denied: {path} is not in base_dir {self.base_dir}.")
         return path
 
     def list_dir(self, path: str, recursive: bool = False) -> Generator[FileEntry, None, None]:
@@ -66,6 +45,8 @@ class LocalProvider(StorageProvider):
         
         for item in iterator:
             try:
+                if self.base_dir and not is_within_directory(item, self.base_dir):
+                    continue
                 # Skip hidden files or system dirs if needed
                 if item.name.startswith('.'): continue
                 

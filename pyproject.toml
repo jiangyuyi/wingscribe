@@ -1,0 +1,57 @@
+[project]
+name = "wingscribe"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "ultralytics==8.4.14",
+    "numpy>=1.26.4,<2",
+    "opencv-python>=4.8,<4.12",
+    "Pillow>=10,<13",
+    "transformers>=4.30,<5",
+    "requests>=2.31,<3",
+    "PyExifTool>=0.5,<1",
+    "fastapi>=0.115.6,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "jinja2>=3.1.6,<4",
+    "python-multipart>=0.0.20,<1",
+    "sqlalchemy>=2,<3",
+    "pandas>=2.2,<3",
+    "pyyaml>=6,<7",
+    "openpyxl>=3.1,<4",
+    "websockets>=14,<17",
+    "open-clip-torch>=2.23,<4",
+    "httpx>=0.28,<1",
+    "pydantic>=2.5.3,<3",
+]
+
+[project.optional-dependencies]
+cpu = ["torch==2.10.0", "torchvision==0.25.0"]
+cu128 = ["torch==2.10.0", "torchvision==0.25.0"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-cov>=6,<8", "pytest-mock>=3.14,<4"]
+
+[tool.uv]
+package = false
+conflicts = [[{ extra = "cpu" }, { extra = "cu128" }]]
+environments = ["sys_platform == 'win32'", "sys_platform == 'linux'"]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

@@ -11,11 +11,11 @@ from src.core.detector import BirdDetector
 from src.core.quality import QualityChecker
 from src.core.processor import ImageProcessor
 
-def test_core_processing():
+def test_core_processing(tmp_path):
     print("--- Testing Core Processing ---")
     
     # Create a dummy image
-    test_img_path = "tests/test_bird.jpg"
+    test_img_path = str(tmp_path / "test_bird.jpg")
     img = Image.new('RGB', (1000, 1000), color=(73, 109, 137))
     img.save(test_img_path)
     
@@ -30,7 +30,7 @@ def test_core_processing():
     assert detector is not None
     
     print("Testing ImageProcessor...")
-    output_path = "tests/test_cropped.jpg"
+    output_path = str(tmp_path / "test_cropped.jpg")
     box = [100, 100, 500, 500]
     success = ImageProcessor.crop_and_resize(test_img_path, box, output_path, target_size=640)
     assert success is True
@@ -41,6 +41,3 @@ def test_core_processing():
     if os.path.exists(output_path): os.remove(output_path)
     
     print("--- Core Processing Test Passed (Logic Check) ---")
-
-if __name__ == "__main__":
-    test_core_processing()

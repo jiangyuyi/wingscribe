@@ -9,8 +9,8 @@ from src.metadata.ioc_manager import IOCManager
 
 logging.basicConfig(level=logging.INFO)
 
-def test_ioc_manager():
-    db_path = "data/db/test_wingscribe.db"
+def test_ioc_manager(tmp_path):
+    db_path = str(tmp_path / "test_wingscribe.db")
     # Use the real Excel file if available, otherwise mock
     real_xlsx = "config/Multiling IOC 15.1_d.xlsx"
     
@@ -56,6 +56,3 @@ def test_ioc_manager():
     if os.path.exists(db_path):
         os.remove(db_path)
     print("--- Test Passed ---")
-
-if __name__ == "__main__":
-    test_ioc_manager()

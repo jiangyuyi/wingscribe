@@ -116,16 +116,27 @@ class TestBirdDetectorIntegration:
         if os.path.exists(f.name):
             os.remove(f.name)
 
-    def test_detect_returns_list(self, test_image):
+    @pytest.fixture
+    def model_path(self):
+        from pathlib import Path
+
+        model = Path(__file__).resolve().parents[1] / "installer" / "models" / "yolo26n.pt"
+        if not model.is_file():
+            pytest.skip("Bundled YOLO weights unavailable; tests never download weights")
+        return str(model)
+
+    @pytest.mark.integration
+    def test_detect_returns_list(self, test_image, model_path):
         """Test that detect returns a list (may be empty)."""
         # Use CPU to avoid CUDA issues in test environment
-        detector = BirdDetector("yolo26n.pt", device="cpu")
+        detector = BirdDetector(model_path, device="cpu")
         result = detector.detect(test_image)
         assert isinstance(result, list)
 
-    def test_detect_with_nonexistent_image(self):
+    @pytest.mark.integration
+    def test_detect_with_nonexistent_image(self, model_path):
         """Test detection with non-existent image returns empty list."""
-        detector = BirdDetector("yolo26n.pt", device="cpu")
+        detector = BirdDetector(model_path, device="cpu")
         result = detector.detect("nonexistent_image.jpg")
         assert result == []
 

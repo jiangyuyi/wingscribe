@@ -327,6 +327,11 @@ def start_pipeline_by_folders(req: StartPipelineByFoldersRequest):
     return pipeline_service.start_pipeline_by_folders(task_manager, req, logger)
 
 
+@app.get("/api/pipeline/status")
+def pipeline_status():
+    return task_manager.snapshot()
+
+
 @app.post("/api/pipeline/stop")
 def stop_pipeline():
     return pipeline_service.stop_pipeline(task_manager)
@@ -335,15 +340,11 @@ def stop_pipeline():
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
-        last_index = 0
+        cursor = None
         while True:
-            current_len = len(task_manager.logs)
-            if current_len > last_index:
-                new_logs = task_manager.logs[last_index:current_len]
-                for log in new_logs:
-                    await websocket.send_text(log)
-                last_index = current_len
-            
+            cursor, new_logs = task_manager.logs_since(cursor)
+            for log in new_logs:
+                await websocket.send_text(log)
             await asyncio.sleep(0.5)
     except asyncio.CancelledError:
         # Handle server shutdown cancellation

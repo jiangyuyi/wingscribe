@@ -441,7 +441,7 @@ def test_run_processes_valid_entries_and_records_scan_history(tmp_path, monkeypa
             return {"captured_date": "20260321", "location_tag": "Beijing"}
 
     class ImmediateExecutor:
-        def __init__(self, max_workers):
+        def __init__(self, max_workers, **kwargs):
             self.max_workers = max_workers
 
         def __enter__(self):
@@ -452,7 +452,7 @@ def test_run_processes_valid_entries_and_records_scan_history(tmp_path, monkeypa
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
@@ -517,7 +517,7 @@ def test_run_by_folders_uses_recursive_scanner_and_records_history(tmp_path, mon
             return {"captured_date": "20260322", "location_tag": "Trip"}
 
     class ImmediateExecutor:
-        def __init__(self, max_workers):
+        def __init__(self, max_workers, **kwargs):
             self.max_workers = max_workers
 
         def __enter__(self):
@@ -528,7 +528,7 @@ def test_run_by_folders_uses_recursive_scanner_and_records_history(tmp_path, mon
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
@@ -600,7 +600,7 @@ def test_run_stops_submitting_new_tasks_when_stop_requested(tmp_path, monkeypatc
             return {"captured_date": "20260320", "location_tag": "Beijing"}
 
     class ImmediateExecutor:
-        def __init__(self, max_workers):
+        def __init__(self, max_workers, **kwargs):
             self.max_workers = max_workers
 
         def __enter__(self):
@@ -611,7 +611,7 @@ def test_run_stops_submitting_new_tasks_when_stop_requested(tmp_path, monkeypatc
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)
@@ -679,7 +679,7 @@ def test_run_by_folders_stops_submitting_new_tasks_when_stop_requested(tmp_path,
             return {"captured_date": "20260322", "location_tag": "Trip"}
 
     class ImmediateExecutor:
-        def __init__(self, max_workers):
+        def __init__(self, max_workers, **kwargs):
             self.max_workers = max_workers
 
         def __enter__(self):
@@ -690,7 +690,7 @@ def test_run_by_folders_stops_submitting_new_tasks_when_stop_requested(tmp_path,
 
         def submit(self, fn, *args, **kwargs):
             fn(*args, **kwargs)
-            return SimpleNamespace(done=lambda: True)
+            return SimpleNamespace(done=lambda: True, result=lambda: None)
 
     monkeypatch.setattr("src.pipeline_runner.LocalProvider", FakeProvider)
     monkeypatch.setattr("src.pipeline_runner.PathParser", FakeParser)

@@ -10,7 +10,8 @@ def start_pipeline(task_manager, req):
 
     s_date = req.start_date if req.start_date else None
     e_date = req.end_date if req.end_date else None
-    task_manager.start_pipeline(s_date, e_date)
+    if not task_manager.start_pipeline(s_date, e_date):
+        return {"status": "error", "message": "Pipeline start rejected or failed"}
     return {"status": "success", "message": "Pipeline started"}
 
 
@@ -103,7 +104,8 @@ def start_pipeline_by_folders(task_manager, req, logger):
         return {"status": "error", "message": "Pipeline already running"}
 
     logger.info("Starting pipeline by folders: %s, recursive=%s", req.paths, req.recursive)
-    task_manager.start_pipeline_by_folders(req.paths, req.recursive)
+    if not task_manager.start_pipeline_by_folders(req.paths, req.recursive):
+        return {"status": "error", "message": "Pipeline start rejected or failed"}
     return {"status": "success", "message": f"Pipeline started for {len(req.paths)} folder(s)"}
 
 
@@ -111,5 +113,6 @@ def stop_pipeline(task_manager):
     if not task_manager.is_running:
         return {"status": "error", "message": "Pipeline is not running"}
 
-    task_manager.stop()
+    if task_manager.stop() is False:
+        return {"status": "error", "message": "Pipeline is not running"}
     return {"status": "success", "message": "Pipeline stop requested"}

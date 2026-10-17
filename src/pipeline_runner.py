@@ -140,7 +140,17 @@ class WingScribePipeline:
             init_timeout: Maximum seconds to wait for model loading (default 120s)
         """
         # Use centralized config loader
-        self.config = load_config(config_path)
+        config_file = Path(config_path)
+        if not config_file.is_absolute():
+            config_file = Path(PROJECT_ROOT) / config_file
+        self.config = load_config(str(config_file), str(config_file.parent / "secrets.yaml"))
+        paths = self.config.get("paths", {})
+        for key in ("db_path", "foreign_list", "china_list", "taxonomy_catalogue_path"):
+            if paths.get(key) and not Path(paths[key]).is_absolute():
+                paths[key] = str(Path(PROJECT_ROOT) / paths[key])
+        processing = self.config.get("processing", {})
+        if processing.get("yolo_model") and not Path(processing["yolo_model"]).is_absolute():
+            processing["yolo_model"] = str(Path(PROJECT_ROOT) / processing["yolo_model"])
 
         # Validate paths configuration
         is_valid, errors = validate_paths_config(self.config)
@@ -156,11 +166,11 @@ class WingScribePipeline:
         if sources and len(sources) > 0:
             source_dir = sources[0].get('path', '')
 
-        # Resolve db_path - relative to cwd if not set
+        # Resolve database paths against the project root
         db_path_config = self.config['paths'].get('db_path')
         if db_path_config is None:
-            # Default: relative to current working directory
-            db_path = Path('data/db/wingscribe.db')
+            # Default: project-local database
+            db_path = Path(PROJECT_ROOT) / 'data/db/wingscribe.db'
         elif Path(db_path_config).is_absolute():
             db_path = Path(db_path_config)
         else:
@@ -178,48 +188,52 @@ class WingScribePipeline:
             source_base_dir=source_dir,
             processed_base_dir=output_root
         )
-        self.device = self.config['processing'].get('device', 'cpu')
+        try:
+            self.device = self.config['processing'].get('device', 'cpu')
 
-        # 日志等级配置
-        self.log_level = self.config.get('web', {}).get('log_level', 'info').lower()
-        self.memory_profile_enabled = os.getenv("WINGSCRIBE_PROFILE_MEMORY") == "1"
-        # 进度跟踪
-        self.total_files = 0
-        self.processed_count = 0
-        self._progress_callback = None
-        self._stop_checker = None
+            # 日志等级配置
+            self.log_level = self.config.get('web', {}).get('log_level', 'info').lower()
+            self.memory_profile_enabled = os.getenv("WINGSCRIBE_PROFILE_MEMORY") == "1"
+            # 进度跟踪
+            self.total_files = 0
+            self.processed_count = 0
+            self._progress_callback = None
+            self._stop_checker = None
 
-        # Lazy load detector with timeout protection
-        self._detector = None
-        self._detector_loaded = False
-        self._detector_lock = threading.Lock()
-        self._init_timeout = init_timeout
+            # Lazy load detector with timeout protection
+            self._detector = None
+            self._detector_loaded = False
+            self._detector_lock = threading.Lock()
+            self._init_timeout = init_timeout
 
-        self.recognizer = None # Lazy load later
-        self.exif_writer = ExifWriter()
+            self.recognizer = None # Lazy load later
+            self.exif_writer = ExifWriter()
 
-        self.path_generator = PathGenerator(
-            template=out_conf.get('structure_template', "{year}/{location}/{species_cn}/{filename}"),
-            output_root=output_root
-        )
-        self.write_back_raw = out_conf.get('write_back_to_source', False)
+            self.path_generator = PathGenerator(
+                template=out_conf.get('structure_template', "{year}/{location}/{species_cn}/{filename}"),
+                output_root=output_root
+            )
+            self.write_back_raw = out_conf.get('write_back_to_source', False)
 
-        # Store source_dir and output_root for relative path conversion and exclusion
-        self.source_dir = source_dir
-        self.output_root = output_root  # Absolute path for exclusion
+            # Store source_dir and output_root for relative path conversion and exclusion
+            self.source_dir = source_dir
+            self.output_root = output_root  # Absolute path for exclusion
         
-        # Recognizer init lock
-        self.batch_lock = threading.Lock()
-        self.inference_batch_size = self.config.get('recognition', {}).get('local', {}).get('inference_batch_size', 16)
+            # Recognizer init lock
+            self.batch_lock = threading.Lock()
+            self.inference_batch_size = self.config.get('recognition', {}).get('local', {}).get('inference_batch_size', 16)
 
-        # Existing hashes for fast deduplication (loaded on demand)
-        self.existing_hashes = None
+            # Existing hashes for fast deduplication (loaded on demand)
+            self.existing_hashes = None
 
-        # Load taxonomy and config lists (with defaults for backward compatibility)
-        paths_config = self.config.get('paths', {})
-        self.foreign_countries = self._load_list(paths_config.get('foreign_list', 'config/dictionaries/foreign_countries.txt'))
-        self.china_allowlist = self._load_list(paths_config.get('china_list', 'config/dictionaries/china_bird_list.txt'))
-        self.all_labels = self._get_taxonomy_labels()
+            # Load taxonomy and config lists (with defaults for backward compatibility)
+            paths_config = self.config.get('paths', {})
+            self.foreign_countries = self._load_list(paths_config.get('foreign_list', 'config/dictionaries/foreign_countries.txt'))
+            self.china_allowlist = self._load_list(paths_config.get('china_list', 'config/dictionaries/china_bird_list.txt'))
+            self.all_labels = self._get_taxonomy_labels()
+        except Exception:
+            self.db.close()
+            raise
 
     def set_progress_callback(self, callback):
         """设置进度回调函数"""
@@ -307,6 +321,8 @@ class WingScribePipeline:
 
     def _load_list(self, path_str):
         path = Path(path_str)
+        if not path.is_absolute():
+            path = Path(PROJECT_ROOT) / path
         if path.exists():
             with open(path, 'r', encoding='utf-8') as f:
                 return set(line.strip() for line in f if line.strip())
@@ -432,6 +448,7 @@ class WingScribePipeline:
             for item in items:
                 try: os.remove(item['crop_path'])
                 except: pass
+            raise
 
     def _archive_item(self, item, results, alt_threshold, low_conf_threshold):
         entry = item['entry']
@@ -566,6 +583,7 @@ class WingScribePipeline:
             # Log more details for debugging
             import traceback
             logging.debug(traceback.format_exc())
+            raise
 
     @staticmethod
     def _quality_storage_fields(quality) -> dict:
@@ -602,7 +620,7 @@ class WingScribePipeline:
             detections = self.detector.detect(local_source_path)
         except Exception as e:
             logging.error(f"Detection failed for {entry.name}: {e}")
-            return
+            raise
             
         if not detections: return
         
@@ -735,6 +753,7 @@ class WingScribePipeline:
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
+        failures = []
         stop_requested = False
 
         # Use provided hashes or load from database
@@ -759,7 +778,7 @@ class WingScribePipeline:
 
         # Use ThreadPool for detection/cropping
         # 4 workers is a good start for IO/CPU bound mix
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="wingscribe-photo") as executor:
             futures = []
 
             for source in sources:
@@ -856,6 +875,11 @@ class WingScribePipeline:
                     # Prevent memory explosion from too many futures
                     if len(futures) > 500:
                         done, not_done = wait(futures, timeout=0.1)
+                        for future in done:
+                            try:
+                                future.result()
+                            except Exception as exc:
+                                failures.append(str(exc))
                         futures = list(not_done)
 
                 if stop_requested:
@@ -864,7 +888,13 @@ class WingScribePipeline:
             # Wait for all tasks to complete
             if futures:
                 wait(futures)
+                for future in futures:
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        failures.append(str(exc))
 
+        stop_requested = stop_requested or self._should_stop()
         t_end = time.time()
         duration = t_end - t_start
         end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -876,8 +906,10 @@ class WingScribePipeline:
             'range_end': end_date or "All",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
-            'status': 'Stopped' if stop_requested else 'Completed'
+            'status': 'Failed' if failures else ('Stopped' if stop_requested else 'Completed')
         })
+        if failures:
+            raise RuntimeError(f"{len(failures)} photo task(s) failed; first error: {failures[0]}")
         if stop_requested:
             logging.info(f"Pipeline stopped by request. Processed: {processed_count}. Duration: {duration:.2f}s")
         else:
@@ -894,6 +926,7 @@ class WingScribePipeline:
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
+        failures = []
         stop_requested = False
 
         # Ensure existing_hashes is loaded
@@ -923,7 +956,7 @@ class WingScribePipeline:
         resolved_paths = list(folder_paths)
 
         # Use ThreadPool for detection/cropping
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="wingscribe-photo") as executor:
             futures = []
 
             for path_str in resolved_paths:
@@ -1018,6 +1051,11 @@ class WingScribePipeline:
                     # Prevent memory explosion
                     if len(futures) > 500:
                         done, not_done = wait(futures, timeout=0.1)
+                        for future in done:
+                            try:
+                                future.result()
+                            except Exception as exc:
+                                failures.append(str(exc))
                         futures = list(not_done)
 
                 if stop_requested:
@@ -1026,7 +1064,13 @@ class WingScribePipeline:
             # Wait for all tasks to complete
             if futures:
                 wait(futures)
+                for future in futures:
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        failures.append(str(exc))
 
+        stop_requested = stop_requested or self._should_stop()
         t_end = time.time()
         duration = t_end - t_start
         end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1038,8 +1082,10 @@ class WingScribePipeline:
             'range_end': "",
             'processed_count': processed_count,
             'duration_seconds': round(duration, 2),
-            'status': 'Stopped' if stop_requested else 'Completed'
+            'status': 'Failed' if failures else ('Stopped' if stop_requested else 'Completed')
         })
+        if failures:
+            raise RuntimeError(f"{len(failures)} photo task(s) failed; first error: {failures[0]}")
         if stop_requested:
             logging.info(f"Pipeline (by folders) stopped by request. Processed: {processed_count}. Duration: {duration:.2f}s")
         else:

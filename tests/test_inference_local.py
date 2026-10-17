@@ -202,6 +202,7 @@ def test_load_model_restores_logging_levels_after_failure(monkeypatch, tmp_path:
     monkeypatch.setattr("src.recognition.inference_local._get_open_clip", lambda: FakeOpenClip())
     monkeypatch.setattr("torch.cuda.is_available", lambda: False)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.recognition.inference_local.MODEL_ROOT", tmp_path / "data/models")
 
     with pytest.raises(RuntimeError, match="boom"):
         recognizer._load_model()
@@ -237,11 +238,12 @@ def test_load_model_uses_registered_architecture_for_local_checkpoint(monkeypatc
     monkeypatch.setattr("src.recognition.inference_local._get_open_clip", lambda: FakeOpenClip())
     monkeypatch.setattr("torch.cuda.is_available", lambda: False)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.recognition.inference_local.MODEL_ROOT", tmp_path / "data/models")
 
     recognizer._load_model()
 
     assert calls["model"][0] == "ViT-L-14"
-    assert calls["model"][1] == str(Path("data/models/bioclip-2/open_clip_model.safetensors"))
+    assert calls["model"][1] == str(checkpoint)
     assert calls["tokenizer"] == "ViT-L-14"
 
 

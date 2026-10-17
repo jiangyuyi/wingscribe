@@ -10,6 +10,7 @@ import logging
 
 # Lazy import open_clip - will be imported after environment variables are set
 _open_clip = None
+MODEL_ROOT = Path(__file__).resolve().parents[2] / "data/models"
 
 
 def _get_process_rss_mb() -> float:
@@ -181,7 +182,7 @@ class LocalBirdRecognizer(BirdRecognizer):
         logger.setLevel(logging.WARNING)
 
         # Check for local model in specific subfolder
-        local_model_root = Path("data/models")
+        local_model_root = MODEL_ROOT
         local_model_path = local_model_root / self.model_type_slug
         model_spec = getattr(self, "model_spec", None) or get_model_spec(self.model_type_slug)
 

@@ -11,6 +11,7 @@ def test_start_pipeline_normalizes_blank_dates_via_request_object():
 
         def start_pipeline(self, start_date, end_date):
             self.calls.append((start_date, end_date))
+            return True
 
     class Req:
         start_date = ""

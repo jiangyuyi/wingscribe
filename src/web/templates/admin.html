@@ -202,6 +202,7 @@
                             <button onclick="clearConsole()" class="btn btn-sm btn-outline-secondary">Clear Log</button>
                         </div>
                         <!-- 进度条 -->
+                        <div id="task-state" class="small mb-2" role="status">正在读取任务状态…</div>
                         <div id="progress-container" class="mb-2" style="display: none;">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span id="progress-text" class="small">0/0</span>
@@ -295,13 +296,7 @@
             const container = document.getElementById('progress-container');
             const bar = document.getElementById('progress-bar');
             bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-            bar.style.width = '100%';
-            document.getElementById('progress-percent').textContent = '100%';
-            // 3秒后隐藏
-            setTimeout(() => {
-                container.style.display = 'none';
-                bar.style.width = '0%';
-            }, 3000);
+            container.style.display = 'none';
         }
 
         function updateProgress(processed, total) {
@@ -336,21 +331,7 @@
 
                 appendLog(event.data);
 
-                // State check based on log content
-                if (event.data.includes("Pipeline completed") || event.data.includes("Pipeline (by folders) completed")) {
-                    startBtn.disabled = false;
-                    startBtn.textContent = "▶ Start Pipeline";
-                    loadHistory(); // Refresh history
-                    loadStats(); // Refresh stats
-                    hideProgress(); // 隐藏进度条
-                }
-                // Error handling
-                if (event.data.includes("Error:") || event.data.includes("Pipeline failed")) {
-                    startBtn.disabled = false;
-                    startBtn.textContent = "▶ Start Pipeline";
-                    loadHistory(); // Refresh history
-                    hideProgress(); // 隐藏进度条
-                }
+
             };
 
             ws.onerror = (error) => {
@@ -365,6 +346,35 @@
                 setTimeout(connectWS, 2000);
             };
         }
+
+        let lastTaskState = '';
+        async function refreshTaskState() {
+            try {
+                const response = await fetch('/api/pipeline/status');
+                if (!response.ok) throw new Error('Status unavailable');
+                const task = await response.json();
+                const labels = {idle: '未运行', starting: '正在初始化', running: '正在处理',
+                    stopping: '正在停止，等待已开始的处理结束', stopped: '已停止',
+                    completed: '已完成', failed: '处理失败'};
+                document.getElementById('task-state').textContent =
+                    (labels[task.state] || task.state) + (task.error ? '：' + task.error : '');
+                startBtn.disabled = task.is_running;
+                startBtn.textContent = task.is_running ? '⏳ Running...' : '▶ Start Pipeline';
+                if (task.is_running && task.total > 0) updateProgress(task.processed, task.total);
+                const key = task.task_id + ':' + task.state;
+                if (key !== lastTaskState && ['completed', 'stopped', 'failed'].includes(task.state)) {
+                    loadHistory();
+                    loadStats();
+                    hideProgress();
+                }
+                lastTaskState = key;
+            } catch (error) {
+                document.getElementById('task-state').textContent = '暂时无法读取任务状态，正在重试';
+            } finally {
+                setTimeout(refreshTaskState, 1000);
+            }
+        }
+        refreshTaskState();
 
         connectWS();
         loadHistory();

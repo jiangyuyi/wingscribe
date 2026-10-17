@@ -1,6 +1,6 @@
 # 识别 API 与云配置
 
-核对日期：2026-10-16；依据本地路由、协议和工厂代码。没有执行付费/远程调用，不保证第三方服务端点当前可用。
+核对日期：2026-10-17；依据本地路由、协议和工厂代码。没有执行付费/远程调用，不保证第三方服务端点当前可用。
 
 ## 两种服务入口
 
@@ -13,12 +13,12 @@
 
 ## 请求协议
 
-`RecognizeRequest` 使用 `platform`、`top_k`（1–20，默认 5）、`timeout`（1–300 秒，默认 60），图片字段为 `image_path`、`image_url` 或 `image_base64`。调用者应只提供一种图片来源；协议模型并未强制“三选一”。`image_path` 是服务端可访问的路径，不是客户端文件上传。
+`RecognizeRequest` 使用 `platform`、`top_k`（1–20，默认 5）、`timeout`（1–300 秒，默认 60），图片字段为 `image_path`、`image_url` 或 `image_base64`。协议强制恰好提供一种非空图片来源；本地适配暂支持路径和纯 Base64，不下载 URL。`image_path` 是服务端可访问的路径，不是客户端文件上传。
 
 ```json
 {
   "image_path": "D:/Photos/sample.jpg",
-  "platform": "huggingface",
+  "platform": "local",
   "top_k": 5,
   "timeout": 60
 }
@@ -43,7 +43,7 @@
 
 `src/pipeline_runner.py` 只处理 `recognition.mode: local/api/dongniao`。`api` 读取 `recognition.api.key` 和 `.url`，懂鸟读取 `recognition.dongniao.key` 和 `.url`，可放在 secrets 中递归合并。顶层 `hf_api_key`、`dongniao_api_key` 不会自动转成这两个配置。
 
-统一 REST 工厂中的 `local` 与 `dongniao` 仍返回旧式 `predict/predict_batch` 识别器，未适配路由期待的 `recognize()`；`custom` 虽在枚举中，却未注册。不要将这些值作为已可用的 REST 示例。
+统一 REST 工厂的 `local` 已通过异步适配器连接旧式 `predict`，使用 AviList 候选并复用模型实例；接口测试通过，真实 BioCLIP2 权重推理仍待验收。`dongniao` 明确返回暂不可用；`custom` 在枚举中但未注册。云端暂只预留，详见[后端验证状态](../development/recognition-backends.md)。
 
 ## 部署限制
 

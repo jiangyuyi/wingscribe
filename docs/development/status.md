@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | 人工校对原图写回 | `src/web/app.py:update_label` 写存在的原图，未检查 `write_back_to_source`；该开关只在流水线读取 | 需决定开关是否统一约束人工校对，并另行修改和回归测试 |
 | 访问认证 | `src/web/routes/recognition.py:verify_api_key` 始终返回真；独立服务也未提供该认证 | 当前只作为本机/可信环境工具；如需对外提供服务，先实现认证和输入访问边界 |
-| REST 本地/懂鸟接口 | 工厂返回的旧式识别器提供 `predict/predict_batch`，路由却调用 `recognize`；懂鸟无参构建也缺少必需参数 | 不将平台枚举等同于已联调支持；补适配与端到端测试后再宣传 |
+| REST 本地/懂鸟接口 | B3b 已补本地异步适配并通过 HTTP 契约测试；懂鸟统一 API 明确暂不可用，旧流水线保留 | 本地真实 BioCLIP2 权重推理待验收；云端按用户决定预留，见[验证状态](recognition-backends.md) |
 | 配置样例与代码不一致 | 流水线读取 `recognition.api/dongniao.key/url`；旧 secrets 样例的顶层密钥不供该路径读取 | 文档给出实际结构；样例修正留待代码/配置维护 |
 | 本地模型缺省不一致 | 样例是 `bioclip-2`，流水线缺少 `local.model_type` 时回退 `bioclip` | 使用显式配置；后续决定是否统一缺省 |
 | 文本批次配置 | `recognition.local.batch_size` 出现在样例，但本地编码函数内部固定为 512 | 不把该字段写成可调有效参数 |

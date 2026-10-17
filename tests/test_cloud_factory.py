@@ -28,12 +28,13 @@ def test_create_local_recognizer_passes_hf_mirror(monkeypatch):
         device="cpu",
     )
 
-    assert isinstance(recognizer, StubLocalRecognizer)
-    assert created == {
-        "model_name": "bioclip",
-        "device": "cpu",
-        "hf_mirror": "https://mirror.example",
+    from src.recognition.local_adapter import LocalRecognitionAdapter
+    assert isinstance(recognizer, LocalRecognitionAdapter)
+    assert created == {}  # Model initialization is deferred until a valid image arrives.
+    assert recognizer.model_options == {
+        "model_name": "bioclip", "device": "cpu", "hf_mirror": "https://mirror.example",
     }
+    assert RecognizerFactory.create("local", model_name="bioclip", device="cpu") is recognizer
 
 
 def test_create_unknown_platform_raises_value_error():

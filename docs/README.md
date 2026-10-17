@@ -18,7 +18,7 @@
 | JPEG 合焦选片与后续 RAW | [选片功能方案](research/focus-culling-plan.md) |
 | 开发、测试与文档维护规则 | [贡献指南](development/contributing.md) |
 | Windows 构建与验收 | [安装器构建](../installer/README.md)、[统一验收清单](development/release-checklist.md) |
-| 识别服务、云配置和接口限制 | [识别 API](reference/recognition-api.md) |
+| 识别服务、云配置和接口限制 | [识别 API](reference/recognition-api.md)、[后端验证状态](development/recognition-backends.md) |
 | 地点词典和只读预览 | [地点标准化](reference/location-resolution.md) |
 | 模型实验、复现命令与结果 | [评测指南](research/evaluation.md)、[历史结果](research/results-2026-08-18.md)、[软先验](research/prior-reranking.md) |
 | 查阅早期决策或 AI 讨论 | [历史档案](archive/README.md) |

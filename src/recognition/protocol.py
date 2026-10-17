@@ -6,7 +6,7 @@
 """
 from enum import Enum
 from typing import List, Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
 
 
@@ -53,6 +53,13 @@ class RecognizeRequest(BaseModel):
     region_filter: Optional[Literal["china", "global", "auto"]] = Field(
         None, description="区域过滤"
     )
+
+    @model_validator(mode="after")
+    def require_one_image_source(self):
+        values = (self.image_path, self.image_url, self.image_base64)
+        if sum(value is not None for value in values) != 1 or not any(value and value.strip() for value in values):
+            raise ValueError("Provide exactly one non-empty image source")
+        return self
 
     class Config:
         json_schema_extra = {

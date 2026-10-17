@@ -2,88 +2,85 @@ import asyncio
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
 
 import yaml
 
+from src.utils.settings import first_run_defaults, shape_errors, with_defaults
+from src.utils.config_loader import validate_paths_config
+
 
 def get_config(base_dir: Path, definition_provider):
     config_path = base_dir / "config" / "settings.yaml"
-
+    result = {"config": first_run_defaults(), "definition": definition_provider(),
+              "is_first_run": not config_path.exists()}
     if not config_path.exists():
-        return {"error": "Configuration file not found", "is_first_run": True}
-
-    with open(config_path, "r", encoding="utf-8") as f:
-        current_config = yaml.safe_load(f)
-
-    return {
-        "config": current_config,
-        "definition": definition_provider(),
-        "is_first_run": False,
-    }
+        return result
+    try:
+        current = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        current = {} if current is None else current
+        if shape_errors(current):
+            raise ValueError("Invalid configuration shape")
+        result["config"] = current
+    except (OSError, ValueError, yaml.YAMLError):
+        result["error"] = "配置文件格式错误或无法读取，请修复 settings.yaml 后重试；原文件未修改。"
+    return result
 
 
 def save_config(req, base_dir: Path, set_nested_value):
     config_path = base_dir / "config" / "settings.yaml"
-    config_dir = config_path.parent
-    config_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        current = (yaml.safe_load(config_path.read_text(encoding="utf-8"))
+                   if config_path.exists() else first_run_defaults())
+        current = {} if current is None else current
+        if shape_errors(current):
+            raise ValueError("Invalid configuration shape")
+    except (OSError, ValueError, yaml.YAMLError):
+        return {"status": "error", "error": "原配置无法读取或格式错误，请先修复 settings.yaml；原文件未修改。"}
 
-    if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            current_config = yaml.safe_load(f) or {}
-    else:
-        current_config = {
-            "paths": {},
-            "processing": {},
-            "recognition": {},
-            "web": {},
-        }
+    old_db_path = current.get("paths", {}).get("db_path", "")
+    try:
+        for item in req.configs:
+            value = item.value
+            if item.type == "int":
+                value = int(value)
+            elif item.type == "float":
+                value = float(value)
+            elif item.type == "bool":
+                if value.lower() not in ("true", "yes", "1", "on", "false", "no", "0", "off"):
+                    raise ValueError("Invalid boolean")
+                value = value.lower() in ("true", "yes", "1", "on")
+            set_nested_value(current, f"{item.section}.{item.key}", value)
+        current = with_defaults(current)
+        valid, errors = validate_paths_config(current)
+        if not valid:
+            return {"status": "error", "error": "; ".join(errors)}
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+        return {"status": "error", "error": "配置字段格式错误，请检查路径、端口和数值；原文件未修改。"}
 
-    db_path_changed = False
-    old_db_path = current_config.get("paths", {}).get("db_path", "")
+    temporary_path = None
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=config_path.parent,
+                                         prefix=".settings-", suffix=".tmp", delete=False) as stream:
+            temporary_path = Path(stream.name)
+            yaml.safe_dump(current, stream, allow_unicode=True, sort_keys=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, config_path)
+    except OSError:
+        return {"status": "error", "error": "无法保存配置，请检查目录权限；原文件未修改。"}
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
-    for item in req.configs:
-        value = item.value
-
-        if item.section == "paths" and item.key == "db_path" and value != old_db_path:
-            db_path_changed = True
-
-        if item.type == "int":
-            value = int(value)
-        elif item.type == "float":
-            value = float(value)
-        elif item.type == "bool":
-            value = value.lower() in ("true", "yes", "1", "on")
-
-        set_nested_value(current_config, f"{item.section}.{item.key}", value)
-
-    if db_path_changed:
-        new_db_path = current_config.get("paths", {}).get("db_path", "")
-        if new_db_path:
-            db_path_obj = Path(new_db_path)
-            if not db_path_obj.parent.exists():
-                try:
-                    db_path_obj.parent.mkdir(parents=True, exist_ok=True)
-                except Exception as exc:
-                    return {"status": "error", "error": f"无法创建数据库目录: {exc}"}
-            try:
-                test_file = db_path_obj.parent / ".wingscribe_db_test"
-                test_file.touch()
-                test_file.unlink()
-            except Exception as exc:
-                return {"status": "error", "error": f"数据库目录不可写: {exc}"}
-
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.dump(current_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-
-    if db_path_changed:
+    if (current["paths"].get("db_path") or "") != (old_db_path or ""):
         return {"status": "saved", "restart_required": True, "db_path_changed": True}
-
     if req.restart:
         return {"status": "saved", "restart_required": True}
-
     return {"status": "saved"}
 
 
@@ -138,14 +135,9 @@ def validate_config_path(path: str, path_type: str = "directory"):
                 pass
 
             try:
-                if is_dir:
-                    test_file = p / ".wingscribe_write_test"
-                    test_file.touch()
-                    test_file.unlink()
-                elif is_file:
-                    test_file = p.parent / ".wingscribe_write_test"
-                    test_file.touch()
-                    test_file.unlink()
+                probe_dir = p if is_dir else p.parent
+                with tempfile.TemporaryFile(dir=probe_dir):
+                    pass
                 can_write = True
             except Exception:
                 pass

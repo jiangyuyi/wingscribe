@@ -8,7 +8,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -20,6 +20,8 @@ sys.path.append(str(BASE_DIR))
 
 from src.metadata.exif_writer import ExifWriter
 from src.utils.config_loader import load_config, validate_paths_config
+from src.utils.settings import first_run_defaults, with_defaults
+import yaml
 from src.core.io.path_generator import PathGenerator
 from src.web.routes.recognition import router as recognition_router
 from src.web import task_manager as task_manager_module
@@ -50,7 +52,8 @@ task_manager = TaskManager.get_instance()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    init_app_db()
+    if is_paths_configured():
+        init_app_db()
     logger.info("Application started.")
     yield
     # Shutdown
@@ -61,27 +64,36 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Load config
-config = load_config(str(BASE_DIR / "config" / "settings.yaml"), str(BASE_DIR / "config" / "secrets.yaml"))
 
-# Validate paths configuration
+@app.middleware("http")
+async def require_configuration(request: Request, call_next):
+    path = request.url.path
+    setup_route = path in ("/", "/settings") or path.startswith(("/api/config", "/lib/"))
+    if not is_paths_configured() and not setup_route:
+        return JSONResponse(status_code=409, content={"error": "请先修复并保存配置，然后重启服务。"})
+    return await call_next(request)
+
+# Reading configuration must not create directories or prevent the settings page.
+startup_errors = []
+try:
+    config = with_defaults(load_config(str(BASE_DIR / "config/settings.yaml"), str(BASE_DIR / "config/secrets.yaml")))
+except (OSError, ValueError, yaml.YAMLError) as exc:
+    startup_errors = ["配置无法读取或格式错误，请检查 settings.yaml 和 secrets.yaml"]
+    logger.error(startup_errors[0])
+    config = first_run_defaults()
 is_valid, errors = validate_paths_config(config)
-if not is_valid:
-    logger.error(f"Configuration validation failed: {errors}")
-    for err in errors:
-        logger.error(f"  - {err}")
-    raise ValueError(f"Invalid paths configuration: {errors}")
+startup_errors.extend(errors)
 
 # Get source directories for raw photo path resolution
 sources = config['paths'].get('sources', [])
 source_dirs = [
     Path(src.get('path'))
     for src in sources
-    if src.get('path')
+    if src.get('path') and src.get('enabled', True)
 ]
 source_dir = ''
-if sources and len(sources) > 0:
-    source_dir = sources[0].get('path', '')
+if source_dirs:
+    source_dir = str(source_dirs[0])
 if source_dir:
     source_dir = Path(source_dir)
 
@@ -95,18 +107,10 @@ def is_absolute_path(p: str) -> bool:
     """Check if path is absolute, including Windows drive letter format like 'Y:/path'"""
     return path_helpers.is_absolute_path(p)
 
-# Resolve db_path - relative to current working directory if not set or empty
-db_path_config = config['paths'].get('db_path')
-if not db_path_config:
-    # Default: relative to current working directory
-    db_path = Path('data/db/wingscribe.db')
-elif is_absolute_path(db_path_config):
-    db_path = Path(db_path_config)
-else:
-    db_path = Path(db_path_config)
-
-# Ensure database directory exists
-db_path.parent.mkdir(parents=True, exist_ok=True)
+# Resolve relative database paths against the project, independently of cwd.
+db_path = Path(config['paths'].get('db_path') or 'data/db/wingscribe.db')
+if not db_path.is_absolute():
+    db_path = BASE_DIR / db_path
 
 # Handle output.root_dir - allow empty for first-run setup
 output_root = config['paths']['output'].get('root_dir', '')
@@ -116,10 +120,6 @@ logger.info(f"Project Base Directory: {BASE_DIR}")
 logger.info(f"Photo Source Directory: {source_dir}")
 logger.info(f"Database Path: {db_path}")
 logger.info(f"Processed Images Directory: {processed_dir}")
-
-if processed_dir and not processed_dir.exists():
-    logger.error(f"Processed directory does not exist: {processed_dir}")
-    processed_dir.mkdir(parents=True, exist_ok=True)
 
 # Note: Using custom route for /processed (see serve_processed_file above)
 app.include_router(recognition_router)
@@ -193,13 +193,14 @@ def is_paths_configured():
     """Check if source and output paths are configured (not empty)"""
     global source_dir
     global output_root
-    return bool(source_dir) and bool(output_root)
+    return not startup_errors and bool(source_dir) and bool(output_root)
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, q: str = "", filter: str = "", date: str = "", limit: int = 50, offset: int = 0, skip_first_check: bool = False):
     # Check for first run or empty paths - redirect to settings if not configured
     if not skip_first_check and (is_first_run() or not is_paths_configured()):
         return templates.TemplateResponse(
+            request=request,
             name="settings.html",
             context={"request": request, "is_first_run": is_first_run()},
         )
@@ -254,6 +255,7 @@ def index(request: Request, q: str = "", filter: str = "", date: str = "", limit
     prev_offset = max(0, offset - limit)
     
     return templates.TemplateResponse(
+        request=request,
         name="index.html",
         context={
             "request": request,
@@ -616,12 +618,15 @@ class LocationPreviewRequest(BaseModel):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """Configuration page"""
-    return templates.TemplateResponse(name="settings.html", context={"request": request})
+    return templates.TemplateResponse(request=request, name="settings.html", context={"request": request})
 
 @app.get("/api/config")
 async def get_config():
     """Get current configuration"""
-    return config_service.get_config(BASE_DIR, get_config_definition)
+    result = config_service.get_config(BASE_DIR, get_config_definition)
+    if startup_errors and not result.get("is_first_run"):
+        result.setdefault("error", "启动配置无效；请检查设置和 secrets.yaml，保存后重启服务。")
+    return result
 
 
 @app.post("/api/location/preview")

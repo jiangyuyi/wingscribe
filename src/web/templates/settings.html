@@ -223,13 +223,9 @@
                 const response = await fetch('/api/config');
                 const data = await response.json();
 
-                if (data.error && data.is_first_run) {
-                    // First run - show welcome message
-                    showWelcome();
-                    currentConfig = { paths: {}, processing: {}, recognition: {}, web: {} };
-                } else if (data.config) {
-                    currentConfig = data.config;
-                }
+                if (data.is_first_run) showWelcome();
+                currentConfig = data.config || {};
+                if (data.error) showToast('配置需要修复', data.error, 'danger');
 
                 configDefinition = data.definition || get_default_definition();
                 renderConfig();

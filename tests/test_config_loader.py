@@ -78,3 +78,20 @@ def test_validate_paths_config_allows_missing_directories_if_paths_are_absolute(
 
     assert is_valid is True
     assert errors == []
+
+
+def test_validate_checks_every_enabled_source(tmp_path):
+    from src.utils.config_loader import validate_paths_config
+    config = {"paths": {"sources": [{"path": str(tmp_path)}, {"path": "relative"}],
+                        "output": {"root_dir": str(tmp_path / "output")}}}
+    valid, errors = validate_paths_config(config)
+    assert not valid
+    assert any("sources[1]" in error for error in errors)
+    config["paths"]["sources"][1]["enabled"] = False
+    assert validate_paths_config(config)[0]
+
+
+def test_invalid_shapes_return_errors_instead_of_crashing():
+    from src.utils.config_loader import validate_paths_config
+    for config in ({"paths": None}, {"paths": {"sources": "wrong"}}, {"web": {"port": 70000}}, []):
+        assert validate_paths_config(config)[0] is False

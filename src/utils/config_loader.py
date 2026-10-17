@@ -1,6 +1,7 @@
 import yaml
 import logging
 from pathlib import Path
+from .settings import ApplicationSettings, shape_errors
 
 # 全局配置缓存
 _config_cache = None
@@ -26,21 +27,27 @@ def validate_paths_config(config: dict) -> tuple[bool, list]:
     """
     errors = []
     warnings = []
-    paths_conf = config.get('paths', {})
+    format_errors = shape_errors(config)
+    if format_errors:
+        return False, format_errors
+    paths_conf = ApplicationSettings.model_validate(config).paths.model_dump()
 
     # 1. 检查 sources.path（必填，绝对路径 - 格式检查）
     sources = paths_conf.get('sources', [])
     if not sources:
         errors.append("sources 未配置")
-    else:
-        src = sources[0]
+    for index, src in enumerate(sources):
+        if not src.get('enabled', True):
+            continue
         src_path = src.get('path', '')
         if not src_path:
-            errors.append("sources[0].path 未配置（必填）")
+            errors.append(f"sources[{index}].path 未配置（必填）")
         elif not Path(src_path).is_absolute():
-            errors.append(f"sources[0].path 必须是绝对路径: {src_path}")
+            errors.append(f"sources[{index}].path 必须是绝对路径: {src_path}")
         elif not Path(src_path).exists():
-            warnings.append(f"sources[0].path 目录不存在（将在首次配置时创建）: {src_path}")
+            warnings.append(f"sources[{index}].path 目录不存在（请检查目录或 NAS 连接）: {src_path}")
+    if sources and not any(src.get('enabled', True) for src in sources):
+        errors.append("sources 至少需要一个启用的源目录")
 
     # 2. 检查 output.root_dir（必填，绝对路径 - 格式检查）
     output = paths_conf.get('output', {})
@@ -103,7 +110,10 @@ def load_config(settings_path: str = "config/settings.yaml", secrets_path: str =
     base_path = Path(settings_path)
     if base_path.exists():
         with open(base_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f) or {}
+            config = yaml.safe_load(f)
+            config = {} if config is None else config
+        if not isinstance(config, dict):
+            raise ValueError("settings.yaml 顶层必须是键值配置")
     else:
         logging.warning(f"Settings file not found at {base_path}")
 
@@ -112,7 +122,10 @@ def load_config(settings_path: str = "config/settings.yaml", secrets_path: str =
     if secret_path.exists():
         logging.info(f"Loading secrets from {secret_path}")
         with open(secret_path, 'r', encoding='utf-8') as f:
-            secrets = yaml.safe_load(f) or {}
+            secrets = yaml.safe_load(f)
+            secrets = {} if secrets is None else secrets
+        if not isinstance(secrets, dict):
+            raise ValueError("secrets.yaml 顶层必须是键值配置")
 
         _deep_merge_dict(config, secrets)
     

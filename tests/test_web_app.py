@@ -748,7 +748,9 @@ def test_get_config_returns_first_run_when_settings_missing(tmp_path, monkeypatc
 
     result = asyncio.run(web_app.get_config())
 
-    assert result == {"error": "Configuration file not found", "is_first_run": True}
+    assert result["is_first_run"] is True
+    assert result["definition"]
+    assert result["config"]["paths"]["sources"][0]["path"] == ""
 
 
 def test_search_species_closes_manager_on_error(monkeypatch):

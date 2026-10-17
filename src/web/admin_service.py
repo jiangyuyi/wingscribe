@@ -8,11 +8,13 @@ from src.metadata.taxonomy_catalogue import ensure_taxonomy
 def admin_dashboard(request, templates, is_paths_configured, get_stats):
     if not is_paths_configured():
         return templates.TemplateResponse(
+            request=request,
             name="settings.html",
             context={"request": request, "is_first_run": False},
         )
     stats = get_stats()
     return templates.TemplateResponse(
+        request=request,
         name="admin.html",
         context={"request": request, "stats": stats},
     )

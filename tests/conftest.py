@@ -1,35 +1,21 @@
-"""Isolate legacy import-time application setup from the personal workspace.
-
-Remove this bootstrap when application construction accepts explicit settings.
-The configuration loader itself is restored immediately and remains testable.
-"""
-from copy import deepcopy
+"""Explicit application fixtures; importing modules never reads personal settings."""
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from unittest.mock import patch
+
+import pytest
+import yaml
 
 
-def pytest_configure(config):
-    sandbox = TemporaryDirectory(prefix="wingscribe-tests-")
-    config.add_cleanup(sandbox.cleanup)
-    root = Path(sandbox.name)
-    source = root / "source"
-    output = root / "output"
+@pytest.fixture
+def web_app(tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("web-app")
+    from src.web.app import create_app
+    source, output = tmp_path / "source", tmp_path / "output"
     source.mkdir()
     output.mkdir()
-    settings = {
-        "paths": {
-            "sources": [{"path": str(source), "enabled": True}],
-            "output": {"root_dir": str(output)},
-            "db_path": str(root / "test.db"),
-        }
-    }
-    from src.utils import config_loader
-
-    real_loader = config_loader.load_config
-    with patch.object(config_loader, "load_config", side_effect=lambda *a, **k: deepcopy(settings)):
-        from src.web import app as web_app
-        from src import recognition_service
-
-    web_app.load_config = real_loader
-    recognition_service.load_config = real_loader
+    settings = {"paths": {"sources": [{"path": str(source), "enabled": True}],
+                          "output": {"root_dir": str(output)},
+                          "db_path": str(tmp_path / "test.db")}}
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "settings.yaml").write_text(yaml.safe_dump(settings), encoding="utf-8")
+    return create_app(tmp_path).state.runtime

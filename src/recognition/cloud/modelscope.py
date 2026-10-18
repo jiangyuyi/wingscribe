@@ -29,7 +29,8 @@ class ModelScopeRecognizer(AbstractBirdRecognizer):
         self,
         api_token: Optional[str] = None,
         model_id: Optional[str] = None,
-        timeout: int = 60
+        timeout: int = 60,
+        config: Optional[dict] = None
     ):
         """
         初始化魔搭识别器
@@ -39,7 +40,7 @@ class ModelScopeRecognizer(AbstractBirdRecognizer):
             model_id: 模型 ID
             timeout: 请求超时时间（秒）
         """
-        self._config = get_config()
+        self._config = config if config is not None else get_config()
         self._api_token = api_token or self._get_api_token()
         self._model_id = model_id or self._get_default_model()
         self._timeout = timeout

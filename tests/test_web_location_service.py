@@ -36,26 +36,26 @@ def test_preview_locations_is_safe_when_dictionaries_are_missing(tmp_path):
     assert response["results"][0]["source"] == "unknown"
 
 
-def test_location_preview_endpoint_delegates_to_service(monkeypatch, tmp_path):
-    from src.web import app as web_app
+def test_location_preview_endpoint_delegates_to_service(web_app, monkeypatch, tmp_path):
+    from src.web import app as web_module
 
     monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
     monkeypatch.setattr(
-        web_app.location_service,
+        web_module.location_service,
         "preview_locations",
         lambda base_dir, locations: {"base_dir": base_dir, "locations": locations},
     )
 
-    result = asyncio.run(web_app.preview_locations(web_app.LocationPreviewRequest(locations=["北京"])))
+    result = asyncio.run(web_app.preview_locations(web_module.LocationPreviewRequest(locations=["北京"])))
 
     assert result == {"base_dir": tmp_path, "locations": ["北京"]}
 
 
 @pytest.mark.parametrize("locations", [[], ["北京"] * 101, [""], ["x" * 501]])
-def test_location_preview_endpoint_rejects_invalid_batches(locations):
-    from src.web import app as web_app
+def test_location_preview_endpoint_rejects_invalid_batches(web_app, locations):
+    from src.web import app as web_module
 
-    with pytest.raises(web_app.HTTPException) as exc_info:
-        asyncio.run(web_app.preview_locations(web_app.LocationPreviewRequest(locations=locations)))
+    with pytest.raises(web_module.HTTPException) as exc_info:
+        asyncio.run(web_app.preview_locations(web_module.LocationPreviewRequest(locations=locations)))
 
     assert exc_info.value.status_code == 400

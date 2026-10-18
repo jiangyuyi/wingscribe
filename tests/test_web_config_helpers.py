@@ -1,8 +1,8 @@
-from src.web import app as web_app
+from src.web import app as web_module
 from src.web import config_helpers
 
 
-def test_app_reexports_config_helpers():
+def test_app_reexports_config_helpers(web_app):
     assert web_app.get_config_definition is config_helpers.get_config_definition
     assert web_app.get_nested_value is config_helpers.get_nested_value
     assert web_app.set_nested_value is config_helpers.set_nested_value

@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from src.web import app as web_app
+from src.web import app as web_module
 from src.web import path_helpers
 
 
-def test_app_reexports_path_helpers(monkeypatch, tmp_path):
+def test_app_reexports_path_helpers(web_app, monkeypatch, tmp_path):
     monkeypatch.setattr(web_app, "db_path", tmp_path / "data.db")
     monkeypatch.setattr(web_app, "source_dir", tmp_path / "raw")
     monkeypatch.setattr(web_app, "source_dirs", [tmp_path / "raw"])
@@ -24,7 +24,7 @@ def test_app_reexports_path_helpers(monkeypatch, tmp_path):
     assert web_app.resolve_web_path("bird.jpg") == path_helpers.resolve_web_path(
         "bird.jpg",
         web_app.source_dirs,
-        web_app.logger,
+        web_module.logger,
     )
 
 
@@ -35,7 +35,7 @@ def test_resolve_web_path_selects_matching_source_for_absolute_path(tmp_path):
     image_path.parent.mkdir(parents=True)
     image_path.write_bytes(b"image")
 
-    result = path_helpers.resolve_web_path(str(image_path), [source_a, source_b], web_app.logger)
+    result = path_helpers.resolve_web_path(str(image_path), [source_a, source_b], web_module.logger)
 
     assert result == "/raw/source-1/nested/bird.jpg"
 

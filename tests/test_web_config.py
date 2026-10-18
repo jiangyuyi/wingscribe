@@ -2,10 +2,10 @@ import asyncio
 
 import yaml
 
-from src.web import app as web_app
+from src.web import app as web_module
 
 
-def test_set_nested_value_supports_array_indexes():
+def test_set_nested_value_supports_array_indexes(web_app):
     target = {"paths": {}}
 
     web_app.set_nested_value(target, "paths.sources[0].path", "D:/photos")
@@ -19,15 +19,15 @@ def test_set_nested_value_supports_array_indexes():
     }
 
 
-def test_save_config_writes_nested_values_and_type_converts(tmp_path, monkeypatch):
+def test_save_config_writes_nested_values_and_type_converts(web_app, tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
 
-    request = web_app.SaveConfigRequest(
+    request = web_module.SaveConfigRequest(
         configs=[
-            web_app.ConfigItem(section="paths", key="sources[0].path", value="D:/photos"),
-            web_app.ConfigItem(section="paths", key="output.root_dir", value="D:/processed"),
-            web_app.ConfigItem(section="web", key="port", value="9000", type="int"),
-            web_app.ConfigItem(section="processing", key="skip_blurry", value="true", type="bool"),
+            web_module.ConfigItem(section="paths", key="sources[0].path", value="D:/photos"),
+            web_module.ConfigItem(section="paths", key="output.root_dir", value="D:/processed"),
+            web_module.ConfigItem(section="web", key="port", value="9000", type="int"),
+            web_module.ConfigItem(section="processing", key="skip_blurry", value="true", type="bool"),
         ],
         restart=False,
     )
@@ -43,7 +43,7 @@ def test_save_config_writes_nested_values_and_type_converts(tmp_path, monkeypatc
     assert saved_config["processing"]["skip_blurry"] is True
 
 
-def test_save_config_marks_restart_required_when_db_path_changes(tmp_path, monkeypatch):
+def test_save_config_marks_restart_required_when_db_path_changes(web_app, tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -52,9 +52,9 @@ def test_save_config_marks_restart_required_when_db_path_changes(tmp_path, monke
         encoding="utf-8",
     )
 
-    request = web_app.SaveConfigRequest(
+    request = web_module.SaveConfigRequest(
         configs=[
-            web_app.ConfigItem(section="paths", key="db_path", value=str(tmp_path / "data" / "db" / "new.db")),
+            web_module.ConfigItem(section="paths", key="db_path", value=str(tmp_path / "data" / "db" / "new.db")),
         ],
         restart=False,
     )
@@ -67,7 +67,7 @@ def test_save_config_marks_restart_required_when_db_path_changes(tmp_path, monke
     assert saved_config["paths"]["db_path"] == str(tmp_path / "data" / "db" / "new.db")
 
 
-def test_failed_atomic_save_preserves_original(tmp_path, monkeypatch):
+def test_failed_atomic_save_preserves_original(web_app, tmp_path, monkeypatch):
     from src.web import config_service
     from src.utils.settings import first_run_defaults
     config = first_run_defaults()
@@ -79,20 +79,20 @@ def test_failed_atomic_save_preserves_original(tmp_path, monkeypatch):
     target.write_text(yaml.safe_dump(config), encoding="utf-8")
     original = target.read_bytes()
     monkeypatch.setattr(config_service.os, "replace", lambda *args: (_ for _ in ()).throw(OSError()))
-    response = config_service.save_config(web_app.SaveConfigRequest(configs=[], restart=False), tmp_path, web_app.set_nested_value)
+    response = config_service.save_config(web_module.SaveConfigRequest(configs=[], restart=False), tmp_path, web_app.set_nested_value)
     assert response["status"] == "error"
     assert target.read_bytes() == original
     assert list(target.parent.iterdir()) == [target]
 
 
-def test_invalid_save_does_not_create_config_directory(tmp_path):
+def test_invalid_save_does_not_create_config_directory(web_app, tmp_path):
     from src.web import config_service
-    request = web_app.SaveConfigRequest(configs=[web_app.ConfigItem(section="web", key="port", value="70000", type="int")])
+    request = web_module.SaveConfigRequest(configs=[web_module.ConfigItem(section="web", key="port", value="70000", type="int")])
     assert config_service.save_config(request, tmp_path, web_app.set_nested_value)["status"] == "error"
     assert not (tmp_path / "config").exists()
 
 
-def test_malformed_yaml_remains_available_for_repair(tmp_path):
+def test_malformed_yaml_remains_available_for_repair(web_app, tmp_path):
     from src.web import config_service
     target = tmp_path / "config/settings.yaml"
     target.parent.mkdir()
@@ -100,11 +100,11 @@ def test_malformed_yaml_remains_available_for_repair(tmp_path):
     result = config_service.get_config(tmp_path, lambda: {"basic": {}})
     assert result["error"]
     assert result["definition"] == {"basic": {}}
-    assert config_service.save_config(web_app.SaveConfigRequest(configs=[]), tmp_path, web_app.set_nested_value)["status"] == "error"
+    assert config_service.save_config(web_module.SaveConfigRequest(configs=[]), tmp_path, web_app.set_nested_value)["status"] == "error"
     assert target.read_text(encoding="utf-8") == "paths: ["
 
 
-def test_setup_mode_blocks_processing_without_initializing_database(monkeypatch):
+def test_setup_mode_blocks_processing_without_initializing_database(web_app, monkeypatch):
     from fastapi.testclient import TestClient
     monkeypatch.setattr(web_app, "startup_errors", ["Invalid settings"])
     monkeypatch.setattr(web_app, "init_app_db", lambda: (_ for _ in ()).throw(AssertionError("Must not initialize")))

@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from src.metadata.ioc_manager import IOCManager
-from src.web import app as web_app
+from src.web import app as web_module
 
 
 class StubExifWriter:
@@ -43,7 +43,7 @@ class TemplateRecorder:
         return payload
 
 
-def test_resolve_processed_web_path_uses_processed_root(tmp_path, monkeypatch):
+def test_resolve_processed_web_path_uses_processed_root(web_app, tmp_path, monkeypatch):
     processed_root = tmp_path / "processed"
     processed_root.mkdir()
     monkeypatch.setattr(web_app, "processed_dir", processed_root)
@@ -53,7 +53,7 @@ def test_resolve_processed_web_path_uses_processed_root(tmp_path, monkeypatch):
     assert result == "/processed/birds/output.jpg"
 
 
-def test_serve_processed_file_returns_file_response_for_existing_file(tmp_path, monkeypatch):
+def test_serve_processed_file_returns_file_response_for_existing_file(web_app, tmp_path, monkeypatch):
     processed_root = tmp_path / "processed"
     processed_root.mkdir()
     image_path = processed_root / "birds" / "output.jpg"
@@ -66,7 +66,7 @@ def test_serve_processed_file_returns_file_response_for_existing_file(tmp_path, 
     assert Path(response.path) == image_path
 
 
-def test_serve_raw_file_returns_file_response_for_selected_source(tmp_path, monkeypatch):
+def test_serve_raw_file_returns_file_response_for_selected_source(web_app, tmp_path, monkeypatch):
     source_a = tmp_path / "source-a"
     source_b = tmp_path / "source-b"
     image_path = source_b / "nested" / "bird.jpg"
@@ -79,18 +79,18 @@ def test_serve_raw_file_returns_file_response_for_selected_source(tmp_path, monk
     assert Path(response.path) == image_path
 
 
-def test_serve_processed_file_raises_404_for_missing_file(tmp_path, monkeypatch):
+def test_serve_processed_file_raises_404_for_missing_file(web_app, tmp_path, monkeypatch):
     processed_root = tmp_path / "processed"
     processed_root.mkdir()
     monkeypatch.setattr(web_app, "processed_dir", processed_root)
 
-    with pytest.raises(web_app.HTTPException) as exc_info:
+    with pytest.raises(web_module.HTTPException) as exc_info:
         web_app.serve_processed_file("birds/missing.jpg")
 
     assert exc_info.value.status_code == 404
 
 
-def test_resolve_web_path_uses_matching_source_root(tmp_path, monkeypatch):
+def test_resolve_web_path_uses_matching_source_root(web_app, tmp_path, monkeypatch):
     source_a = tmp_path / "source-a"
     source_b = tmp_path / "source-b"
     image_path = source_b / "nested" / "bird.jpg"
@@ -103,7 +103,7 @@ def test_resolve_web_path_uses_matching_source_root(tmp_path, monkeypatch):
     assert result == "/raw/source-1/nested/bird.jpg"
 
 
-def test_index_redirects_to_settings_when_first_run(monkeypatch):
+def test_index_redirects_to_settings_when_first_run(web_app, monkeypatch):
     templates = TemplateRecorder()
     monkeypatch.setattr(web_app, "templates", templates)
     monkeypatch.setattr(web_app, "is_first_run", lambda: True)
@@ -117,7 +117,7 @@ def test_index_redirects_to_settings_when_first_run(monkeypatch):
     }
 
 
-def test_index_builds_photo_page_and_pagination(monkeypatch):
+def test_index_builds_photo_page_and_pagination(web_app, monkeypatch):
     templates = TemplateRecorder()
 
     class StubCursor:
@@ -223,7 +223,7 @@ def test_index_builds_photo_page_and_pagination(monkeypatch):
     assert conn.cursor_obj.executed[1][1][-2:] == [2, 1]
 
 
-def test_admin_dashboard_uses_settings_template_when_paths_missing(monkeypatch):
+def test_admin_dashboard_uses_settings_template_when_paths_missing(web_app, monkeypatch):
     templates = TemplateRecorder()
     monkeypatch.setattr(web_app, "templates", templates)
     monkeypatch.setattr(web_app, "is_paths_configured", lambda: False)
@@ -236,7 +236,7 @@ def test_admin_dashboard_uses_settings_template_when_paths_missing(monkeypatch):
     }
 
 
-def test_admin_dashboard_renders_stats_when_paths_configured(monkeypatch):
+def test_admin_dashboard_renders_stats_when_paths_configured(web_app, monkeypatch):
     templates = TemplateRecorder()
     monkeypatch.setattr(web_app, "templates", templates)
     monkeypatch.setattr(web_app, "is_paths_configured", lambda: True)
@@ -250,7 +250,7 @@ def test_admin_dashboard_renders_stats_when_paths_configured(monkeypatch):
     }
 
 
-def test_settings_page_renders_template(monkeypatch):
+def test_settings_page_renders_template(web_app, monkeypatch):
     templates = TemplateRecorder()
     monkeypatch.setattr(web_app, "templates", templates)
 
@@ -259,7 +259,7 @@ def test_settings_page_renders_template(monkeypatch):
     assert result == {"template": "settings.html", "context": {"request": ANY}}
 
 
-def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monkeypatch):
+def test_update_label_updates_db_after_file_and_metadata_success(web_app, tmp_path, monkeypatch):
     source_root = tmp_path / "source"
     processed_root = tmp_path / "processed"
     source_root.mkdir()
@@ -335,7 +335,7 @@ def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monke
     monkeypatch.setattr(web_app, "exif_writer", exif_writer)
 
     response = web_app.update_label(
-        web_app.UpdateLabelRequest(
+        web_module.UpdateLabelRequest(
             photo_id=photo_id,
             scientific_name="Parus minor",
             chinese_name="大山雀",
@@ -365,7 +365,7 @@ def test_update_label_updates_db_after_file_and_metadata_success(tmp_path, monke
     assert len(exif_writer.calls) == 2
 
 
-def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp_path, monkeypatch):
+def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(web_app, tmp_path, monkeypatch):
     source_root = tmp_path / "source"
     processed_root = tmp_path / "processed"
     source_root.mkdir()
@@ -438,9 +438,9 @@ def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp
     )
     monkeypatch.setattr(web_app, "exif_writer", StubExifWriter([False]))
 
-    with pytest.raises(web_app.HTTPException) as exc_info:
+    with pytest.raises(web_module.HTTPException) as exc_info:
         web_app.update_label(
-            web_app.UpdateLabelRequest(
+            web_module.UpdateLabelRequest(
                 photo_id=photo_id,
                 scientific_name="Parus minor",
                 chinese_name="大山雀",
@@ -469,14 +469,14 @@ def test_update_label_does_not_commit_db_when_processed_metadata_write_fails(tmp
     assert not (processed_root / "trip" / "bird_大山雀_100pct.jpg").exists()
 
 
-def test_get_api_stats_returns_get_stats(monkeypatch):
+def test_get_api_stats_returns_get_stats(web_app, monkeypatch):
     expected = {"photos": 12, "species": 4}
     monkeypatch.setattr(web_app, "get_stats", lambda: expected)
 
     assert web_app.get_api_stats() == expected
 
 
-def test_get_scan_history_uses_manager_and_closes(monkeypatch):
+def test_get_scan_history_uses_manager_and_closes(web_app, monkeypatch):
     class StubManager:
         def __init__(self):
             self.closed = False
@@ -499,7 +499,7 @@ def test_get_scan_history_uses_manager_and_closes(monkeypatch):
     assert manager.closed is True
 
 
-def test_taxonomy_and_search_endpoints_forward_requests(monkeypatch):
+def test_taxonomy_and_search_endpoints_forward_requests(web_app, monkeypatch):
     class StubManager:
         def __init__(self):
             self.closed = False
@@ -551,7 +551,7 @@ def test_taxonomy_and_search_endpoints_forward_requests(monkeypatch):
     assert all(manager.closed for manager in managers)
 
 
-def test_validate_config_path_reports_file_and_directory_state(tmp_path):
+def test_validate_config_path_reports_file_and_directory_state(web_app, tmp_path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     data_file = data_dir / "taxonomy.xlsx"
@@ -584,14 +584,14 @@ def test_validate_config_path_reports_file_and_directory_state(tmp_path):
     }
 
 
-def test_browse_folder_and_file_api_return_success_and_error(monkeypatch):
+def test_browse_folder_and_file_api_return_success_and_error(web_app, monkeypatch):
     async def run_success_cases():
         folder = await web_app.browse_folder_api(title="Folder", initial_path="D:/birds")
         file = await web_app.browse_file_api(title="File", initial_path="D:/birds/list.xlsx", file_types="xlsx|xls")
         return folder, file
 
     monkeypatch.setattr(
-        web_app.asyncio,
+        web_module.asyncio,
         "to_thread",
         lambda func, *args: asyncio.sleep(0, result=func(*args)),
     )
@@ -615,7 +615,7 @@ def test_browse_folder_and_file_api_return_success_and_error(monkeypatch):
     def fail_to_thread(func, *args):
         raise RuntimeError("dialog unavailable")
 
-    monkeypatch.setattr(web_app.asyncio, "to_thread", fail_to_thread)
+    monkeypatch.setattr(web_module.asyncio, "to_thread", fail_to_thread)
 
     folder_error, file_error = asyncio.run(run_error_cases())
 
@@ -623,11 +623,11 @@ def test_browse_folder_and_file_api_return_success_and_error(monkeypatch):
     assert file_error == {"error": "dialog unavailable", "path": None}
 
 
-def test_download_raw_returns_guidance_message():
+def test_download_raw_returns_guidance_message(web_app):
     assert web_app.download_raw("raw/a.jpg") == {"error": "Use context menu to save image"}
 
 
-def test_reset_system_clears_processed_and_reimports_taxonomy(tmp_path, monkeypatch):
+def test_reset_system_clears_processed_and_reimports_taxonomy(web_app, tmp_path, monkeypatch):
     base_dir = tmp_path / "repo"
     base_dir.mkdir()
     processed_root = tmp_path / "processed"
@@ -701,7 +701,7 @@ def test_reset_system_clears_processed_and_reimports_taxonomy(tmp_path, monkeypa
     assert not db_file.exists()
 
 
-def test_rebuild_species_stats_returns_success(monkeypatch):
+def test_rebuild_species_stats_returns_success(web_app, monkeypatch):
     class StubManager:
         def __init__(self):
             self.rebuilt = False
@@ -723,7 +723,7 @@ def test_rebuild_species_stats_returns_success(monkeypatch):
     assert manager.closed is True
 
 
-def test_rebuild_species_stats_closes_manager_on_error(monkeypatch):
+def test_rebuild_species_stats_closes_manager_on_error(web_app, monkeypatch):
     class StubManager:
         def __init__(self):
             self.closed = False
@@ -743,7 +743,7 @@ def test_rebuild_species_stats_closes_manager_on_error(monkeypatch):
     assert manager.closed is True
 
 
-def test_get_config_returns_first_run_when_settings_missing(tmp_path, monkeypatch):
+def test_get_config_returns_first_run_when_settings_missing(web_app, tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "BASE_DIR", tmp_path)
 
     result = asyncio.run(web_app.get_config())
@@ -753,7 +753,7 @@ def test_get_config_returns_first_run_when_settings_missing(tmp_path, monkeypatc
     assert result["config"]["paths"]["sources"][0]["path"] == ""
 
 
-def test_search_species_closes_manager_on_error(monkeypatch):
+def test_search_species_closes_manager_on_error(web_app, monkeypatch):
     class StubManager:
         def __init__(self):
             self.closed = False
@@ -773,7 +773,7 @@ def test_search_species_closes_manager_on_error(monkeypatch):
     assert manager.closed is True
 
 
-def test_get_config_reads_yaml_when_settings_exists(tmp_path, monkeypatch):
+def test_get_config_reads_yaml_when_settings_exists(web_app, tmp_path, monkeypatch):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     settings_path = config_dir / "settings.yaml"
@@ -794,7 +794,7 @@ def test_get_config_reads_yaml_when_settings_exists(tmp_path, monkeypatch):
     }
 
 
-def test_restart_server_returns_restarting_status(monkeypatch, tmp_path):
+def test_restart_server_returns_restarting_status(web_app, monkeypatch, tmp_path):
     base_dir = tmp_path / "repo"
     base_dir.mkdir()
     popen_calls = {}
@@ -841,7 +841,7 @@ def test_restart_server_returns_restarting_status(monkeypatch, tmp_path):
     assert thread_calls["started"] is True
 
 
-def test_restart_server_returns_error_when_spawn_fails(monkeypatch, tmp_path):
+def test_restart_server_returns_error_when_spawn_fails(web_app, monkeypatch, tmp_path):
     base_dir = tmp_path / "repo"
     base_dir.mkdir()
 
@@ -865,7 +865,7 @@ def test_restart_server_returns_error_when_spawn_fails(monkeypatch, tmp_path):
     assert result == {"error": "spawn failed"}
 
 
-def test_websocket_endpoint_sends_new_logs_and_handles_cancel(monkeypatch):
+def test_websocket_endpoint_sends_new_logs_and_handles_cancel(web_app, monkeypatch):
     accepted = {"value": False}
     sent = []
 
@@ -883,7 +883,7 @@ def test_websocket_endpoint_sends_new_logs_and_handles_cancel(monkeypatch):
         raise asyncio.CancelledError()
 
     monkeypatch.setattr(web_app.task_manager, "logs", ["log-1", "log-2"])
-    monkeypatch.setattr(web_app.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(web_module.asyncio, "sleep", fake_sleep)
 
     asyncio.run(web_app.websocket_endpoint(StubWebSocket()))
 
@@ -892,7 +892,7 @@ def test_websocket_endpoint_sends_new_logs_and_handles_cancel(monkeypatch):
     assert sleep_calls["count"] == 1
 
 
-def test_get_stats_returns_counts_and_closes_connection(monkeypatch):
+def test_get_stats_returns_counts_and_closes_connection(web_app, monkeypatch):
     class StubCursor:
         def __init__(self):
             self.calls = []
@@ -928,7 +928,7 @@ def test_get_stats_returns_counts_and_closes_connection(monkeypatch):
     ]
 
 
-def test_get_stats_returns_zero_on_query_error(monkeypatch):
+def test_get_stats_returns_zero_on_query_error(web_app, monkeypatch):
     class StubCursor:
         def execute(self, sql):
             raise RuntimeError("db unavailable")
@@ -952,7 +952,7 @@ def test_get_stats_returns_zero_on_query_error(monkeypatch):
     assert conn.closed is True
 
 
-def test_get_photos_by_taxonomy_prefers_cn_filters_and_resolves_web_paths(monkeypatch):
+def test_get_photos_by_taxonomy_prefers_cn_filters_and_resolves_web_paths(web_app, monkeypatch):
     class StubManager:
         def __init__(self):
             self.closed = False
@@ -1035,7 +1035,7 @@ def test_get_photos_by_taxonomy_prefers_cn_filters_and_resolves_web_paths(monkey
     assert conn.cursor_obj.executed[1][1] == ["雀形目", "Paridae", "山雀属", "Parus minor", "20260320", 10, 20]
 
 
-def test_get_photos_by_taxonomy_uses_scientific_fallback_filters(monkeypatch):
+def test_get_photos_by_taxonomy_uses_scientific_fallback_filters(web_app, monkeypatch):
     class StubManager:
         def close(self):
             pass

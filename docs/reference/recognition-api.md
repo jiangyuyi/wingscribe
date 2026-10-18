@@ -1,6 +1,6 @@
 # 识别 API 与云配置
 
-核对日期：2026-10-17；依据本地路由、协议和工厂代码。没有执行付费/远程调用，不保证第三方服务端点当前可用。
+核对日期：2026-10-18；依据本地路由、协议和工厂代码。没有执行付费/远程调用，不保证第三方服务端点当前可用。
 
 ## 两种服务入口
 
@@ -9,7 +9,7 @@
 | 完整 Web 应用 | `python src/web/app.py` | `/api/recognition/recognize`、`/api/recognition/batch`、批次查询/结果/取消、`/api/recognition/platforms`、`/api/recognition/health` |
 | 独立识别服务 | `python src/recognition_service.py` | `/api/recognize`、`/platforms`、`/health`；没有挂载 Web 批量路由 |
 
-从仓库根目录启动；两者默认使用配置中的同一端口，不要同时占用同一地址。启动后 `/docs` 展示对应入口的实际 OpenAPI。
+从仓库根目录启动；两者默认使用配置中的同一端口，不要同时占用同一地址。配置有效时 `/docs` 展示对应入口的实际 OpenAPI。直接用 Uvicorn 时指定 `src.web.app:create_app --factory` 或 `src.recognition_service:create_app --factory`；模块导入不再创建服务实例。
 
 ## 请求协议
 

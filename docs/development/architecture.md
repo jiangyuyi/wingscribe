@@ -1,6 +1,6 @@
 # 架构与数据流
 
-核对日期：2026-10-16。本文说明当前代码分工；后续想法见 [项目状态](status.md)，早期审计见 [档案](../archive/README.md)。
+核对日期：2026-10-18。本文说明当前代码分工；后续想法见 [项目状态](status.md)，早期审计见 [档案](../archive/README.md)。
 
 ## 主要模块
 
@@ -43,3 +43,14 @@ SQLite 包含 `taxonomy`、`photos`、`scan_history` 及物种统计等结构。
 - 多视野融合和软先验在离线评测中使用，未接入默认流水线。
 - BioCLIP 2.5 已注册为实验模型；配置样例仍使用 BioCLIP2。缺省回退与显式配置的差异见 [配置](../user/configuration.md)。
 - 人工确认数据已可区分，但 prototype/kNN 和连拍排序仍属待实施方向。
+
+
+## 应用实例与启动（B3d）
+
+`src.web.app.create_app()` 显式创建 Web 应用，`app.state.runtime` 保存该实例的配置、路径、模板、ExifWriter 和 TaskManager。导入模块不读取个人配置，不初始化数据库或模型。数据库初始化在 lifespan 启动阶段执行，失败时仅开放设置入口。
+
+识别工厂的配置和本地模型缓存、批任务服务也由各应用实例分别持有；后台照片任务使用该实例启动时的配置快照。保存新配置后仍需重启。退出时协作停止并等待照片任务，取消本实例识别批次，释放模型缓存引用；底层已经开始的推理无法强杀。
+
+脚本入口仍为 `python src/web/app.py` 和 `python src/recognition_service.py`。直接使用 Uvicorn 时采用 `src.web.app:create_app --factory` 或 `src.recognition_service:create_app --factory`，不再提供导入即构建的模块级 `app`。
+
+测试通过显式工厂和临时配置创建应用，不再在导入前替换配置加载器。实例隔离用于清晰的生命周期和测试，不意味着可以让两个实例同时处理同一数据库/输出目录；跨进程任务互斥留待 B4。

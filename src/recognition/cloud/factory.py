@@ -14,6 +14,7 @@ from ..inference_dongniao import DongniaoRecognizer
 from ...utils.config_loader import get_config
 import logging
 import threading
+from copy import deepcopy
 from pathlib import Path
 from ..local_adapter import LocalRecognitionAdapter
 from ...metadata.avilist import DEFAULT_CATALOGUE
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 class RecognizerFactory:
     """识别器工厂"""
 
+    _config = None
     _local_instances = {}
     _local_lock = threading.Lock()
 
@@ -35,6 +37,14 @@ class RecognizerFactory:
         RecognitionPlatform.baidu.value: BaiduRecognizer,
         "dongniao": DongniaoRecognizer,  # 懂鸟 API
     }
+
+    @classmethod
+    def configured(cls, config):
+        class ApplicationRecognizerFactory(cls):
+            _config = deepcopy(config)
+            _local_instances = {}
+            _local_lock = threading.Lock()
+        return ApplicationRecognizerFactory
 
     @classmethod
     def create(
@@ -59,7 +69,7 @@ class RecognizerFactory:
         if platform not in cls._recognizers:
             # 如果是本地识别，尝试加载本地识别器
             if platform == RecognitionPlatform.local.value:
-                config = get_config()
+                config = cls._config if cls._config is not None else get_config()
                 rec = config.get("recognition", {})
                 root = Path(__file__).resolve().parents[3]
                 catalogue = Path(config.get("paths", {}).get("taxonomy_catalogue_path") or DEFAULT_CATALOGUE)
@@ -82,6 +92,8 @@ class RecognizerFactory:
 
         # 尝试创建实例
         try:
+            if cls._config is not None and platform in ("huggingface", "modelscope", "aliyun", "baidu"):
+                kwargs.setdefault("config", cls._config)
             recognizer = recognizer_class(**kwargs)
 
             # 检查是否可用
@@ -96,6 +108,11 @@ class RecognizerFactory:
         except Exception as e:
             logger.error(f"Error creating {platform} recognizer: {e}")
             raise RuntimeError(f"Failed to initialize {platform} recognizer: {e}")
+
+    @classmethod
+    def clear_local_cache(cls):
+        with cls._local_lock:
+            cls._local_instances.clear()
 
     @classmethod
     def loaded_local_models(cls) -> list[str]:

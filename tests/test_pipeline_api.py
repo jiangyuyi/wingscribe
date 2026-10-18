@@ -1,4 +1,4 @@
-from src.web import app as web_app
+from src.web import app as web_module
 
 
 class StubThread:
@@ -20,9 +20,9 @@ def test_task_manager_start_pipeline_starts_background_thread(monkeypatch):
         created_threads.append(thread)
         return thread
 
-    monkeypatch.setattr(web_app.threading, "Thread", fake_thread)
+    monkeypatch.setattr(web_module.task_manager_module.threading, "Thread", fake_thread)
 
-    manager = web_app.TaskManager()
+    manager = web_module.ExtractedTaskManager()
     manager.should_stop = True
 
     result = manager.start_pipeline("20260101", "20260131")
@@ -46,9 +46,9 @@ def test_task_manager_start_pipeline_by_folders_starts_background_thread(monkeyp
         created_threads.append(thread)
         return thread
 
-    monkeypatch.setattr(web_app.threading, "Thread", fake_thread)
+    monkeypatch.setattr(web_module.task_manager_module.threading, "Thread", fake_thread)
 
-    manager = web_app.TaskManager()
+    manager = web_module.ExtractedTaskManager()
     manager.should_stop = True
 
     result = manager.start_pipeline_by_folders(["D:/photos/trip"], recursive=False)
@@ -65,7 +65,7 @@ def test_task_manager_start_pipeline_by_folders_starts_background_thread(monkeyp
 
 
 def test_task_manager_rejects_duplicate_start():
-    manager = web_app.TaskManager()
+    manager = web_module.ExtractedTaskManager()
     manager.is_running = True
 
     result = manager.start_pipeline("20260101", "20260131")
@@ -73,7 +73,7 @@ def test_task_manager_rejects_duplicate_start():
     assert result is False
 
 
-def test_start_pipeline_endpoint_normalizes_empty_dates(monkeypatch):
+def test_start_pipeline_endpoint_normalizes_empty_dates(web_app, monkeypatch):
     calls = []
 
     class StubTaskManager:
@@ -86,14 +86,14 @@ def test_start_pipeline_endpoint_normalizes_empty_dates(monkeypatch):
     monkeypatch.setattr(web_app, "task_manager", StubTaskManager())
 
     response = web_app.start_pipeline(
-        web_app.StartPipelineRequest(start_date="", end_date="")
+        web_module.StartPipelineRequest(start_date="", end_date="")
     )
 
     assert response == {"status": "success", "message": "Pipeline started"}
     assert calls == [(None, None)]
 
 
-def test_start_pipeline_by_folders_endpoint_forwards_request(monkeypatch):
+def test_start_pipeline_by_folders_endpoint_forwards_request(web_app, monkeypatch):
     calls = []
 
     class StubTaskManager:
@@ -106,27 +106,27 @@ def test_start_pipeline_by_folders_endpoint_forwards_request(monkeypatch):
     monkeypatch.setattr(web_app, "task_manager", StubTaskManager())
 
     response = web_app.start_pipeline_by_folders(
-        web_app.StartPipelineByFoldersRequest(paths=["D:/photos/a", "D:/photos/b"], recursive=False)
+        web_module.StartPipelineByFoldersRequest(paths=["D:/photos/a", "D:/photos/b"], recursive=False)
     )
 
     assert response == {"status": "success", "message": "Pipeline started for 2 folder(s)"}
     assert calls == [(["D:/photos/a", "D:/photos/b"], False)]
 
 
-def test_start_pipeline_by_folders_endpoint_rejects_when_running(monkeypatch):
+def test_start_pipeline_by_folders_endpoint_rejects_when_running(web_app, monkeypatch):
     class StubTaskManager:
         is_running = True
 
     monkeypatch.setattr(web_app, "task_manager", StubTaskManager())
 
     response = web_app.start_pipeline_by_folders(
-        web_app.StartPipelineByFoldersRequest(paths=["D:/photos/a"], recursive=True)
+        web_module.StartPipelineByFoldersRequest(paths=["D:/photos/a"], recursive=True)
     )
 
     assert response == {"status": "error", "message": "Pipeline already running"}
 
 
-def test_stop_pipeline_endpoint_sets_stop_flag(monkeypatch):
+def test_stop_pipeline_endpoint_sets_stop_flag(web_app, monkeypatch):
     class StubTaskManager:
         def __init__(self):
             self.is_running = True
@@ -144,7 +144,7 @@ def test_stop_pipeline_endpoint_sets_stop_flag(monkeypatch):
     assert manager.stop_called is True
 
 
-def test_stop_pipeline_endpoint_rejects_when_not_running(monkeypatch):
+def test_stop_pipeline_endpoint_rejects_when_not_running(web_app, monkeypatch):
     class StubTaskManager:
         is_running = False
 
@@ -155,7 +155,7 @@ def test_stop_pipeline_endpoint_rejects_when_not_running(monkeypatch):
     assert response == {"status": "error", "message": "Pipeline is not running"}
 
 
-def test_build_folder_tree_filters_system_directories(tmp_path):
+def test_build_folder_tree_filters_system_directories(web_app, tmp_path):
     (tmp_path / "trip-a").mkdir()
     (tmp_path / ".hidden").mkdir()
     (tmp_path / "$RECYCLE.BIN").mkdir()
@@ -173,7 +173,7 @@ def test_build_folder_tree_filters_system_directories(tmp_path):
     ]
 
 
-def test_build_folder_tree_recursive_adds_children(tmp_path):
+def test_build_folder_tree_recursive_adds_children(web_app, tmp_path):
     child = tmp_path / "trip-a"
     grandchild = child / "day-1"
     grandchild.mkdir(parents=True)
@@ -196,7 +196,7 @@ def test_build_folder_tree_recursive_adds_children(tmp_path):
     ]
 
 
-def test_get_folder_tree_uses_enabled_existing_sources_only(tmp_path, monkeypatch):
+def test_get_folder_tree_uses_enabled_existing_sources_only(web_app, tmp_path, monkeypatch):
     enabled_source = tmp_path / "enabled"
     enabled_source.mkdir()
     (enabled_source / "trip-a").mkdir()
@@ -235,7 +235,7 @@ def test_get_folder_tree_uses_enabled_existing_sources_only(tmp_path, monkeypatc
     }
 
 
-def test_get_folder_children_returns_one_level_for_absolute_path(tmp_path):
+def test_get_folder_children_returns_one_level_for_absolute_path(web_app, tmp_path):
     target = tmp_path / "trip-a"
     target.mkdir()
     (target / "day-1").mkdir()
@@ -261,7 +261,7 @@ def test_get_folder_children_returns_one_level_for_absolute_path(tmp_path):
     }
 
 
-def test_get_folder_children_returns_empty_for_missing_path(tmp_path):
+def test_get_folder_children_returns_empty_for_missing_path(web_app, tmp_path):
     response = web_app.get_folder_children(str(tmp_path / "missing"))
 
     assert response == {"children": []}

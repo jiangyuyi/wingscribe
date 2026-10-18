@@ -72,7 +72,8 @@ class BatchRecognitionService:
     def __init__(
         self,
         max_concurrent: int = 10,
-        max_concurrent_per_platform: int = 5
+        max_concurrent_per_platform: int = 5,
+        recognizer_factory=None
     ):
         """
         初始化批量识别服务
@@ -81,11 +82,21 @@ class BatchRecognitionService:
             max_concurrent: 全局最大并发数
             max_concurrent_per_platform: 每个平台的最大并发数
         """
+        self.recognizer_factory = recognizer_factory or CloudFactory
         self.max_concurrent = max_concurrent
         self.max_concurrent_per_platform = max_concurrent_per_platform
         self.jobs: Dict[str, BatchJob] = {}
         self._executor = ThreadPoolExecutor(max_workers=max_concurrent)
         self._running_tasks: Dict[str, asyncio.Task] = {}
+
+    async def close(self):
+        tasks = list(self._running_tasks.values())
+        for batch_id in list(self._running_tasks):
+            self.cancel_job(batch_id)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._running_tasks.clear()
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     def create_batch(
         self,
@@ -172,7 +183,7 @@ class BatchRecognitionService:
                 """处理单个平台的所有图片"""
                 # 创建该平台的识别器
                 try:
-                    recognizer = CloudFactory.create(platform)
+                    recognizer = self.recognizer_factory.create(platform)
                 except Exception as e:
                     logger.error(f"Failed to create recognizer for {platform}: {e}")
                     # 返回错误响应

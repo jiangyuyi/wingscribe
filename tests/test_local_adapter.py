@@ -103,7 +103,8 @@ def test_unverified_dongniao_fails_explicitly():
 def test_real_http_local_route_uses_factory_adapter(image_path, monkeypatch):
     from fastapi.testclient import TestClient
     from src.recognition.cloud.factory import RecognizerFactory
-    from src.recognition_service import app
+    from src.recognition_service import create_app
+    app = create_app(config_override={})
     import torch
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     monkeypatch.setattr(RecognizerFactory, "_local_instances", {})

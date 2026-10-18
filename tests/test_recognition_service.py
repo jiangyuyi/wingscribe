@@ -19,17 +19,12 @@ def test_recognition_service_loads_config_from_project_root(monkeypatch):
         captured["secrets_path"] = secrets_path
         return {"web": {"host": "127.0.0.1", "port": 9000}}
 
-    monkeypatch.setattr(config_loader, "load_config", fake_load_config)
-
-    reloaded = importlib.reload(recognition_service)
-
-    try:
-        project_root = Path(reloaded.__file__).resolve().parent.parent
-        assert captured["settings_path"] == str(project_root / "config" / "settings.yaml")
-        assert captured["secrets_path"] == str(project_root / "config" / "secrets.yaml")
-        assert reloaded.PROJECT_ROOT == project_root
-    finally:
-        importlib.reload(reloaded)
+    monkeypatch.setattr(recognition_service, "load_config", fake_load_config)
+    application = recognition_service.create_app()
+    project_root = Path(recognition_service.__file__).resolve().parent.parent
+    assert captured["settings_path"] == str(project_root / "config/settings.yaml")
+    assert captured["secrets_path"] == str(project_root / "config/secrets.yaml")
+    assert application.state.config["web"]["port"] == 9000
 
 
 def test_health_check_reports_gpu_when_available(monkeypatch):

@@ -33,7 +33,7 @@ uv run --locked --extra cpu python -m pytest
 
 根 `requirements.txt` 和安装器依赖仍是旧入口，尚未完成统一，不用于此次可复现环境验收；B7 将替换安装器消费方式。更新依赖必须重新运行测试并提交锁文件，不能只改版本范围。
 
-测试的 Web 导入使用临时配置与数据库；传统集成测试仅使用已经存在的 `installer/models/yolo26n.pt`，缺少权重则明确跳过，不在测试中下载模型。全部运行结果见 [实施记录](execution-log.md)。自动测试不能代替真实鸟类识别精度、NAS 实机和安装器验收。
+测试通过应用工厂显式创建临时配置与数据库，不在导入时替换全局加载器；传统集成测试仅使用已经存在的 `installer/models/yolo26n.pt`，缺少权重则明确跳过，不在测试中下载模型。全部运行结果见 [实施记录](execution-log.md)。自动测试不能代替真实鸟类识别精度、NAS 实机和安装器验收。
 
 ExifTool 是独立可执行文件，Python 的 PyExifTool 包不包含它。仓库已有 `installer/tools/exiftool.exe`，开发时可设置：
 

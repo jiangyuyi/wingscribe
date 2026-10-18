@@ -187,9 +187,9 @@ def test_initialization_failure_retains_error(monkeypatch):
     assert manager.error == "initialization failed"
 
 
-def test_status_endpoint_and_admin_render(monkeypatch):
+def test_status_endpoint_and_admin_render(web_app, monkeypatch):
     from fastapi.testclient import TestClient
-    from src.web import app as web_app
+    from src.web import app as web_module
     manager = TaskManager()
     manager.state = "failed"
     manager.error = "test failure"

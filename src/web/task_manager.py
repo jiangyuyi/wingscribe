@@ -1,5 +1,6 @@
 import logging
 import threading
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -15,9 +16,10 @@ class ListLogHandler(logging.Handler):
         super().__init__()
         self.manager = manager
         self.owner = owner
+        self.worker_prefix = f"wingscribe-photo-{manager.task_id}_"
 
     def emit(self, record):
-        if record.thread != self.owner and not record.threadName.startswith("wingscribe-photo"):
+        if record.thread != self.owner and not record.threadName.startswith(self.worker_prefix):
             return
         self.manager.broadcast_log(self.format(record))
         if record.levelno >= logging.ERROR:
@@ -28,7 +30,9 @@ class TaskManager:
     _instance = None
     _instance_lock = threading.Lock()
 
-    def __init__(self):
+    def __init__(self, config_path=None, config_override=None):
+        self._config_snapshot = deepcopy(config_override)
+        self.config_path = Path(config_path) if config_path else BASE_DIR / "config/settings.yaml"
         self._lock = threading.RLock()
         self.is_running = False
         self.should_stop = False
@@ -64,6 +68,11 @@ class TaskManager:
             self.should_stop = True
             self.state = "stopping"
             return True
+
+    def wait(self):
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join()
 
     def record_error(self, message):
         with self._lock:
@@ -130,11 +139,13 @@ class TaskManager:
         try:
             if not self.should_stop:
                 self.broadcast_log("Initializing pipeline (this may take a while on first run)...")
-                runner = WingScribePipeline(str(BASE_DIR / "config/settings.yaml"), init_timeout=120)
+                options = {"config_override": self._config_snapshot} if self._config_snapshot is not None else {}
+                runner = WingScribePipeline(str(self.config_path), init_timeout=120, **options)
                 def progress(processed, total):
                     with self._lock:
                         self.processed, self.total = processed, total
                     self.broadcast_log(f"[PROGRESS] {processed}/{total}")
+                runner.worker_thread_prefix = f"wingscribe-photo-{self.task_id}"
                 runner.set_progress_callback(progress)
                 runner.set_stop_checker(lambda: self.should_stop)
                 with self._lock:

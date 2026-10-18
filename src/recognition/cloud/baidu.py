@@ -29,7 +29,8 @@ class BaiduRecognizer(AbstractBirdRecognizer):
         self,
         api_key: Optional[str] = None,
         secret_key: Optional[str] = None,
-        timeout: int = 30
+        timeout: int = 30,
+        config: Optional[dict] = None
     ):
         """
         初始化百度云识别器
@@ -39,7 +40,7 @@ class BaiduRecognizer(AbstractBirdRecognizer):
             secret_key: 百度云 Secret Key
             timeout: 请求超时时间（秒）
         """
-        self._config = get_config()
+        self._config = config if config is not None else get_config()
         self._api_key = api_key or self._get_config_value("api_key")
         self._secret_key = secret_key or self._get_config_value("secret_key")
         self._timeout = timeout

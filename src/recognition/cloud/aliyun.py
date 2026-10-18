@@ -32,7 +32,8 @@ class AliyunRecognizer(AbstractBirdRecognizer):
         self,
         access_key_id: Optional[str] = None,
         access_key_secret: Optional[str] = None,
-        timeout: int = 30
+        timeout: int = 30,
+        config: Optional[dict] = None
     ):
         """
         初始化阿里云识别器
@@ -42,7 +43,7 @@ class AliyunRecognizer(AbstractBirdRecognizer):
             access_key_secret: 阿里云 AccessKey Secret
             timeout: 请求超时时间（秒）
         """
-        self._config = get_config()
+        self._config = config if config is not None else get_config()
         self._access_key_id = access_key_id or self._get_config_value("access_key_id")
         self._access_key_secret = access_key_secret or self._get_config_value("access_key_secret")
         self._timeout = timeout

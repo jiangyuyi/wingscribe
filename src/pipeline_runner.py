@@ -7,6 +7,7 @@ import time
 import json
 import threading
 import tempfile
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 from datetime import datetime
@@ -131,7 +132,7 @@ class SmartScanner:
             pass
 
 class WingScribePipeline:
-    def __init__(self, config_path: str = "config/settings.yaml", init_timeout: int = 120):
+    def __init__(self, config_path: str = "config/settings.yaml", init_timeout: int = 120, config_override: dict = None):
         """
         Initialize the pipeline.
 
@@ -143,7 +144,8 @@ class WingScribePipeline:
         config_file = Path(config_path)
         if not config_file.is_absolute():
             config_file = Path(PROJECT_ROOT) / config_file
-        self.config = load_config(str(config_file), str(config_file.parent / "secrets.yaml"))
+        self.config = (load_config(str(config_file), str(config_file.parent / "secrets.yaml"))
+                       if config_override is None else deepcopy(config_override))
         paths = self.config.get("paths", {})
         for key in ("db_path", "foreign_list", "china_list", "taxonomy_catalogue_path"):
             if paths.get(key) and not Path(paths[key]).is_absolute():
@@ -778,7 +780,7 @@ class WingScribePipeline:
 
         # Use ThreadPool for detection/cropping
         # 4 workers is a good start for IO/CPU bound mix
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="wingscribe-photo") as executor:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
             futures = []
 
             for source in sources:
@@ -956,7 +958,7 @@ class WingScribePipeline:
         resolved_paths = list(folder_paths)
 
         # Use ThreadPool for detection/cropping
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="wingscribe-photo") as executor:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
             futures = []
 
             for path_str in resolved_paths:

@@ -4,7 +4,7 @@ Recognition API routes.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
+from fastapi import Request, APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
 
 from src.recognition.batch import BatchRecognitionService
@@ -25,15 +25,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/recognition", tags=["recognition"])
 
-batch_service: Optional[BatchRecognitionService] = None
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-def get_batch_service() -> BatchRecognitionService:
-    global batch_service
-    if batch_service is None:
-        batch_service = BatchRecognitionService()
-    return batch_service
+def get_batch_service(http_request: Request = None) -> BatchRecognitionService:
+    if http_request is None:
+        raise RuntimeError("Batch service requires an application request")
+    return http_request.app.state.batch_service
+
+
+def get_recognizer_factory(http_request: Request = None):
+    return http_request.app.state.recognizer_factory if http_request else RecognizerFactory
 
 
 async def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> bool:
@@ -46,9 +48,10 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> b
 async def recognize(
     request: RecognizeRequest,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> RecognizeResponse:
     try:
-        recognizer = RecognizerFactory.create(request.platform.value)
+        recognizer = get_recognizer_factory(http_request).create(request.platform.value)
         return await recognizer.recognize(request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -64,8 +67,9 @@ async def create_batch(
     request: BatchRecognizeRequest,
     background_tasks: BackgroundTasks,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> BatchRecognizeResponse:
-    service = get_batch_service()
+    service = get_batch_service(http_request) if http_request else get_batch_service()
 
     if not request.images:
         raise HTTPException(status_code=400, detail="No images provided")
@@ -83,8 +87,9 @@ async def start_batch(
     batch_id: str,
     background_tasks: BackgroundTasks,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> dict:
-    service = get_batch_service()
+    service = get_batch_service(http_request) if http_request else get_batch_service()
     success = await service.start_batch(batch_id)
 
     if not success:
@@ -100,8 +105,9 @@ async def start_batch(
 async def get_batch_status(
     batch_id: str,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> BatchRecognizeResponse:
-    service = get_batch_service()
+    service = get_batch_service(http_request) if http_request else get_batch_service()
     status = service.get_status(batch_id)
 
     if status is None:
@@ -114,8 +120,9 @@ async def get_batch_status(
 async def get_batch_result(
     batch_id: str,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> BatchResultResponse:
-    service = get_batch_service()
+    service = get_batch_service(http_request) if http_request else get_batch_service()
     result = service.get_result(batch_id)
 
     if result is None:
@@ -128,8 +135,9 @@ async def get_batch_result(
 async def cancel_batch(
     batch_id: str,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> dict:
-    service = get_batch_service()
+    service = get_batch_service(http_request) if http_request else get_batch_service()
     success = service.cancel_job(batch_id)
 
     if not success:
@@ -143,20 +151,22 @@ async def list_batches(
     status: Optional[BatchJobStatus] = None,
     limit: int = 20,
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> list:
-    service = get_batch_service()
+    service = get_batch_service(http_request) if http_request else get_batch_service()
     return service.list_jobs(status=status, limit=limit)
 
 
 @router.get("/platforms", response_model=ListPlatformsResponse)
 async def list_platforms(
     _auth: bool = Depends(verify_api_key),
+    http_request: Request = None,
 ) -> ListPlatformsResponse:
     return build_platforms_response()
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health_check() -> HealthResponse:
+async def health_check(http_request: Request = None) -> HealthResponse:
     import torch
 
     return HealthResponse(
@@ -165,5 +175,5 @@ async def health_check() -> HealthResponse:
         platform="wingscribe",
         gpu_available=torch.cuda.is_available(),
         gpu_device=torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-        models_loaded=RecognizerFactory.loaded_local_models(),
+        models_loaded=get_recognizer_factory(http_request).loaded_local_models(),
     )

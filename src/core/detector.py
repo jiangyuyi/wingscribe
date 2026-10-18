@@ -3,6 +3,7 @@ from ultralytics import YOLO
 import logging
 import torch
 import os
+import threading
 
 def _check_cuda_stable(max_retries: int = 3) -> bool:
     """
@@ -44,6 +45,8 @@ class BirdDetector:
         self.model_path = model_path  # Store for reloading
         self.reload_count = 0  # Track reloads to avoid infinite loop
         self._model = None  # Lazy load
+        # Ultralytics initializes and mutates its predictor during inference.
+        self._inference_lock = threading.RLock()
 
         # Determine device with careful checking
         if device == "auto":
@@ -73,9 +76,10 @@ class BirdDetector:
     @property
     def model(self):
         """Lazy load the model on first access."""
-        if self._model is None:
-            self._load_model()
-        return self._model
+        with self._inference_lock:
+            if self._model is None:
+                self._load_model()
+            return self._model
 
     def _load_model(self):
         """Load or reload the YOLO model."""
@@ -90,6 +94,10 @@ class BirdDetector:
         """
         Detect birds in the image.
         """
+        with self._inference_lock:
+            return self._detect_locked(image_path)
+
+    def _detect_locked(self, image_path: str):
         # Ensure model is loaded before detection
         _ = self.model
 
@@ -114,7 +122,7 @@ class BirdDetector:
                         device=self.device
                     )
                 else:
-                    return []
+                    raise
             elif "CUDA" in error_str and self.device != "cpu":
                 self.device = "cpu"
                 results = self.model.predict(
@@ -124,7 +132,7 @@ class BirdDetector:
                     device="cpu"
                 )
             else:
-                return []
+                raise
 
         bird_boxes = []
         for result in results:

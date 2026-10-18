@@ -11,6 +11,7 @@
 | 网络照片目录 | [NAS 设置](user/nas.md) |
 | AviList 名录与中文显示名 | [分类数据](user/taxonomy.md) |
 | 模块职责与数据流 | [架构](development/architecture.md) |
+| 原片、分析和任务存储边界 | [存储契约](development/asset-catalogue.md) |
 | 当前能力、实现缺口、后续事项 | [项目状态](development/status.md) |
 | 是否重写与分阶段改造 | [工程评估与改造计划](development/modernization-plan-2026-10-16.md) |
 | 当前批次与验证结果 | [实施记录](development/execution-log.md)、[锁定开发环境](development/environment.md) |

@@ -301,3 +301,134 @@ p.run()
     assert len(rows(p, 'asset_versions')) == 2
     assert rows(p, 'job_items')[0]['version_id'] != rows(p, 'job_items')[1]['version_id']
     assert [r['status'] for r in rows(p, 'processing_jobs')] == ['interrupted', 'completed']
+
+
+@pytest.mark.parametrize('folders', [False, True])
+def test_source_disappears_and_recovers_without_deleting_records(setup, folders):
+    p, provider, entry = setup
+    run = lambda: p.run_by_folders([p.source_dir]) if folders else p.run()
+    run()
+    old_asset = rows(p, 'assets')[0]['id']
+    source = Path(p.source_dir)
+    offline = source.with_name('offline-test-source')
+    source.rename(offline)
+    try:
+        with pytest.raises(RuntimeError, match='Cannot scan'):
+            run()
+        assert rows(p, 'assets')[0]['availability'] == 'unavailable'
+        assert len(rows(p, 'asset_versions')) == 1
+        assert rows(p, 'processing_jobs')[-1]['status'] == 'failed'
+        assert p.db.add_scan_history.call_args.args[0]['status'] == 'Failed'
+    finally:
+        offline.rename(source)
+    run()
+    assert rows(p, 'assets')[0]['id'] == old_asset
+    assert rows(p, 'assets')[0]['availability'] == 'available'
+    assert len(rows(p, 'analysis_runs')) == 1
+
+
+@pytest.mark.parametrize('mode', ['recursive', 'dates', 'folders'])
+def test_nested_permission_failure_is_not_success(setup, monkeypatch, mode):
+    import os
+    p, provider, entry = setup
+    p.run()
+    blocked = Path(entry.path).parent
+    original = os.scandir
+    def scandir(path):
+        if Path(path) == blocked:
+            raise PermissionError(13, 'injected directory denial', str(path))
+        return original(path)
+    monkeypatch.setattr('src.core.io.local.os.scandir', scandir)
+    with pytest.raises(RuntimeError, match='directory denial'):
+        if mode == 'folders':
+            p.run_by_folders([p.source_dir])
+        elif mode == 'dates':
+            p.run('20261001', '20261001')
+        else:
+            p.run()
+    assert rows(p, 'assets')[0]['availability'] == 'unknown'
+    assert rows(p, 'processing_jobs')[-1]['status'] == 'failed'
+    assert p.db.add_scan_history.call_args.args[0]['status'] == 'Failed'
+
+
+def test_unavailable_subfolder_does_not_mark_sibling(setup):
+    p, provider, entry = setup
+    sibling = Path(p.source_dir) / '20261002other'
+    sibling.mkdir()
+    (sibling / 'other.jpg').write_bytes(Path(entry.path).read_bytes())
+    p.run()
+    folder = Path(entry.path).parent
+    offline = folder.with_name('offline')
+    folder.rename(offline)
+    try:
+        with pytest.raises(RuntimeError):
+            p.run_by_folders([str(folder)])
+        availability = {a['relative_path']: a['availability'] for a in rows(p, 'assets')}
+        assert availability['20261001park/bird.jpg'] == 'unavailable'
+        assert availability['20261002other/other.jpg'] == 'available'
+    finally:
+        offline.rename(folder)
+
+
+def test_individual_missing_source_keeps_previous_version(setup):
+    p, provider, entry = setup
+    p.process_image(provider, entry, {})
+    Path(entry.path).unlink()
+    with pytest.raises(FileNotFoundError):
+        p.process_image(provider, entry, {})
+    assert rows(p, 'assets')[0]['availability'] == 'unavailable'
+    assert len(rows(p, 'asset_versions')) == 1
+    assert rows(p, 'asset_observations')[-1]['version_id'] is None
+
+
+def test_source_rebind_then_rescan_preserves_asset_identity(setup):
+    p, provider, entry = setup
+    p.run()
+    before = rows(p, 'assets')[0]
+    old_root = Path(p.source_dir)
+    new_root = old_root.with_name('new-source-binding')
+    old_root.rename(new_root)
+    with p.catalogue.transaction() as tx:
+        tx.rebind_source(before['source_id'], str(new_root))
+    p.source_dir = str(new_root)
+    p.config['paths']['sources'][0]['path'] = str(new_root)
+    p.run()
+    assert len(rows(p, 'assets')) == len(rows(p, 'asset_versions')) == 1
+    assert rows(p, 'assets')[0]['id'] == before['id']
+    assert rows(p, 'job_items')[-1]['status'] == 'skipped'
+
+
+def test_unreadable_excluded_output_is_not_scanned(setup, monkeypatch):
+    import os
+    p, provider, entry = setup
+    p.output_root = str(Path(p.source_dir) / 'output')
+    Path(p.output_root).mkdir()
+    original = os.scandir
+    def scandir(path):
+        if Path(path) == Path(p.output_root):
+            raise PermissionError('output is deliberately unreadable')
+        return original(path)
+    monkeypatch.setattr('src.core.io.local.os.scandir', scandir)
+    p.run()
+    assert rows(p, 'processing_jobs')[0]['status'] == 'completed'
+
+
+def test_directory_link_cycle_is_not_followed(setup):
+    p, provider, entry = setup
+    link = Path(entry.path).parent / 'cycle'
+    try:
+        link.symlink_to(Path(p.source_dir), target_is_directory=True)
+    except OSError:
+        pytest.skip('Creating directory links requires Windows privilege')
+    p.run()
+    assert len(rows(p, 'assets')) == 1
+    assert rows(p, 'processing_jobs')[0]['status'] == 'completed'
+
+
+def test_offline_scope_marking_does_not_require_path_resolution(setup, monkeypatch):
+    p, provider, entry = setup
+    p.run()
+    monkeypatch.setattr('src.pipeline_runner.is_within_directory', lambda *args: False)
+    errors = []
+    p._record_scan_failure(provider, p.source_dir, FileNotFoundError('offline'), errors)
+    assert errors and rows(p, 'assets')[0]['availability'] == 'unavailable'

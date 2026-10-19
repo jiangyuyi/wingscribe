@@ -279,6 +279,23 @@ class CatalogueTransaction:
                           (asset_id, source_id, path, path.casefold(), 'unknown', now, now))
         return asset_id
 
+    def set_assets_availability(self, source_id: str, availability: str, relative_dir: str = '') -> None:
+        """Mark only known assets in a failed scan scope; never infer deletion."""
+        if availability not in {'available', 'unavailable', 'unknown'}:
+            raise ValueError('Invalid availability')
+        if not self.conn.execute('SELECT 1 FROM asset_sources WHERE id=?', (source_id,)).fetchone():
+            raise ValueError('Unknown source')
+        prefix = _relative(relative_dir).casefold() + '/' if relative_dir else ''
+        self.conn.execute('UPDATE assets SET availability=? WHERE source_id=? '
+                          'AND substr(path_key,1,?)=?', (availability, source_id, len(prefix), prefix))
+
+    def set_asset_availability(self, asset_id: str, availability: str) -> None:
+        if availability not in {'available', 'unavailable', 'unknown'}:
+            raise ValueError('Invalid availability')
+        result = self.conn.execute('UPDATE assets SET availability=? WHERE id=?', (availability, asset_id))
+        if result.rowcount != 1:
+            raise ValueError('Unknown asset')
+
     def record_observation(self, asset_id: str, observation_key: str, *, outcome: str,
                            version_id: str | None = None, analysis_id: str | None = None,
                            reason: str | None = None, error: str | None = None) -> str:

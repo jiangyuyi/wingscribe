@@ -77,6 +77,9 @@ def observe_image(pipeline, provider, entry, meta):
         if (after.st_size, after.st_mtime_ns) != (final.st_size, final.st_mtime_ns):
             raise RuntimeError('Source changed during processing')
     except Exception as exc:
+        if version is None and isinstance(exc, OSError):
+            with catalogue.transaction() as tx:
+                tx.set_asset_availability(asset, 'unavailable' if isinstance(exc, FileNotFoundError) else 'unknown')
         _save(catalogue, asset, version, key, model, parameters, taxonomy, state, str(exc) or type(exc).__name__)
         if session and item_id:
             session.finish_item(item_id, 'failed', error=str(exc) or type(exc).__name__)

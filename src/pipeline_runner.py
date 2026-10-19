@@ -31,7 +31,7 @@ from src.metadata.exif_writer import ExifWriter
 from src.utils.config_loader import load_config, validate_paths_config
 from src.utils.env_check import check_system_dependencies
 
-from src.core.io.local import LocalProvider # Import to access IGNORED_DIRS
+from src.core.io.local import LocalProvider, SecurityViolationError
 from src.core.io.temp_manager import TempFileManager
 from src.core.io.path_generator import PathGenerator
 from src.core.io.path_parser import PathParser
@@ -105,34 +105,19 @@ class SmartScanner:
         return not (end_int < self.start_date or start_int > self.end_date)
 
     def scan(self, current_path: Path):
-        try:
-            # First, process files in current dir
-            for entry in os.scandir(current_path):
-                # Ignore system/recycle directories
-                if entry.name in LocalProvider.IGNORED_DIRS:
-                    continue
+        provider = LocalProvider(str(self.root_path))
+        provider.strict = True
+        for entry in provider.list_dir(str(current_path), recursive=False):
+            if not entry.is_dir:
+                yield entry
+                continue
+            entry_path = Path(entry.path)
+            if any(is_within_directory(entry_path, ex) for ex in self.exclude_dirs):
+                continue
+            d_start, d_end, _ = PathParser.parse_folder_name(entry.name)
+            if self._is_in_range(d_start, d_end):
+                yield from self.scan(entry_path)
 
-                if entry.is_file():
-                    yield entry
-                elif entry.is_dir():
-                    # Check if this directory should be excluded (output dir)
-                    # 不使用 resolve()，避免 UNC 路径问题
-                    entry_path = Path(entry.path)
-                    if self.exclude_dirs:
-                        if any(is_within_directory(entry_path, ex) for ex in self.exclude_dirs):
-                            logging.debug(f"Excluding output dir: {entry.name}")
-                            continue
-
-                    # Check pruning
-                    d_start, d_end, _ = PathParser.parse_folder_name(entry.name)
-
-                    if self._is_in_range(d_start, d_end):
-                         # Recurse
-                         yield from self.scan(Path(entry.path))
-                    else:
-                        logging.debug(f"Pruning skipped: {entry.name}")
-        except PermissionError:
-            pass
 
 class WingScribePipeline:
     def __init__(self, config_path: str = "config/settings.yaml", init_timeout: int = 120, config_override: dict = None):
@@ -806,6 +791,43 @@ class WingScribePipeline:
         with pipeline_job(self, {'mode': 'dates', 'start_date': start_date, 'end_date': end_date}):
             return self._run_dates(start_date, end_date, existing_hashes)
 
+    def _record_scan_failure(self, provider, path_str, exc, failures):
+        message = f'Cannot scan {path_str}: {exc}'
+        failures.append(message)
+        logging.error(message)
+        catalogue = getattr(self, 'catalogue', None)
+        root = Path(provider.base_dir)
+        scope = Path(path_str)
+        if catalogue is None:
+            return
+        # This only updates logical DB scope. Resolving an offline NAS path may
+        # itself fail, so do not require filesystem IO to retain its failure.
+        try:
+            relative = scope.relative_to(root).as_posix()
+        except ValueError:
+            return
+        # A failed enumeration proves neither deletion nor photo readability.
+        availability = 'unavailable' if isinstance(exc, FileNotFoundError) else 'unknown'
+        with catalogue.transaction() as tx:
+            source = tx.register_source(str(root.absolute()))
+            tx.set_assets_availability(source, availability, '' if relative == '.' else relative)
+
+    def _scan_with_failures(self, provider, path_str, iterator, failures):
+        try:
+            yield from iterator
+        except (OSError, SecurityViolationError) as exc:
+            self._record_scan_failure(provider, path_str, exc, failures)
+
+    def _source_exists(self, provider, path_str, failures):
+        try:
+            if provider.exists(path_str):
+                return True
+            exc = FileNotFoundError(path_str)
+        except OSError as error:
+            exc = error
+        self._record_scan_failure(provider, path_str, exc, failures)
+        return False
+
     def _run_dates(self, start_date=None, end_date=None, existing_hashes=None):
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -855,8 +877,8 @@ class WingScribePipeline:
 
                 # 使用 LocalProvider 替代 fs_manager
                 provider = LocalProvider(base_dir=path_str)
-                if not provider.exists(path_str):
-                    logging.warning(f"Source path not found: {path_str}")
+                provider.strict = True
+                if not self._source_exists(provider, path_str, failures):
                     continue
 
                 source_root_abs = Path(provider.get_local_path(path_str))
@@ -869,12 +891,14 @@ class WingScribePipeline:
                 if recursive and (start_date or end_date):
                     scanner = SmartScanner(source_root_abs, start_date, end_date, exclude_dirs)
                     iterator = scanner.scan(source_root_abs)
+                elif recursive:
+                    iterator = self._scan_folder_recursive(provider, path_str)
                 else:
-                    iterator = provider.list_dir(path_str, recursive=recursive)
+                    iterator = provider.list_dir(path_str, recursive=False)
 
                 # 收集有效的图片文件并统计总数
                 valid_entries = []
-                for entry in iterator:
+                for entry in self._scan_with_failures(provider, path_str, iterator, failures):
                     is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
                     if is_dir: continue
 
@@ -1039,8 +1063,8 @@ class WingScribePipeline:
                     source_root_abs = Path(self.source_dir) if self.source_dir else Path(path_str)
 
                 provider = LocalProvider(base_dir=str(source_root_abs))
-                if not provider.exists(path_str):
-                    logging.warning(f"Folder path not found or outside source: {path_str}")
+                provider.strict = True
+                if not self._source_exists(provider, path_str, failures):
                     continue
 
                 parser = PathParser(source_root_abs, None)
@@ -1058,7 +1082,7 @@ class WingScribePipeline:
 
                 # 收集有效的图片文件
                 valid_entries = []
-                for entry in iterator:
+                for entry in self._scan_with_failures(provider, path_str, iterator, failures):
                     is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
                     if is_dir:
                         continue
@@ -1182,6 +1206,7 @@ class WingScribePipeline:
                     yield entry
         except Exception as e:
             logging.warning(f"Error scanning folder {folder_path}: {e}")
+            raise
 
 if __name__ == "__main__":
     config_path = "config/settings.yaml"

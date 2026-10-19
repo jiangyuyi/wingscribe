@@ -27,6 +27,7 @@ class LocalProvider(StorageProvider):
         # 不使用 resolve()，保持原始路径格式 (如 Y:/)
         # 否则 Windows 映射驱动器会被解析为 UNC 路径 \\192.168.31.205\share
         self.base_dir = Path(base_dir) if base_dir else None
+        self.strict = False
 
     def _validate_path(self, path_str: str) -> Path:
         # 不使用 resolve()，避免将 Y:/ 转换为 UNC 路径
@@ -36,6 +37,9 @@ class LocalProvider(StorageProvider):
         return path
 
     def list_dir(self, path: str, recursive: bool = False) -> Generator[FileEntry, None, None]:
+        if self.strict:
+            yield from self._list_dir_strict(path, recursive)
+            return
         p = self._validate_path(path)
         if not p.exists() or not p.is_dir():
             return
@@ -71,6 +75,35 @@ class LocalProvider(StorageProvider):
                     # Let the observed worker retain the read/stat failure.
                     yield FileEntry(path=str(item.absolute()), name=item.name, is_dir=False)
                 continue
+
+    def _list_dir_strict(self, path: str, recursive: bool):
+        """Scanning must surface directory failures, including nested failures.
+
+        Do not recurse through directory links: this avoids cycles and aliases.
+        A JPEG stat failure is passed to its worker for a persistent observation.
+        """
+        directory = self._validate_path(path)
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.name.startswith('.') or entry.name in self.IGNORED_DIRS:
+                    continue
+                item = Path(entry.path)
+                try:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                    # Linked directories are outside the supported traversal contract.
+                    attributes = getattr(entry.stat(follow_symlinks=False), 'st_file_attributes', 0)
+                    if (entry.is_symlink() or attributes & 0x400) and entry.is_dir():
+                        continue
+                    if entry.is_symlink() and self.base_dir and not is_within_directory(item, self.base_dir):
+                        continue
+                    size = 0 if is_dir else entry.stat().st_size
+                except OSError:
+                    if item.suffix.lower() not in {'.jpg', '.jpeg'}:
+                        raise
+                    is_dir, size = False, 0
+                yield FileEntry(str(item.absolute()), is_dir, size, entry.name)
+                if recursive and is_dir:
+                    yield from self._list_dir_strict(str(item), True)
 
     def exists(self, path: str) -> bool:
         try:

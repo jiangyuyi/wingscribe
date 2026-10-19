@@ -17,6 +17,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(PROJECT_ROOT)
 
 from src.metadata.ioc_manager import IOCManager
+from src.storage.catalogue import AssetCatalogue
+from src.storage.scan_observer import observe_image
 from src.metadata.taxonomy_catalogue import ensure_taxonomy, current_release
 from src.core.detector import BirdDetector
 from src.core.quality import QualityEvaluator, QualityResult
@@ -191,6 +193,8 @@ class WingScribePipeline:
             processed_base_dir=output_root
         )
         try:
+            self.catalogue = AssetCatalogue(db_path)
+            self.catalogue.initialize(backup_dir=db_path.parent / 'backups')
             self.device = self.config['processing'].get('device', 'cpu')
 
             # 日志等级配置
@@ -443,7 +447,11 @@ class WingScribePipeline:
             alt_threshold = self.config.get('recognition', {}).get('alternatives_threshold', 70)
             low_conf_threshold = self.config.get('recognition', {}).get('low_confidence_threshold', 60)
 
+            if len(batch_results) != len(items) or any(not results for results in batch_results):
+                raise RuntimeError('Recognition returned incomplete results')
             for item, results in zip(items, batch_results):
+                if 'catalogue_detection' in item:
+                    item['catalogue_detection']['result']['candidates'] = results
                 self._archive_item(item, results, alt_threshold, low_conf_threshold)
         except Exception as e:
             logging.error(f"Batch processing failed: {e}", exc_info=True)
@@ -468,6 +476,7 @@ class WingScribePipeline:
         cn_name = "Unknown"
         sci_name = "Unknown"
         user_comment = "No recognition results."
+        candidates_data = []
 
         if not results:
             top_result = {"scientific_name": "Unknown", "confidence": 0.0}
@@ -527,12 +536,18 @@ class WingScribePipeline:
             ext = Path(entry.name).suffix
             current_filename = f"{base}_{i_det+1}{ext}"
 
+        if item.get('attempt_key'):
+            # Preserve old outputs across sources, file versions and retries.
+            current_filename = f"{Path(current_filename).stem}_{item['attempt_key']}{Path(current_filename).suffix}"
+
         final_path = self.path_generator.generate_path(gen_meta, current_filename)
         Path(final_path).parent.mkdir(parents=True, exist_ok=True)
         
         try:
             import shutil
             shutil.move(temp_crop_path, final_path)
+            if 'catalogue_detection' in item:
+                item['catalogue_detection']['output_path'] = str(Path(final_path).absolute())
             
             if is_low_conf:
                 description = "Uncertain Bird (Low Confidence)"
@@ -544,7 +559,7 @@ class WingScribePipeline:
             # Filter out None values from keywords
             keywords = [k for k in keywords if k is not None]
 
-            self.exif_writer.write_metadata(str(final_path), {
+            metadata_written = self.exif_writer.write_metadata(str(final_path), {
                 'ImageDescription': description,
                 'XMP:Description': description,
                 'XPTitle': description,
@@ -552,6 +567,8 @@ class WingScribePipeline:
                 'Keywords': keywords,
                 'UserComment': user_comment
             })
+            if metadata_written is False:
+                raise RuntimeError('Output metadata writing failed')
             
             # Store absolute paths for database
             self.db.add_photo_record({
@@ -602,10 +619,18 @@ class WingScribePipeline:
         }
 
     def process_image(self, provider, entry, meta):
+        if getattr(self, 'catalogue', None) is not None:
+            return observe_image(self, provider, entry, meta)
+        return self._process_image(provider, entry, meta)
+
+    def _process_image(self, provider, entry, meta, observation=None):
         # 1. Deduplication
-        file_hash = self._calculate_file_hash(provider, entry.path, entry.size)
+        size = Path(provider.get_local_path(entry.path)).stat().st_size if observation is not None else entry.size
+        file_hash = self._calculate_file_hash(provider, entry.path, size)
         # Use in-memory set if available (much faster), otherwise fallback to database
-        if self.existing_hashes is not None:
+        if observation is not None:
+            pass  # Version/parameter deduplication already ran; keep distinct source locations.
+        elif self.existing_hashes is not None:
             if file_hash in self.existing_hashes:
                 logging.debug(f"Skipping duplicate (in-memory): {entry.name}")
                 return
@@ -614,7 +639,8 @@ class WingScribePipeline:
             return
 
         local_source_path = provider.get_local_path(entry.path)
-        if not local_source_path: return
+        if not local_source_path:
+            raise RuntimeError('Source has no readable local path')
 
         # 2. Detect (Thread-safe if YOLO is)
         # Note: YOLO instantiation might need lock if not thread-safe, but predict is usually ok
@@ -624,7 +650,10 @@ class WingScribePipeline:
             logging.error(f"Detection failed for {entry.name}: {e}")
             raise
             
-        if not detections: return
+        if not detections:
+            if observation is not None:
+                observation['outcome'] = 'no_detection'
+            return
         
         # Init recognizer if needed (double check locking if lazily init)
         if self.recognizer is None: 
@@ -650,6 +679,9 @@ class WingScribePipeline:
         # Each invocation owns its crops until synchronous recognition finishes.
         with tempfile.TemporaryDirectory(prefix="image-", dir=temp_root) as image_temp_dir:
             for i, (box, score) in enumerate(detections):
+                recorded = {'bbox': [float(v) for v in box], 'confidence': float(score), 'result': {}}
+                if observation is not None:
+                    observation['detections'].append(recorded)
                 temp_crop_path = Path(image_temp_dir) / f"detection_{i}.jpg"
 
                 success = ImageProcessor.crop_and_resize(
@@ -658,6 +690,8 @@ class WingScribePipeline:
                     padding=self.config['processing']['crop_padding']
                 )
 
+                if not success:
+                    raise RuntimeError(f'Crop failed for detection {i}: {entry.name}')
                 if success:
                     # 5. Quality evaluation. The default mode preserves the legacy blur filter.
                     should_process, quality_result = self._evaluate_crop_quality(
@@ -668,6 +702,8 @@ class WingScribePipeline:
                         image_height=img_height,
                     )
                     if not should_process:
+                        recorded['result']['status'] = 'quality_filtered'
+                        recorded['result']['quality'] = quality_result.to_dict() if quality_result else None
                         try:
                             os.remove(str(temp_crop_path))
                         except OSError:
@@ -686,9 +722,15 @@ class WingScribePipeline:
                     }
                     if quality_result is not None:
                         batch_item['quality'] = quality_result.to_dict()
+                    if observation is not None:
+                        recorded['result']['quality'] = batch_item.get('quality')
+                        batch_item['catalogue_detection'] = recorded
+                        batch_item['attempt_key'] = observation['attempt_key']
                     image_batch_items.append(batch_item)
 
             self._recognize_batch(image_batch_items, candidates)
+            if observation is not None:
+                observation['outcome'] = 'succeeded' if image_batch_items else 'quality_filtered'
 
     def _evaluate_crop_quality(
         self,
@@ -799,7 +841,7 @@ class WingScribePipeline:
                 logging.info(f"Scanning source: {path_str} (Recursive: {recursive})")
 
                 # 使用 LocalProvider 替代 fs_manager
-                provider = LocalProvider(base_dir=self.source_dir)
+                provider = LocalProvider(base_dir=path_str)
                 if not provider.exists(path_str):
                     logging.warning(f"Source path not found: {path_str}")
                     continue
@@ -865,7 +907,7 @@ class WingScribePipeline:
                             def __init__(self, e):
                                 self.path = e.path
                                 self.name = e.name
-                                self.size = e.stat().st_size
+                                self.size = 0  # Actual stat belongs inside the observed worker.
                         entry_obj = Adapter(entry)
                     else:
                         entry_obj = entry
@@ -1041,7 +1083,7 @@ class WingScribePipeline:
                             def __init__(self, e):
                                 self.path = e.path
                                 self.name = e.name
-                                self.size = e.stat().st_size
+                                self.size = 0  # Actual stat belongs inside the observed worker.
                         entry_obj = Adapter(entry)
                     else:
                         entry_obj = entry

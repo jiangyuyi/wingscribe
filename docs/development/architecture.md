@@ -35,7 +35,7 @@
 
 SQLite 包含 `taxonomy`、`photos`、`scan_history` 及物种统计等结构。照片记录保留候选、自动/人工标签来源和可选质量数据。文件数据库热点操作采用短连接与写锁；部分兼容代码仍直接使用 `manager.conn`。
 
-B4a 新增独立的 `src/storage/catalogue.py`，提供来源、原片版本、分析/检测与持久任务数据结构。它尚未接入扫描或应用启动；只在显式初始化时创建增量表，已有库需先备份，详见[原片与任务存储契约](asset-catalogue.md)。
+B4a–b 的 `src/storage/catalogue.py` 提供来源、原片版本、分析/检测与持久任务数据结构。流水线初始化时备份已有库并建立增量表，`src/storage/scan_observer.py` 包装两种扫描入口共享的原片处理函数，记录完整指纹、分析结果、失败和跳过原因。任务执行器的持久状态与恢复仍待 B4c，详见[原片与任务存储契约](asset-catalogue.md)。
 
 源目录及输出目录使用绝对路径，内部参考文件按项目根目录使用；命令统一在根目录执行。Web 原图通过 `/raw/source-{index}/...` 对应多个源，处理图由 `/processed/...` 提供。
 

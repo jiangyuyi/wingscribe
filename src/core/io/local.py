@@ -65,8 +65,11 @@ class LocalProvider(StorageProvider):
                     is_dir=item.is_dir(),
                     size=item.stat().st_size if item.is_file() else 0
                 )
-            except PermissionError:
-                logging.warning(f"Permission denied accessing {item}")
+            except OSError:
+                logging.warning(f"Cannot inspect directory entry {item}")
+                if item.suffix.lower() in {'.jpg', '.jpeg'}:
+                    # Let the observed worker retain the read/stat failure.
+                    yield FileEntry(path=str(item.absolute()), name=item.name, is_dir=False)
                 continue
 
     def exists(self, path: str) -> bool:

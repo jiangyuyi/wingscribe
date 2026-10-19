@@ -8,7 +8,7 @@ import json
 import threading
 import tempfile
 from copy import deepcopy
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from pathlib import Path
 from datetime import datetime
 
@@ -19,6 +19,7 @@ sys.path.append(PROJECT_ROOT)
 from src.metadata.ioc_manager import IOCManager
 from src.storage.catalogue import AssetCatalogue
 from src.storage.scan_observer import observe_image
+from src.storage.pipeline_jobs import pipeline_job
 from src.metadata.taxonomy_catalogue import ensure_taxonomy, current_release
 from src.core.detector import BirdDetector
 from src.core.quality import QualityEvaluator, QualityResult
@@ -594,8 +595,9 @@ class WingScribePipeline:
             if self.log_level == 'debug':
                 logging.info(f"Processed: {entry.name} -> {log_name} ({confidence*100:.1f}%)")
             # 更新进度
-            self.processed_count += 1
-            self._emit_progress()
+            if getattr(self, 'catalogue', None) is None:
+                self.processed_count += 1
+                self._emit_progress()
             
         except Exception as e:
             logging.error(f"Failed to archive {entry.name}: {e}")
@@ -620,7 +622,14 @@ class WingScribePipeline:
 
     def process_image(self, provider, entry, meta):
         if getattr(self, 'catalogue', None) is not None:
-            return observe_image(self, provider, entry, meta)
+            if getattr(self, '_job_session', None) is None:
+                with pipeline_job(self, {'mode': 'image', 'path': entry.path}):
+                    return observe_image(self, provider, entry, meta)
+            try:
+                return observe_image(self, provider, entry, meta)
+            finally:
+                self.processed_count += 1
+                self._emit_progress()
         return self._process_image(provider, entry, meta)
 
     def _process_image(self, provider, entry, meta, observation=None):
@@ -794,6 +803,10 @@ class WingScribePipeline:
         return (clipped_width * clipped_height) / (image_width * image_height)
 
     def run(self, start_date: str = None, end_date: str = None, existing_hashes: set = None):
+        with pipeline_job(self, {'mode': 'dates', 'start_date': start_date, 'end_date': end_date}):
+            return self._run_dates(start_date, end_date, existing_hashes)
+
+    def _run_dates(self, start_date=None, end_date=None, existing_hashes=None):
         t_start = time.time()
         start_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         processed_count = 0
@@ -821,8 +834,8 @@ class WingScribePipeline:
         # source.path is now always absolute (required), no conversion needed
 
         # Use ThreadPool for detection/cropping
-        # 4 workers is a good start for IO/CPU bound mix
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
+        # One worker owns detector/recognizer state; at most four submitted items.
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
             futures = []
 
             for source in sources:
@@ -917,8 +930,8 @@ class WingScribePipeline:
                     futures.append(executor.submit(self.process_image, provider, entry_obj, meta))
                     
                     # Prevent memory explosion from too many futures
-                    if len(futures) > 500:
-                        done, not_done = wait(futures, timeout=0.1)
+                    if len(futures) >= 4:
+                        done, not_done = wait(futures, return_when=FIRST_COMPLETED)
                         for future in done:
                             try:
                                 future.result()
@@ -960,6 +973,10 @@ class WingScribePipeline:
             logging.info(f"Pipeline completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 
     def run_by_folders(self, folder_paths: list, recursive: bool = True):
+        with pipeline_job(self, {'mode': 'folders', 'paths': list(folder_paths), 'recursive': recursive}):
+            return self._run_folders(folder_paths, recursive)
+
+    def _run_folders(self, folder_paths, recursive=True):
         """
         Run pipeline for specific folders only, ignoring date range filters.
 
@@ -1000,7 +1017,7 @@ class WingScribePipeline:
         resolved_paths = list(folder_paths)
 
         # Use ThreadPool for detection/cropping
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
             futures = []
 
             for path_str in resolved_paths:
@@ -1093,8 +1110,8 @@ class WingScribePipeline:
                     futures.append(executor.submit(self.process_image, provider, entry_obj, meta))
 
                     # Prevent memory explosion
-                    if len(futures) > 500:
-                        done, not_done = wait(futures, timeout=0.1)
+                    if len(futures) >= 4:
+                        done, not_done = wait(futures, return_when=FIRST_COMPLETED)
                         for future in done:
                             try:
                                 future.result()

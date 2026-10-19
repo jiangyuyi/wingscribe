@@ -14,9 +14,12 @@ def observe_image(pipeline, provider, entry, meta):
     with catalogue.transaction() as tx:
         source = tx.register_source(str(root.absolute()))
         asset = tx.discover_asset(source, relative)
-    key = uuid4().hex
+    session = getattr(pipeline, '_job_session', None)
+    key = (pipeline.job_id + ':' if session else '') + uuid4().hex
+    item_id = None
     version = None
-    state = {'outcome': 'failed', 'detections': [], 'attempt_key': key}
+    # Observation keys include job provenance; filenames must use only a UUID.
+    state = {'outcome': 'failed', 'detections': [], 'attempt_key': key.rsplit(':', 1)[-1]}
     recognition = pipeline.config.get('recognition', {})
     parameters = {
         'processing': pipeline.config.get('processing', {}),
@@ -44,6 +47,19 @@ def observe_image(pipeline, provider, entry, meta):
                 mtime_ns=after.st_mtime_ns, fingerprint=fingerprint,
                 captured_at=meta.get('captured_date'))
         version = registered['version_id']
+        if session:
+            item_id = session.enqueue(pipeline.job_id, version)
+            if pipeline._should_stop():
+                with catalogue.transaction() as tx:
+                    tx.record_observation(asset, key, outcome='skipped', version_id=version,
+                                          reason='stopped_before_execution')
+                return
+            if session.claim(pipeline.job_id, item_id) is None:
+                # Overlapping selected folders must not execute the same item twice.
+                with catalogue.transaction() as tx:
+                    tx.record_observation(asset, key, outcome='skipped', version_id=version,
+                                          reason='already_enqueued_in_this_job')
+                return
         for previous in reversed(catalogue.list_analyses(version)):
             if (previous['outcome'] in {'succeeded', 'no_detection', 'quality_filtered'}
                     and previous['model'] == model and previous['taxonomy_version'] == taxonomy
@@ -53,6 +69,8 @@ def observe_image(pipeline, provider, entry, meta):
                     with catalogue.transaction() as tx:
                         tx.record_observation(asset, key, outcome='skipped', version_id=version,
                             analysis_id=previous['id'], reason='unchanged_version_and_parameters')
+                    if session:
+                        session.finish_item(item_id, 'skipped', reason='unchanged_version_and_parameters')
                     return
         pipeline._process_image(provider, entry, meta, state)
         final = path.stat()
@@ -60,8 +78,12 @@ def observe_image(pipeline, provider, entry, meta):
             raise RuntimeError('Source changed during processing')
     except Exception as exc:
         _save(catalogue, asset, version, key, model, parameters, taxonomy, state, str(exc) or type(exc).__name__)
+        if session and item_id:
+            session.finish_item(item_id, 'failed', error=str(exc) or type(exc).__name__)
         raise
     _save(catalogue, asset, version, key, model, parameters, taxonomy, state)
+    if session:
+        session.finish_item(item_id, 'completed')
 
 
 def _save(catalogue, asset, version, key, model, parameters, taxonomy, state, error=None):

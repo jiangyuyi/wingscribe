@@ -355,14 +355,14 @@
                 const task = await response.json();
                 const labels = {idle: '未运行', starting: '正在初始化', running: '正在处理',
                     stopping: '正在停止，等待已开始的处理结束', stopped: '已停止',
-                    completed: '已完成', failed: '处理失败'};
+                    completed: '已完成', failed: '处理失败', interrupted: '上次处理已中断，可重新扫描继续'};
                 document.getElementById('task-state').textContent =
                     (labels[task.state] || task.state) + (task.error ? '：' + task.error : '');
                 startBtn.disabled = task.is_running;
                 startBtn.textContent = task.is_running ? '⏳ Running...' : '▶ Start Pipeline';
                 if (task.is_running && task.total > 0) updateProgress(task.processed, task.total);
                 const key = task.task_id + ':' + task.state;
-                if (key !== lastTaskState && ['completed', 'stopped', 'failed'].includes(task.state)) {
+                if (key !== lastTaskState && ['completed', 'stopped', 'failed', 'interrupted'].includes(task.state)) {
                     loadHistory();
                     loadStats();
                     hideProgress();

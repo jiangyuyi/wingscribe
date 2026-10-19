@@ -35,7 +35,7 @@
 
 SQLite 包含 `taxonomy`、`photos`、`scan_history` 及物种统计等结构。照片记录保留候选、自动/人工标签来源和可选质量数据。文件数据库热点操作采用短连接与写锁；部分兼容代码仍直接使用 `manager.conn`。
 
-B4a–b 的 `src/storage/catalogue.py` 提供来源、原片版本、分析/检测与持久任务数据结构。流水线初始化时备份已有库并建立增量表，`src/storage/scan_observer.py` 包装两种扫描入口共享的原片处理函数，记录完整指纹、分析结果、失败和跳过原因。任务执行器的持久状态与恢复仍待 B4c，详见[原片与任务存储契约](asset-catalogue.md)。
+B4a–c 的 `src/storage/catalogue.py` 提供来源、原片版本、分析/检测与持久任务数据结构。流水线初始化时备份已有库并建立增量表，`src/storage/scan_observer.py` 包装两种扫描入口共享的原片处理函数，记录完整指纹、分析结果、失败和跳过原因。`pipeline_jobs.py` 与 `JobSession` 在每次扫描全程持有同库独占锁，写入任务状态；单个照片线程使用模型，最多提交 4 项。TaskManager 关联任务 ID、启动时恢复旧状态；重新发起扫描会重验文件版本并复用有效结果，不盲目恢复旧输入。详见[原片与任务存储契约](asset-catalogue.md)。
 
 源目录及输出目录使用绝对路径，内部参考文件按项目根目录使用；命令统一在根目录执行。Web 原图通过 `/raw/source-{index}/...` 对应多个源，处理图由 `/processed/...` 提供。
 
@@ -55,4 +55,4 @@ B4a–b 的 `src/storage/catalogue.py` 提供来源、原片版本、分析/检�
 
 脚本入口仍为 `python src/web/app.py` 和 `python src/recognition_service.py`。直接使用 Uvicorn 时采用 `src.web.app:create_app --factory` 或 `src.recognition_service:create_app --factory`，不再提供导入即构建的模块级 `app`。
 
-测试通过显式工厂和临时配置创建应用，不再在导入前替换配置加载器。实例隔离用于清晰的生命周期和测试，不意味着可以让两个实例同时处理同一数据库/输出目录；跨进程任务互斥留待 B4。
+测试通过显式工厂和临时配置创建应用，不再在导入前替换配置加载器。实例隔离用于清晰的生命周期和测试；B4c 的本地文件锁拒绝两个执行者同时扫描同一数据库。不同数据库共用输出目录、网络数据库以及跨实例远程停止不在这套锁的保护范围内。

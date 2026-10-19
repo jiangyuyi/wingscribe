@@ -1,11 +1,15 @@
 import logging
 import threading
+import sqlite3
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from contextlib import closing
 
 from src.pipeline_runner import WingScribePipeline
+from src.storage.catalogue import AssetCatalogue
+from src.storage.job_session import JobSession, JobBusyError
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 logger = logging.getLogger(__name__)
@@ -47,6 +51,44 @@ class TaskManager:
         self.processed = 0
         self.total = 0
         self._thread = None
+        self.job_id = None
+        self.recovered_jobs = 0
+        self.persisted_job = None
+        self._restore_job()
+
+    def _restore_job(self):
+        """Restore a saved result; never reclaim a database owned by a live worker."""
+        if self._config_snapshot is None:
+            return
+        configured = self._config_snapshot.get('paths', {}).get('db_path') or 'data/db/wingscribe.db'
+        path = Path(configured)
+        if not path.is_absolute():
+            path = BASE_DIR / path
+        if not path.is_file():
+            return
+        try:
+            with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as conn:
+                if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='processing_jobs'").fetchone():
+                    return
+            catalogue = AssetCatalogue(path)
+            try:
+                with JobSession(catalogue) as session:
+                    self.recovered_jobs = session.recover()
+            except JobBusyError:
+                # The current owner remains authoritative; this manager cannot stop it.
+                return
+            rows = catalogue._read('SELECT * FROM processing_jobs ORDER BY created_at DESC,id DESC LIMIT 1', ())
+            if rows:
+                saved = rows[0]
+                self.persisted_job = saved
+                self.job_id, self.task_id = saved['id'], saved['request_key']
+                self.state, self.error = saved['status'], saved['error']
+                self.started_at, self.finished_at = saved['created_at'], saved['updated_at']
+                items = catalogue.list_job_items(self.job_id)
+                self.total = len(items)
+                self.processed = sum(i['status'] in {'completed', 'skipped', 'failed'} for i in items)
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            logger.warning('Could not restore saved pipeline status: %s', exc)
 
     @classmethod
     def get_instance(cls):
@@ -59,7 +101,8 @@ class TaskManager:
         with self._lock:
             return dict(task_id=self.task_id, state=self.state, is_running=self.is_running,
                         error=self.error, started_at=self.started_at, finished_at=self.finished_at,
-                        processed=self.processed, total=self.total)
+                        processed=self.processed, total=self.total, job_id=self.job_id,
+                        recovered_jobs=self.recovered_jobs, persisted_job=self.persisted_job)
 
     def stop(self):
         with self._lock:
@@ -105,6 +148,9 @@ class TaskManager:
             self.finished_at = None
             self.error = None
             self.processed = self.total = 0
+            self.job_id = None
+            self.persisted_job = None
+            self.recovered_jobs = 0
             self.logs = [message]
             self._log_offset = 0
             try:
@@ -146,6 +192,11 @@ class TaskManager:
                         self.processed, self.total = processed, total
                     self.broadcast_log(f"[PROGRESS] {processed}/{total}")
                 runner.worker_thread_prefix = f"wingscribe-photo-{self.task_id}"
+                runner.task_request_key = self.task_id
+                def job_started(job_id, recovered):
+                    with self._lock:
+                        self.job_id, self.recovered_jobs = job_id, recovered
+                runner._job_callback = job_started
                 runner.set_progress_callback(progress)
                 runner.set_stop_checker(lambda: self.should_stop)
                 with self._lock:
@@ -157,6 +208,11 @@ class TaskManager:
             self.record_error(exc)
             self.broadcast_log(f"Error: {exc}")
         finally:
+            if runner is not None and self.job_id and getattr(runner, 'catalogue', None) is not None:
+                try:
+                    self.persisted_job = runner.catalogue.get_job(self.job_id)
+                except Exception as exc:
+                    self.record_error(exc)
             if runner is not None and getattr(runner, "db", None) is not None:
                 try:
                     runner.db.close()

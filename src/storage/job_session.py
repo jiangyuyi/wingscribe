@@ -99,12 +99,13 @@ class JobSession:
             self._require_running(tx.conn, job_id)
             return tx.enqueue(job_id, version_id)
 
-    def claim(self, job_id: str) -> dict | None:
+    def claim(self, job_id: str, item_id: str | None = None) -> dict | None:
         self._require_open()
         with self.catalogue.transaction() as tx:
             self._require_running(tx.conn, job_id)
             row = tx.conn.execute("SELECT * FROM job_items WHERE job_id=? AND status='pending' "
-                                  'ORDER BY created_at,id LIMIT 1', (job_id,)).fetchone()
+                                  'AND (? IS NULL OR id=?) ORDER BY created_at,id LIMIT 1',
+                                  (job_id, item_id, item_id)).fetchone()
             if row is None:
                 return None
             tx.conn.execute("UPDATE job_items SET status='running', attempts=attempts+1, updated_at=? WHERE id=?",
@@ -168,3 +169,13 @@ class JobSession:
             tx.conn.execute("UPDATE processing_jobs SET status='running',updated_at=? WHERE id=?", (_now(), job))
             self._has_started = True
             return job
+
+    def abort(self, job_id: str, error: str):
+        """Record an exceptional exit after the caller has joined every worker."""
+        self._require_open()
+        if not error:
+            raise ValueError('Abort requires an error')
+        with self.catalogue.transaction() as tx:
+            self._require_running(tx.conn, job_id)
+            self._interrupt(tx.conn, job_id, error)
+            tx.conn.execute("UPDATE processing_jobs SET status='failed' WHERE id=?", (job_id,))

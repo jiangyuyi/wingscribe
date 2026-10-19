@@ -136,6 +136,7 @@ def test_archive_outputs_preserved_and_missing_output_reprocessed(setup):
     p.process_image(provider, entry, {})
     first = Path(rows(p, 'detections')[0]['output_path'])
     assert first.is_file()
+    assert ':' not in first.name
     p.config['processing']['target_size'] = 40
     p.process_image(provider, entry, {})
     second = Path(rows(p, 'detections')[1]['output_path'])
@@ -157,3 +158,146 @@ def test_partial_archive_error_keeps_output_evidence(setup):
         p.process_image(provider, entry, {})
     assert rows(p, 'analysis_runs')[0]['outcome'] == 'failed'
     assert Path(rows(p, 'detections')[0]['output_path']).is_file()
+
+
+@pytest.mark.parametrize('folders', [False, True])
+def test_scans_persist_jobs_and_progress_per_original(setup, folders):
+    p, provider, entry = setup
+    run = lambda: p.run_by_folders([p.source_dir]) if folders else p.run()
+    run()
+    assert rows(p, 'processing_jobs')[0]['status'] == 'completed'
+    assert rows(p, 'job_items')[0]['status'] == 'completed'
+    assert p.processed_count == p.total_files == 1
+    run()
+    assert len(rows(p, 'processing_jobs')) == 2
+    assert rows(p, 'job_items')[1]['status'] == 'skipped'
+    assert p.processed_count == p.total_files == 1
+
+
+def test_failed_image_finishes_persistent_job(setup):
+    p, provider, entry = setup
+    p._detector.detect.side_effect = RuntimeError('broken model')
+    with pytest.raises(RuntimeError, match='broken model'):
+        p.run()
+    assert rows(p, 'processing_jobs')[0]['status'] == 'failed'
+    assert rows(p, 'job_items')[0]['status'] == 'failed'
+    p._detector.detect.side_effect = None
+    p.run()
+    assert [r['status'] for r in rows(p, 'processing_jobs')] == ['failed', 'completed']
+
+
+def test_second_scanner_rejected_before_model_work(setup):
+    from src.storage.job_session import JobBusyError, JobSession
+    p, provider, entry = setup
+    with JobSession(p.catalogue):
+        with pytest.raises(JobBusyError):
+            p.run()
+    p._detector.detect.assert_not_called()
+    assert not rows(p, 'processing_jobs')
+
+
+def test_overlapping_folders_do_not_repeat_item(setup):
+    p, provider, entry = setup
+    p.run_by_folders([p.source_dir, str(Path(entry.path).parent)])
+    assert len(rows(p, 'job_items')) == 1
+    p._detector.detect.assert_called_once()
+
+
+def test_bounded_submission_and_cooperative_stop(setup, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    p, provider, entry = setup
+    for n in range(20):
+        Path(entry.path).with_name(f'bird{n}.jpg').write_bytes(Path(entry.path).read_bytes())
+    entered, submitted_four, release = threading.Event(), threading.Event(), threading.Event()
+    submissions = []
+    class TrackingExecutor(ThreadPoolExecutor):
+        def submit(self, *args, **kwargs):
+            future = super().submit(*args, **kwargs)
+            submissions.append(future)
+            if len(submissions) == 4:
+                submitted_four.set()
+            return future
+    monkeypatch.setattr('src.pipeline_runner.ThreadPoolExecutor', TrackingExecutor)
+    stop = threading.Event()
+    p.set_stop_checker(stop.is_set)
+    def detect(*args):
+        entered.set()
+        assert release.wait(10)
+        return []
+    p._detector.detect.side_effect = detect
+    errors = []
+    def run():
+        try:
+            p.run()
+        except Exception as exc:
+            errors.append(exc)
+    thread = threading.Thread(target=run)
+    thread.start()
+    try:
+        assert entered.wait(5) and submitted_four.wait(5)
+        assert len(submissions) == 4
+        stop.set()
+    finally:
+        release.set()
+        thread.join(10)
+    assert not thread.is_alive() and not errors
+    assert len(submissions) == 4
+    assert rows(p, 'processing_jobs')[0]['status'] == 'stopped'
+    assert sorted(i['status'] for i in rows(p, 'job_items')) == ['completed', 'interrupted', 'interrupted', 'interrupted']
+    assert p._detector.detect.call_count == 1
+
+
+def test_task_manager_links_job_and_restores_terminal_status(setup, monkeypatch):
+    from src.web.task_manager import TaskManager
+    p, provider, entry = setup
+    p.db.close = lambda: None
+    monkeypatch.setattr('src.web.task_manager.WingScribePipeline', lambda *args, **kwargs: p)
+    config = {'paths': {'db_path': str(p.catalogue.db_path)}}
+    manager = TaskManager(config_override=config)
+    assert manager.start_pipeline()
+    manager.wait()
+    status = manager.snapshot()
+    assert status['job_id'] == p.job_id
+    assert status['persisted_job']['status'] == status['state'] == 'completed'
+    restored = TaskManager(config_override=config).snapshot()
+    assert restored['job_id'] == p.job_id
+    assert restored['state'] == 'completed'
+    assert restored['processed'] == restored['total'] == 1
+
+
+def test_crashed_scan_recovered_and_rescan_uses_current_version(setup):
+    import subprocess
+    import sys
+    from src.web.task_manager import TaskManager
+    p, provider, entry = setup
+    script = '''
+import os,sys
+from types import SimpleNamespace
+from src.pipeline_runner import WingScribePipeline
+from src.storage.catalogue import AssetCatalogue
+p=WingScribePipeline.__new__(WingScribePipeline)
+p.catalogue=AssetCatalogue(sys.argv[1])
+p.source_dir=sys.argv[2]
+p.output_root=sys.argv[3]
+p.config={'paths':{'sources':[{'path':p.source_dir}]}}
+p.taxonomy_version='test-v1'
+p.all_labels=['bird']
+p.existing_hashes=set()
+p._progress_callback=None
+p.db=SimpleNamespace(add_scan_history=lambda data: None)
+p._detector=SimpleNamespace(detect=lambda path: os._exit(19))
+p.run()
+'''
+    result = subprocess.run([sys.executable, '-c', script, str(p.catalogue.db_path), p.source_dir, p.output_root], timeout=45)
+    assert result.returncode == 19
+    assert rows(p, 'processing_jobs')[0]['status'] == 'running'
+    manager = TaskManager(config_override={'paths': {'db_path': str(p.catalogue.db_path)}})
+    assert manager.snapshot()['state'] == 'interrupted'
+    assert manager.snapshot()['recovered_jobs'] == 1
+    assert rows(p, 'job_items')[0]['status'] == 'interrupted'
+    Image.new('RGB', (40, 40), 'black').save(entry.path)
+    p.run()
+    assert len(rows(p, 'asset_versions')) == 2
+    assert rows(p, 'job_items')[0]['version_id'] != rows(p, 'job_items')[1]['version_id']
+    assert [r['status'] for r in rows(p, 'processing_jobs')] == ['interrupted', 'completed']

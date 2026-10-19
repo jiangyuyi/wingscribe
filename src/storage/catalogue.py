@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from uuid import uuid4
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TABLES = {'asset_sources', 'assets', 'asset_versions', 'analysis_runs', 'detections',
           'processing_jobs', 'job_items'}
 DDL = (
@@ -66,6 +66,18 @@ DDL = (
         UNIQUE(job_id, version_id))""",
     "CREATE INDEX job_items_status ON job_items(job_id, status)",
     "CREATE INDEX analysis_runs_version ON analysis_runs(version_id, created_at)",
+)
+
+OBSERVATION_DDL = (
+    """CREATE TABLE asset_observations (
+        id TEXT PRIMARY KEY, observation_key TEXT NOT NULL UNIQUE,
+        asset_id TEXT NOT NULL REFERENCES assets(id),
+        version_id TEXT REFERENCES asset_versions(id),
+        analysis_id TEXT REFERENCES analysis_runs(id),
+        outcome TEXT NOT NULL CHECK(outcome IN
+            ('succeeded','no_detection','quality_filtered','failed','skipped')),
+        reason TEXT, error TEXT, payload_hash TEXT NOT NULL, created_at TEXT NOT NULL)""",
+    'CREATE INDEX asset_observations_asset ON asset_observations(asset_id, created_at)',
 )
 
 
@@ -126,14 +138,17 @@ class AssetCatalogue:
         try:
             conn.execute('BEGIN IMMEDIATE')
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            versions = []
             if 'asset_schema_migrations' in tables:
                 versions = [row[0] for row in conn.execute('SELECT version FROM asset_schema_migrations ORDER BY version')]
-                if versions != [SCHEMA_VERSION]:
+                if versions not in ([1], [1, SCHEMA_VERSION]):
                     raise ValueError('Unsupported asset catalogue schema version')
-                if not TABLES.issubset(tables):
+                required = TABLES | ({'asset_observations'} if len(versions) == 2 else set())
+                if not required.issubset(tables):
                     raise ValueError('Incomplete asset catalogue schema; restore a verified backup')
-                conn.rollback()
-                return None
+                if versions == [1, SCHEMA_VERSION]:
+                    conn.rollback()
+                    return None
             if tables:
                 if backup_dir is None:
                     raise ValueError('A backup directory is required before migrating an existing database')
@@ -149,8 +164,12 @@ class AssetCatalogue:
                 finally:
                     destination.close()
                     source.close()
-            conn.execute('CREATE TABLE asset_schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)')
-            for statement in DDL:
+            if not versions:
+                conn.execute('CREATE TABLE asset_schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)')
+                for statement in DDL:
+                    conn.execute(statement)
+                conn.execute('INSERT INTO asset_schema_migrations VALUES (?, ?)', (1, _now()))
+            for statement in OBSERVATION_DDL:
                 conn.execute(statement)
             conn.execute('INSERT INTO asset_schema_migrations VALUES (?, ?)', (SCHEMA_VERSION, _now()))
             conn.commit()
@@ -215,6 +234,9 @@ class AssetCatalogue:
     def list_detections(self, analysis_id: str) -> list[dict]:
         return self._read('SELECT * FROM detections WHERE analysis_id=? ORDER BY ordinal', (analysis_id,))
 
+    def list_observations(self, asset_id: str) -> list[dict]:
+        return self._read('SELECT * FROM asset_observations WHERE asset_id=? ORDER BY created_at, id', (asset_id,))
+
 
 class CatalogueTransaction:
     """Use only within AssetCatalogue.transaction(); never share across threads."""
@@ -239,6 +261,56 @@ class CatalogueTransaction:
             (root, root.casefold(), _now(), source_id))
         if changed.rowcount != 1:
             raise ValueError('Unknown source')
+
+    def discover_asset(self, source_id: str, relative_path: str) -> str:
+        """Record a directory entry without pretending its bytes are readable.
+
+        Discovery alone never resets a known availability or creates a version.
+        """
+        path, now = _relative(relative_path), _now()
+        row = self.conn.execute('SELECT id FROM assets WHERE source_id=? AND path_key=?',
+                                (source_id, path.casefold())).fetchone()
+        if row:
+            self.conn.execute('UPDATE assets SET relative_path=?, last_seen_at=? WHERE id=?',
+                              (path, now, row['id']))
+            return row['id']
+        asset_id = uuid4().hex
+        self.conn.execute('INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?)',
+                          (asset_id, source_id, path, path.casefold(), 'unknown', now, now))
+        return asset_id
+
+    def record_observation(self, asset_id: str, observation_key: str, *, outcome: str,
+                           version_id: str | None = None, analysis_id: str | None = None,
+                           reason: str | None = None, error: str | None = None) -> str:
+        """Persist a scan attempt even when stat, hashing or image decoding failed."""
+        if not observation_key or outcome not in {'succeeded', 'no_detection', 'quality_filtered', 'failed', 'skipped'}:
+            raise ValueError('Observation key and valid outcome are required')
+        if outcome == 'failed' and not error:
+            raise ValueError('Failed observation requires an error')
+        if outcome == 'skipped' and not reason:
+            raise ValueError('Skipped observation requires a reason')
+        if outcome in {'succeeded', 'no_detection', 'quality_filtered'} and not version_id:
+            raise ValueError('Analyzed outcomes require a file version')
+        if version_id:
+            row = self.conn.execute('SELECT asset_id FROM asset_versions WHERE id=?', (version_id,)).fetchone()
+            if not row or row['asset_id'] != asset_id:
+                raise ValueError('Version does not belong to the observed asset')
+        if analysis_id:
+            row = self.conn.execute('SELECT version_id FROM analysis_runs WHERE id=?', (analysis_id,)).fetchone()
+            if not row or row['version_id'] != version_id:
+                raise ValueError('Analysis does not belong to the observed version')
+        digest = hashlib.sha256(_json([asset_id, version_id, analysis_id, outcome, reason, error]).encode('utf-8')).hexdigest()
+        existing = self.conn.execute('SELECT id, payload_hash FROM asset_observations WHERE observation_key=?',
+                                     (observation_key,)).fetchone()
+        if existing:
+            if existing['payload_hash'] != digest:
+                raise ValueError('Observation key already belongs to a different result')
+            return existing['id']
+        observation_id = uuid4().hex
+        self.conn.execute('INSERT INTO asset_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                          (observation_id, observation_key, asset_id, version_id, analysis_id,
+                           outcome, reason, error, digest, _now()))
+        return observation_id
 
     def register_asset(self, source_id: str, relative_path: str, *, size_bytes: int,
                        mtime_ns: int, fingerprint: str, width: int | None = None,

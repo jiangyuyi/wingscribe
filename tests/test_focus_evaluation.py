@@ -37,7 +37,8 @@ def test_wrong_groups_and_empty_best_not_fabricated_truth():
         label("g1", ["a"], grouping="incorrect"), label("g2", [])]})
     assert result["eligible_best_set_groups"] == 0
     assert result["incorrect_or_uncertain_groups"] == 1
-    assert result["correct_groups_without_acceptable_best"] == 1
+    assert result["correct_groups_without_selection"] == 1
+    assert "correct_groups_without_acceptable_best" not in result
     assert result["top3_best_set_hit_rate"] is None
 
 

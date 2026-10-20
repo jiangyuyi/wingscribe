@@ -263,3 +263,10 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 标注页的 28 个缩略图及 24 个 100% 无损主体细节链接存在性已检查。内置浏览器安全策略拒绝 file URL，未绕过限制，页面视觉/浏览器导出交互尚未验收，交由用户在本机浏览器使用后反馈。
 - 本地证据：`.codex-tmp/b5d-inventory.json`、`.codex-tmp/b5d-study/manifest.json`、`review/report.json`、`review/review.html`、`review/metrics-pending.json`。照片与报告均不入 Git。
 - B5d **仍在进行**：下一步需要用户判断四组是否合理并勾选可接受最佳照片、导出本地 JSON 后计算指标。进一步跨拍摄事件校准与独立测试仍待办；没有进入 B6 删除/隔离产品实现。
+
+## B5d-2 首次人工反馈解释（2026-10-20）
+
+- 读取用户指定的 Downloads/focus-labels.json，报告身份匹配；原文件未修改，原样复制到隔离报告目录。用户说明空选择是肉眼难区分，有选择的一组也只是初步比较；该说明单独保存，不将空选择视为全部不合格或算法失误。
+- 原标注三个组为 reviewed=true 且无选择，七张组选择 DDY00794.JPG 但 reviewed=false。保持原始字段，严格指标可评估组为 0、命中率为空；该照片在算法 Top-3 第 3 位，仅记录弱偏好重合，不提升为正式真值。
+- 修正评估字段 `correct_groups_without_acceptable_best` 为中性的 `correct_groups_without_selection`，避免暗示用户否定全部照片。聚焦测试 **11 passed，5 个既有警告，2.86 秒**。未修改评分算法、并列参数、用户配置或照片。
+- 后续重点转向明确的标注确定程度、清晰度差异更明显的样本与同步主体对比；不要求用户强制区分近似照片。B5d 校准仍未通过，实际材料和反馈保留在 `.codex-tmp/b5d-study/review/`。

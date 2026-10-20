@@ -29,7 +29,7 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
             continue
         if not best:
             no_best += 1
-            continue  # Explicit no acceptable best; not an automatic algorithm miss.
+            continue  # Empty selection is ambiguous, never a rejection or a miss.
         eligible += 1
         picks = groups[key]["ranking"]["recommended"]
         recommended += bool(picks)
@@ -42,7 +42,7 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
         "total_groups": len(groups), "reviewed_groups": judged,
         "incorrect_or_uncertain_groups": rejected_groups,
         "eligible_best_set_groups": eligible,
-        "correct_groups_without_acceptable_best": no_best,
+        "correct_groups_without_selection": no_best,
         "eligible_groups_over_three_photos": larger_groups,
         "top3_hit_rate_over_three_photos": larger_hits / larger_groups if larger_groups else None,
         "recommendation_coverage": recommended / eligible if eligible else None,

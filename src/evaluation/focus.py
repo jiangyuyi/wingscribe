@@ -1,6 +1,7 @@
 """Human-labelled, group-level evaluation. Unlabelled groups are never truth."""
 import html
 import json
+from pathlib import Path
 
 
 def evaluate_labels(report: dict, labels: dict) -> dict:
@@ -10,6 +11,10 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
     seen = set()
     judged = eligible = hits1 = hits3 = recommended = rejected_groups = 0
     larger_groups = larger_hits = no_best = 0
+    schema = labels.get("schema_version", 1)
+    if schema not in (1, 2):
+        raise ValueError("Unsupported label schema")
+    confidence_counts = dict(similar=0, uncertain=0, tentative=0, confident=0, none_acceptable=0)
     for label in labels.get("groups", []):
         key = label["group_id"]
         if key not in groups or key in seen:
@@ -23,13 +28,25 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
         best = label.get("best", [])
         if len(set(best)) != len(best) or not set(best) <= set(groups[key]["version_ids"]):
             raise ValueError("Best choices must be unique members of this group")
+        confidence = label.get("certainty") if schema == 2 else "legacy"
+        if schema == 2:
+            if confidence not in confidence_counts:
+                raise ValueError("Invalid selection certainty")
+            if confidence == "confident" and not best:
+                raise ValueError("Confident selection requires at least one photo")
+            if confidence == "none_acceptable" and best:
+                raise ValueError("No acceptable photos conflicts with selection")
+            confidence_counts[confidence] += 1
         judged += 1
         if valid != "correct":
             rejected_groups += 1
             continue
         if not best:
             no_best += 1
-            continue  # Empty selection is ambiguous, never a rejection or a miss.
+        if schema == 2 and confidence != "confident":
+            continue  # Similar/uncertain/tentative choices are not hard truth.
+        if not best:
+            continue
         eligible += 1
         picks = groups[key]["ranking"]["recommended"]
         recommended += bool(picks)
@@ -49,6 +66,8 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
         "top1_best_set_hit_rate": hits1 / eligible if eligible else None,
         "top3_best_set_hit_rate": hits3 / eligible if eligible else None,
         "unreviewed_groups": len(groups) - judged,
+        "label_schema_version": schema,
+        "reviewed_certainty_counts": confidence_counts,
         "scope": "exploratory single-session labels; not an independent test benchmark",
     }
 
@@ -59,11 +78,14 @@ def render_review(report: dict) -> str:
     for number, group in enumerate(report["groups"], 1):
         gid = html.escape(group["group_id"], quote=True)
         photos = []
+        options = []
         for key in group["version_ids"]:
             item = report["items"][key]
             title = html.escape(item["filename"])
             preview = html.escape(item["preview"], quote=True)
             crop = html.escape(item["crop"], quote=True) if item["crop"] else ""
+            if crop:
+                options.append(f'<option value="{crop}">{title}</option>')
             detail = (f'<details><summary>主体 100% 细节（可滚动）</summary>'
                       f'<div class="crop"><img src="{crop}"></div></details>' if crop
                       else '<p>没有有效主体框，请查看整图副本；这不表示失焦。</p>')
@@ -93,33 +115,66 @@ def render_review(report: dict) -> str:
                 "、".join(report["items"][key]["filename"] for key in tied)
                 for tied in group["ranking"]["tie_sets"])
         ranking = html.escape(ranking + "\n推荐仅表示组内相对优先，不代表已经合焦。")
+        compare = (
+            '<div class="compare"><p>同步对比：两侧使用相同比例；滚动一侧同步相对位置。'
+            '这是鸟体框内位置同步，并非眼部自动对齐，主体姿态不同可取消同步。</p>'
+            '<label><input class="sync" type="checkbox" checked>同步位置</label> '
+            '<label>像素比例 <select class="zoom"><option value="0.5">50%</option>'
+            '<option value="1" selected>100%</option><option value="2">200%</option></select></label> '
+            '<button type="button" class="blink">原位切换 A／B</button><span class="blink-label"></span>'
+            '<div class="pair">' + ''.join(
+                f'<div><label>{side} <select class="pick">{"".join(options)}</select></label>'
+                '<div class="viewport"><img alt="主体细节"></div></div>' for side in ("A", "B")
+            ) + '</div></div>' if options else '<p>本组无可用主体裁切，请查看完整测试副本。</p>'
+        )
         cards.append(f'<section data-group="{gid}"><h2>第 {number} 组 · {len(photos)} 张</h2>'
-                     '<label>分组是否合理？ <select><option value="uncertain">尚不确定</option>'
+                     '<label>分组是否合理？ <select class="grouping"><option value="uncertain">尚不确定</option>'
                      '<option value="correct">合理，是可比较的一组</option>'
                      '<option value="incorrect">不合理，需要拆分或合并</option></select></label> '
+                     '<label>选择把握 <select class="certainty">'
+                     '<option value="uncertain">不确定／看不清</option>'
+                     '<option value="similar">差不多，难分高下</option>'
+                     '<option value="tentative">仅初步偏好</option>'
+                     '<option value="confident">有把握的最佳集合</option>'
+                     '<option value="none_acceptable">全部不可接受</option></select></label> '
                      '<label><input type="checkbox" class="reviewed">本组已看完（可不选最佳照片）</label>'
-                     f'<div class="grid">{"".join(photos)}</div><pre class="algorithm" hidden>{ranking}</pre></section>')
+                     f'{compare}<div class="grid">{"".join(photos)}</div><pre class="algorithm" hidden>{ranking}</pre></section>')
     rid = json.dumps(report["report_id"]).replace("<", "\\u003c")
     return '''<!doctype html><html lang="zh"><meta charset="utf-8"><title>WingScribe 选片探索标注</title>
 <style>body{font:16px system-ui;margin:24px;background:#f5f6f8;color:#17212b}
 button,select{padding:10px}section{margin:30px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
 article{background:white;padding:15px;min-width:0}.preview{display:block;width:100%;margin:10px 0}
 .crop{overflow:auto;max-height:520px}.crop img{max-width:none}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pair>div{min-width:0}
+.viewport{height:480px;overflow:auto;background:#26313b}.viewport img{display:block;max-width:none}
+.compare{background:#e4eaf0;padding:16px;margin:12px 0}.blink-label{margin-left:12px}
+@media(max-width:700px){.pair{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
 </style><h1>连续拍摄组：先选照片，再看算法</h1>
 <p>先判断分组，再勾选你认为可接受的最佳照片，可多选、并列，也可不选。看完请勾选“本组已看完”。
 没有勾选的照片不会被删除。缩略图仅用于定位，清晰度请结合主体 100% 细节和完整副本判断。</p>
-<p>算法推荐默认隐藏，以减少影响。导出标注保存在本地；刷新页面前请导出，页面不自动保存。</p>
+<p>难以区分时请选择“差不多”或“不确定”，不用强行选最佳；粗略选择请选择“仅初步偏好”。
+只有“有把握的最佳集合”参与命中率统计。</p>
+<p>算法推荐默认隐藏。导出标注保存在本地；刷新页面前请导出，页面不自动保存。可导入此前导出的本页标注继续填写。</p>
 <button onclick="document.querySelectorAll('.algorithm').forEach(e=>e.hidden=!e.hidden)">显示／隐藏算法结果</button>
 <button onclick="saveLabels()">导出本地标注 JSON</button>
+<label>恢复本页标注 <input type="file" id="import-labels" accept=".json"></label><p id="message" role="status"></p>
 ''' + "".join(cards) + '''
 <script>
+const reportId = ''' + rid + ''';
 function saveLabels(){
  const groups=[...document.querySelectorAll('section')].map(s=>({
  group_id:s.dataset.group, reviewed:s.querySelector('.reviewed').checked,
- grouping:s.querySelector('select').value,
+ grouping:s.querySelector('.grouping').value,certainty:s.querySelector('.certainty').value,
  best:[...s.querySelectorAll('article input:checked')].map(e=>e.value)}));
- const blob=new Blob([JSON.stringify({report_id:''' + rid + ''',groups},null,2)],{type:'application/json'});
+ for(const g of groups){
+  if(g.reviewed && ((g.certainty==='confident' && !g.best.length) ||
+     (g.certainty==='none_acceptable' && g.best.length))){
+   document.querySelector('#message').textContent='请检查选择把握：有把握的最佳集合需勾选照片，全部不可接受不能同时勾选最佳照片。';return;
+  }
+ }
+ const blob=new Blob([JSON.stringify({schema_version:2,report_id:reportId,groups},null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download='focus-labels.json';a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
+ document.querySelector('#message').textContent='已发起下载；请确认浏览器保存的文件。';
 }
-</script></html>'''
+''' + Path(__file__).with_name("focus_review.js").read_text(encoding="utf-8") + '</script></html>'

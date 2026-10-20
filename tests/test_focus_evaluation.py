@@ -72,3 +72,39 @@ def test_review_html_escapes_names_and_hides_algorithm():
     assert 'class="algorithm" hidden' in output
     assert "fetch(" not in output
     assert "focus-labels.json" in output
+    assert 'class="certainty"' in output
+    assert 'schema_version:2' in output
+
+
+@pytest.mark.parametrize("certainty", ["similar", "uncertain", "tentative", "none_acceptable"])
+def test_v2_nonconfident_labels_never_become_ground_truth(certainty):
+    best = [] if certainty == "none_acceptable" else ["a"]
+    result = evaluate_labels(report(), {"report_id": "study", "schema_version": 2, "groups": [
+        {**label("g1", best), "certainty": certainty}]})
+    assert result["eligible_best_set_groups"] == 0
+    assert result["top3_best_set_hit_rate"] is None
+    assert result["reviewed_certainty_counts"][certainty] == 1
+
+
+def test_v2_confident_set_counts_only_when_reviewed():
+    labels = {"report_id": "study", "schema_version": 2, "groups": [
+        {**label("g1", ["b"]), "certainty": "confident"},
+        {**label("g2", ["e"], reviewed=False), "certainty": "confident"}]}
+    result = evaluate_labels(report(), labels)
+    assert result["eligible_best_set_groups"] == 1
+    assert result["top3_best_set_hit_rate"] == 1
+    assert result["reviewed_certainty_counts"]["confident"] == 1
+
+
+@pytest.mark.parametrize("certainty,best", [
+    ("confident", []), ("none_acceptable", ["a"]), ("invalid", []), (None, []),
+])
+def test_v2_contradictory_certainty_rejected(certainty, best):
+    with pytest.raises(ValueError):
+        evaluate_labels(report(), {"report_id": "study", "schema_version": 2,
+                                  "groups": [{**label("g1", best), "certainty": certainty}]})
+
+
+def test_unknown_label_schema_rejected():
+    with pytest.raises(ValueError):
+        evaluate_labels(report(), {"report_id": "study", "schema_version": 99, "groups": []})

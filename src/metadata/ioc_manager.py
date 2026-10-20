@@ -836,6 +836,10 @@ class IOCManager:
             return {row[0] for row in cursor.fetchall()}
 
     def add_photo_record(self, record: Dict):
+        with self._operation_connection(write=True) as conn:
+            return self.insert_photo_record_conn(conn, self.prepare_photo_record(conn, record))
+
+    def prepare_photo_record(self, conn, record: Dict) -> Dict:
         # Convert absolute paths to relative paths for storage
         record = dict(record)
         if 'file_path' in record and record['file_path']:
@@ -843,20 +847,21 @@ class IOCManager:
         if 'original_path' in record and record['original_path']:
             record['original_path'] = self.to_storage_original_path(record['original_path'])
 
-        with self._operation_connection(write=True) as conn:
-            release = current_release(conn)
-            record.setdefault("taxonomy_version", release["version"] if release else "legacy-unversioned")
-            keys = ', '.join(record.keys())
-            placeholders = ', '.join(['?'] * len(record))
-            values = tuple(record.values())
-            sql = f"INSERT INTO photos ({keys}) VALUES ({placeholders})"
-            cursor = conn.execute(sql, values)
+        release = current_release(conn)
+        record.setdefault("taxonomy_version", release["version"] if release else "legacy-unversioned")
+        return record
 
-            # Update species stats in the same transaction to keep photo/stat changes aligned
-            if record.get('scientific_name'):
-                self._update_species_stats_for_photo_conn(conn, record['scientific_name'])
-
-            return cursor.lastrowid
+    def insert_photo_record_conn(self, conn, record: Dict):
+        """Insert a prepared record and statistics in the caller's transaction."""
+        allowed = {row[1] for row in conn.execute('PRAGMA table_info(photos)')}
+        if not record or not set(record).issubset(allowed - {'id'}):
+            raise ValueError('Invalid photo record fields')
+        keys = ', '.join(record.keys())
+        placeholders = ', '.join(['?'] * len(record))
+        cursor = conn.execute(f"INSERT INTO photos ({keys}) VALUES ({placeholders})", tuple(record.values()))
+        if record.get('scientific_name'):
+            self._update_species_stats_for_photo_conn(conn, record['scientific_name'])
+        return cursor.lastrowid
 
     def update_photo_species(self, photo_id: int, scientific_name: str, chinese_name: str):
         with self._operation_connection(write=True) as conn:

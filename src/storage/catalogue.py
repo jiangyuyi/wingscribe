@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from uuid import uuid4
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 TABLES = {'asset_sources', 'assets', 'asset_versions', 'analysis_runs', 'detections',
           'processing_jobs', 'job_items'}
 DDL = (
@@ -80,6 +80,17 @@ OBSERVATION_DDL = (
     'CREATE INDEX asset_observations_asset ON asset_observations(asset_id, created_at)',
 )
 
+ARCHIVE_DDL = (
+    """CREATE TABLE archive_publications (
+        id TEXT PRIMARY KEY, version_id TEXT NOT NULL REFERENCES asset_versions(id),
+        reuse_key TEXT NOT NULL, output_root TEXT NOT NULL,
+        staged_path TEXT NOT NULL, final_path TEXT NOT NULL UNIQUE,
+        sha256 TEXT NOT NULL, record_json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','completed')),
+        photo_id INTEGER, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""",
+    'CREATE INDEX archive_publications_reuse ON archive_publications(reuse_key,status)',
+)
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -141,12 +152,14 @@ class AssetCatalogue:
             versions = []
             if 'asset_schema_migrations' in tables:
                 versions = [row[0] for row in conn.execute('SELECT version FROM asset_schema_migrations ORDER BY version')]
-                if versions not in ([1], [1, SCHEMA_VERSION]):
+                if versions not in ([1], [1, 2], [1, 2, 3]):
                     raise ValueError('Unsupported asset catalogue schema version')
-                required = TABLES | ({'asset_observations'} if len(versions) == 2 else set())
+                required = TABLES | ({'asset_observations'} if 2 in versions else set())
+                if 3 in versions:
+                    required.add('archive_publications')
                 if not required.issubset(tables):
                     raise ValueError('Incomplete asset catalogue schema; restore a verified backup')
-                if versions == [1, SCHEMA_VERSION]:
+                if versions == [1, 2, 3]:
                     conn.rollback()
                     return None
             if tables:
@@ -169,7 +182,11 @@ class AssetCatalogue:
                 for statement in DDL:
                     conn.execute(statement)
                 conn.execute('INSERT INTO asset_schema_migrations VALUES (?, ?)', (1, _now()))
-            for statement in OBSERVATION_DDL:
+            if 2 not in versions:
+                for statement in OBSERVATION_DDL:
+                    conn.execute(statement)
+                conn.execute('INSERT INTO asset_schema_migrations VALUES (?, ?)', (2, _now()))
+            for statement in ARCHIVE_DDL:
                 conn.execute(statement)
             conn.execute('INSERT INTO asset_schema_migrations VALUES (?, ?)', (SCHEMA_VERSION, _now()))
             conn.commit()

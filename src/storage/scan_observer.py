@@ -47,6 +47,9 @@ def observe_image(pipeline, provider, entry, meta):
                 mtime_ns=after.st_mtime_ns, fingerprint=fingerprint,
                 captured_at=meta.get('captured_date'))
         version = registered['version_id']
+        state['version_id'] = version
+        state['reuse_context'] = hashlib.sha256(json.dumps([parameters, model, taxonomy],
+            ensure_ascii=False, sort_keys=True, allow_nan=False).encode()).hexdigest()
         if session:
             item_id = session.enqueue(pipeline.job_id, version)
             if pipeline._should_stop():

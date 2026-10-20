@@ -22,6 +22,9 @@ def pipeline_job(pipeline, selection):
             callback = getattr(pipeline, '_job_callback', None)
             if callback:
                 callback(job, recovered)
+            publisher = getattr(pipeline, 'archive_publisher', None)
+            if publisher is not None:
+                pipeline.recovered_archives = publisher.recover()
             yield
             session.finish(job, 'stopped' if pipeline._should_stop() else 'completed')
         except Exception as exc:

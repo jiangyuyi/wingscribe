@@ -96,8 +96,9 @@ def seed_v1(store):
         source = tx.register_source('Y:/photos')
         asset = version(tx, source)
     with sqlite3.connect(store.db_path) as conn:
+        conn.execute('DROP TABLE archive_publications')
         conn.execute('DROP TABLE asset_observations')
-        conn.execute('DELETE FROM asset_schema_migrations WHERE version=2')
+        conn.execute('DELETE FROM asset_schema_migrations WHERE version>=2')
     return source, asset
 
 

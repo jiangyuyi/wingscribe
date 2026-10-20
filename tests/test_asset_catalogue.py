@@ -49,7 +49,7 @@ def test_legacy_migration_backup_and_reopen_preserve_labels(tmp_path):
     assert query(store, 'PRAGMA user_version') == [(42,)]
     assert AssetCatalogue(store.db_path).initialize() is None
     assert len(list((tmp_path / 'backups').iterdir())) == 1
-    assert query(store, 'SELECT version FROM asset_schema_migrations ORDER BY version') == [(1,), (2,)]
+    assert query(store, 'SELECT version FROM asset_schema_migrations ORDER BY version') == [(1,), (2,), (3,)]
 
 
 def test_ddl_failure_rolls_back_entire_migration(tmp_path, monkeypatch):

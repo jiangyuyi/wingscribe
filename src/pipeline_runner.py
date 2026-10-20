@@ -20,6 +20,7 @@ from src.metadata.ioc_manager import IOCManager
 from src.storage.catalogue import AssetCatalogue
 from src.storage.scan_observer import observe_image
 from src.storage.pipeline_jobs import pipeline_job
+from src.storage.archive_publication import ArchivePublisher
 from src.metadata.taxonomy_catalogue import ensure_taxonomy, current_release
 from src.core.detector import BirdDetector
 from src.core.quality import QualityEvaluator, QualityResult
@@ -181,6 +182,7 @@ class WingScribePipeline:
         try:
             self.catalogue = AssetCatalogue(db_path)
             self.catalogue.initialize(backup_dir=db_path.parent / 'backups')
+            self.archive_publisher = ArchivePublisher(self.catalogue, self.db, output_root)
             self.device = self.config['processing'].get('device', 'cpu')
 
             # 日志等级配置
@@ -530,11 +532,6 @@ class WingScribePipeline:
         Path(final_path).parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            import shutil
-            shutil.move(temp_crop_path, final_path)
-            if 'catalogue_detection' in item:
-                item['catalogue_detection']['output_path'] = str(Path(final_path).absolute())
-            
             if is_low_conf:
                 description = "Uncertain Bird (Low Confidence)"
                 keywords = ["WingScribe", "LowConfidence", meta.get('location_tag')]
@@ -545,19 +542,17 @@ class WingScribePipeline:
             # Filter out None values from keywords
             keywords = [k for k in keywords if k is not None]
 
-            metadata_written = self.exif_writer.write_metadata(str(final_path), {
+            tags = {
                 'ImageDescription': description,
                 'XMP:Description': description,
                 'XPTitle': description,
                 'XPSubject': "",
                 'Keywords': keywords,
                 'UserComment': user_comment
-            })
-            if metadata_written is False:
-                raise RuntimeError('Output metadata writing failed')
+            }
             
             # Store absolute paths for database
-            self.db.add_photo_record({
+            photo_record = {
                 'file_path': str(final_path),
                 'filename': Path(final_path).name,
                 'original_path': entry.path,
@@ -573,7 +568,25 @@ class WingScribePipeline:
                 'width': img_width,
                 'height': img_height,
                 'candidates_json': json.dumps(candidates_data, ensure_ascii=False)
-            })
+            }
+            publisher = getattr(self, 'archive_publisher', None)
+            if publisher is not None:
+                reuse_key = hashlib.sha256(json.dumps([
+                    item['version_id'], item['reuse_context'], i_det, results, quality_fields, gen_meta
+                ], sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+                final_path = publisher.publish(temp_crop_path, final_path, photo_record, tags,
+                    self.exif_writer, version_id=item['version_id'], reuse_key=reuse_key)
+            else:
+                # Legacy isolated callers without a catalogue publisher.
+                import shutil
+                shutil.move(temp_crop_path, final_path)
+                if 'catalogue_detection' in item:
+                    item['catalogue_detection']['output_path'] = str(Path(final_path).absolute())
+                if self.exif_writer.write_metadata(str(final_path), tags) is False:
+                    raise RuntimeError('Output metadata writing failed')
+                self.db.add_photo_record(photo_record)
+            if 'catalogue_detection' in item:
+                item['catalogue_detection']['output_path'] = str(Path(final_path).absolute())
             
             log_name = cn_name if not is_low_conf else f"Uncertain ({top_result['scientific_name']})"
             # 根据日志等级决定输出详细程度
@@ -720,6 +733,8 @@ class WingScribePipeline:
                         recorded['result']['quality'] = batch_item.get('quality')
                         batch_item['catalogue_detection'] = recorded
                         batch_item['attempt_key'] = observation['attempt_key']
+                        batch_item['version_id'] = observation['version_id']
+                        batch_item['reuse_context'] = observation['reuse_context']
                     image_batch_items.append(batch_item)
 
             self._recognize_batch(image_batch_items, candidates)

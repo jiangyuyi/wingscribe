@@ -432,3 +432,42 @@ def test_offline_scope_marking_does_not_require_path_resolution(setup, monkeypat
     errors = []
     p._record_scan_failure(provider, p.source_dir, FileNotFoundError('offline'), errors)
     assert errors and rows(p, 'assets')[0]['availability'] == 'unavailable'
+
+
+def test_partial_multibird_archive_recovers_without_duplicate_outputs(setup, monkeypatch):
+    from src.core.io.path_generator import PathGenerator
+    from src.metadata.ioc_manager import IOCManager
+    from src.storage.archive_publication import ArchivePublisher
+    p, provider, entry = setup
+    store = IOCManager(str(p.catalogue.db_path), source_base_dir=p.source_dir, processed_base_dir=p.output_root)
+    p.db = store
+    p.archive_publisher = ArchivePublisher(p.catalogue, store, p.output_root)
+    p.path_generator = PathGenerator('{filename}', p.output_root)
+    p._archive_item = WingScribePipeline._archive_item.__get__(p)
+    p.exif_writer = SimpleNamespace(write_metadata=lambda *args: True)
+    p.log_level = 'info'
+    p._detector.detect.return_value = [([0, 0, 16, 16], .9), ([16, 16, 32, 32], .8)]
+    original = store.insert_photo_record_conn
+    calls = []
+    def insert(conn, record):
+        calls.append(record)
+        if len(calls) == 2:
+            raise RuntimeError('injected second bird database failure')
+        return original(conn, record)
+    monkeypatch.setattr(store, 'insert_photo_record_conn', insert)
+    try:
+        with pytest.raises(RuntimeError, match='second bird'):
+            p.run()
+        first = rows(p, 'photos')[0]
+        assert len(rows(p, 'photos')) == 1
+        store.update_photo_species(first['id'], 'Manual bird', 'manual')
+        monkeypatch.setattr(store, 'insert_photo_record_conn', original)
+        p.run()
+        assert p.recovered_archives == 1
+        assert len(rows(p, 'photos')) == len(rows(p, 'archive_publications')) == 2
+        assert len(list(Path(p.output_root).glob('*.jpg'))) == 2
+        assert rows(p, 'photos')[0]['scientific_name'] == 'Manual bird'
+        assert rows(p, 'processing_jobs')[-1]['status'] == 'completed'
+        assert all(d['output_path'] for d in p.catalogue.list_detections(rows(p, 'analysis_runs')[-1]['id']))
+    finally:
+        store.close()

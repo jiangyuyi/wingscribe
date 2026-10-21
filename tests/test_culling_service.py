@@ -152,3 +152,80 @@ def test_directory_reparse_point_is_not_traversed(env,monkeypatch):
     monkeypatch.setattr(module,'_linked',lambda path: path==linked or original(path))
     result=run(env)
     assert result['analyzed']==2
+
+
+def test_cache_hit_skips_detector_but_regroups_and_preserves_decisions(env):
+    calls=[]
+    detector=lambda frame: calls.append(frame.path.name) or []
+    first=run(env,detector)
+    version=env[1].list_job_items(first['job_id'])[0]['version_id']
+    env[2].set_decision(version,'keep')
+    second=service(env,detector).run(env[0],request_key='second',gap=10,span=60)
+    assert len(calls)==2 and second['cache_hits']==2 and second['computed']==0
+    assert env[2].get_decision(version)['decision']=='keep'
+    assert env[2].get_snapshot(second['snapshot_id'])['report']['experiment']['gap']==10
+
+
+@pytest.mark.parametrize('change',['file','detector','algorithm','protocol','runtime','policy'])
+def test_cache_invalidation(env,monkeypatch,change):
+    import src.application.culling as module
+    calls=[]
+    detector=lambda frame: calls.append(frame.path.name) or []
+    run(env,detector)
+    next_service=service(env,detector)
+    if change=='file':Image.new('RGB',(81,81),'white').save(env[0]/'a.jpg')
+    elif change=='detector':next_service.detector_identity={'test':'new-v2'}
+    elif change=='algorithm':monkeypatch.setattr(module,'ALGORITHM_VERSION','new-v2')
+    elif change=='protocol':monkeypatch.setattr(module,'CACHE_PROTOCOL','new-v2')
+    elif change=='runtime':next_service.runtime={'test':'new-v2'}
+    else:
+        original=module.FocusPolicy
+        monkeypatch.setattr(module,'FocusPolicy',lambda **kw:original(**({'min_side':40}|kw)))
+    result=next_service.run(env[0],request_key='new',gap=5,span=30)
+    assert result['computed']==(1 if change=='file' else 2)
+    assert len(calls)==(3 if change=='file' else 4)
+
+
+def test_cache_survives_cancel_and_report_publication_failure(env,monkeypatch):
+    calls=[]
+    detector=lambda frame:calls.append(frame.path.name) or []
+    stopped=run(env,detector,cancelled=lambda:len(calls)==1)
+    assert stopped['status']=='stopped' and stopped['computed']==1
+    original=env[2].save_snapshot
+    monkeypatch.setattr(env[2],'save_snapshot',lambda *args:(_ for _ in ()).throw(RuntimeError('publish failed')))
+    with pytest.raises(RuntimeError):run(env,detector,request_key='second')
+    monkeypatch.setattr(env[2],'save_snapshot',original)
+    third=run(env,detector,request_key='third')
+    assert len(calls)==2 and third['cache_hits']==2
+
+
+def test_corrupt_cache_is_recomputed_and_repaired(env):
+    calls=[]
+    detector=lambda frame:calls.append(frame.path.name) or []
+    run(env,detector)
+    with env[1]._connect() as conn:
+        conn.execute("UPDATE culling_result_cache SET payload_json='broken'")
+    second=run(env,detector,request_key='second')
+    assert second['computed']==2 and second['cache_hits']==0
+    third=run(env,detector,request_key='third')
+    assert third['cache_hits']==2 and len(calls)==4
+
+
+def test_failed_inference_not_cached(env):
+    def bad(frame):raise RuntimeError('inference')
+    first=run(env,bad)
+    assert first['status']=='failed'
+    second=run(env,request_key='second')
+    assert second['computed']==2 and second['cache_hits']==0
+
+
+def test_cache_commit_survives_failure_before_item_completion(env,monkeypatch):
+    original=JobSession.finish_item
+    calls=[]
+    detector=lambda frame:calls.append(frame.path.name) or []
+    def interrupted(*args,**kwargs):raise RuntimeError('after cache commit')
+    monkeypatch.setattr(JobSession,'finish_item',interrupted)
+    with pytest.raises(RuntimeError,match='cache commit'):run(env,detector)
+    monkeypatch.setattr(JobSession,'finish_item',original)
+    result=run(env,detector,request_key='recover')
+    assert result['cache_hits']==1 and result['computed']==1 and len(calls)==2

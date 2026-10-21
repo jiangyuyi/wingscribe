@@ -10,6 +10,10 @@ from src.storage.catalogue import _json, _now
 from src.core.culling import FOCUS_MODES as MODES
 
 TABLES = {'culling_snapshots', 'culling_members', 'culling_decisions', 'culling_preferences', 'culling_group_modes'}
+CACHE_DDL = '''CREATE TABLE culling_result_cache (
+    version_id TEXT NOT NULL REFERENCES asset_versions(id), cache_key TEXT NOT NULL,
+    payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+    PRIMARY KEY(version_id,cache_key))'''
 DDL = (
     '''CREATE TABLE culling_snapshots (
        id TEXT PRIMARY KEY, run_key TEXT NOT NULL UNIQUE, payload_hash TEXT NOT NULL,
@@ -59,12 +63,16 @@ class CullingStore:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if 'asset_versions' not in tables:
                 raise ValueError('Initialize the asset catalogue first')
+            versions = []
             if 'culling_schema_migrations' in tables:
                 versions = [r[0] for r in conn.execute('SELECT version FROM culling_schema_migrations ORDER BY version')]
-                if versions != [1] or not TABLES.issubset(tables):
+                if versions not in ([1], [1, 2]) or not TABLES.issubset(tables):
                     raise ValueError('Unsupported or incomplete culling schema')
-                return None
-            if TABLES & tables:
+                if versions == [1, 2]:
+                    if 'culling_result_cache' not in tables:
+                        raise ValueError('Incomplete cache schema')
+                    return None
+            if not versions and TABLES & tables:
                 raise ValueError('Unversioned culling tables; restore a verified backup')
             directory = Path(backup_dir)
             directory.mkdir(parents=True, exist_ok=True)
@@ -78,11 +86,36 @@ class CullingStore:
             finally:
                 source.close()
                 destination.close()
-            for statement in DDL:
-                conn.execute(statement)
-            conn.execute('CREATE TABLE culling_schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)')
-            conn.execute('INSERT INTO culling_schema_migrations VALUES (1,?)', (_now(),))
+            if not versions:
+                for statement in DDL:
+                    conn.execute(statement)
+                conn.execute('CREATE TABLE culling_schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)')
+                conn.execute('INSERT INTO culling_schema_migrations VALUES (1,?)', (_now(),))
+            conn.execute(CACHE_DDL)
+            conn.execute('INSERT INTO culling_schema_migrations VALUES (2,?)', (_now(),))
             return backup
+
+    def get_cached_result(self, version_id: str, cache_key: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute('SELECT payload_json,payload_hash FROM culling_result_cache '
+                               'WHERE version_id=? AND cache_key=?', (version_id, cache_key)).fetchone()
+            if not row or hashlib.sha256(row['payload_json'].encode()).hexdigest() != row['payload_hash']:
+                return None
+            try:
+                return json.loads(row['payload_json'])
+            except (ValueError, TypeError):
+                return None
+
+    def save_cached_result(self, version_id: str, cache_key: str, payload: dict) -> None:
+        if not cache_key:
+            raise ValueError('Cache key required')
+        encoded = _json(payload)
+        digest = hashlib.sha256(encoded.encode()).hexdigest()
+        with self._connection(write=True) as conn:
+            conn.execute('''INSERT INTO culling_result_cache VALUES (?,?,?,?,?)
+                ON CONFLICT(version_id,cache_key) DO UPDATE SET payload_json=excluded.payload_json,
+                payload_hash=excluded.payload_hash,created_at=excluded.created_at''',
+                (version_id, cache_key, encoded, digest, _now()))
 
     def save_snapshot(self, run_key: str, report: dict, version_map: dict[str, str]) -> str:
         """Freeze a complete report, mapping its local item IDs to registered versions."""

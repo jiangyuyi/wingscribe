@@ -113,3 +113,20 @@ def test_two_writers_share_one_idempotent_snapshot(setup):
     with ThreadPoolExecutor(max_workers=2) as executor:
         ids=list(executor.map(save,range(2)))
     assert ids[0]==ids[1]
+
+
+def test_v1_upgrade_backs_up_and_preserves_human_state(setup,tmp_path):
+    _,store,_,version,report,_=setup
+    sid=store.save_snapshot('r',report,{'a':version})
+    store.set_decision(version,'keep',note='manual')
+    store.set_default_mode('assist')
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute('DROP TABLE culling_result_cache')
+        conn.execute('DELETE FROM culling_schema_migrations WHERE version=2')
+    backup=store.initialize(backup_dir=tmp_path/'v1backup')
+    with sqlite3.connect(backup) as conn:
+        assert conn.execute('SELECT version FROM culling_schema_migrations').fetchall()==[(1,)]
+    assert store.get_decision(version)['note']=='manual'
+    assert store.get_mode(sid,'g')['effective']=='assist'
+    assert store.get_snapshot(sid)['report']==report
+    assert store.initialize(backup_dir=tmp_path/'v1backup') is None

@@ -11,4 +11,7 @@
 <pre id="progress" aria-live="polite"></pre></section>
 <section class="panel"><div class="toolbar"><label>默认模式<select id="default-mode"><option value="safe">稳妥推荐</option><option value="assist">辅助比较</option><option value="relaxed">宽松推荐（实验）</option></select></label><button id="save-default">保存默认模式</button>
 <label>已保存的分析<select id="history"></select></label><button id="open">打开结果</button></div><p id="message" role="status"></p></section>
+<section id="revision-panel" class="panel" hidden><p id="revision-current" aria-live="polite"></p>
+<div class="toolbar"><label>分组历史版本<select id="revisions"></select></label><button id="open-revision">打开所选版本</button><button id="parent-revision" disabled>查看上一版本</button></div>
+<p>在旧版本继续调整会保留为另一分支；查看历史不会回滚人工标记。</p></section>
 <div id="results"></div></main><script src="/lib/culling.js"></script></body></html>

@@ -2,6 +2,7 @@
 const $=s=>document.querySelector(s);
 let snapshot=null, loading=false, defaultDirty=false, adviceUpdates=[];
 const unsaved=new Set();
+let reviewBusy=false, pendingRegroup=null;
 const modes={safe:'稳妥推荐',assist:'辅助比较',relaxed:'宽松推荐（实验）'};
 const states={completed:'已完成',failed:'有失败',stopped:'已停止',interrupted:'上次中断',running:'处理中',pending:'等待中'};
 function el(tag,text){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;}
@@ -22,15 +23,26 @@ function render(){
  adviceUpdates=[];unsaved.clear();
  const host=$('#results');host.replaceChildren();const report=snapshot.report;
  host.append(el('p',report.input_set_complete?'本次输入已处理完毕。':'这是一份部分结果，请查看任务失败或停止原因。'));
+ host.append(el('p',report.revision?'这是人工分组修订，以下统计来自原分析；本次未重新推理。':'这是原始自动分组。'));
  host.append(el('p',`缓存命中 ${report.cache_hits??0} 张，新计算 ${report.computed??0} 张。`));
+ const mergeSelection=new Set();
+ const merge=el('button','合并所选组'),mergeCount=el('span',' 已选 0 组');merge.disabled=true;
+ merge.onclick=()=>act(()=>submitRegroup('merge',[...mergeSelection],[]));
+ host.append(merge,mergeCount,el('p','合并允许跨自动分组边界。来源组模式不一致时，新组跟随默认；原版本和人工标记保留。'));
  for(const [number,group] of report.groups.entries()){
   const section=el('section');section.className='panel';section.append(el('h2',`第 ${number+1} 组 · ${group.version_ids.length} 张`));
+  const mergeBox=el('input');mergeBox.type='checkbox';
+  const mergeLabel=el('label',`选择第 ${number+1} 组参与合并 `);mergeLabel.append(mergeBox);section.append(mergeLabel);
+  mergeBox.onchange=()=>{if(mergeBox.checked)mergeSelection.add(group.group_id);else mergeSelection.delete(group.group_id);mergeCount.textContent=` 已选 ${mergeSelection.size} 组`;merge.disabled=mergeSelection.size<2;};
+  const splitSelection=new Set(),split=el('button','将所选照片拆为新组'),splitCount=el('span',' 已选 0 张');split.disabled=true;
+  split.onclick=()=>act(()=>submitRegroup('split',[group.group_id],[...splitSelection]));
+  section.append(split,splitCount);
   const mode=el('select');options(mode,[['','跟随默认'],...Object.entries(modes)]);mode.value=snapshot.modes[group.group_id].override??'';
   const caption=el('label','本组模式 ');caption.append(mode);section.append(caption);
   const advice=el('pre');section.append(advice);
   function updateAdvice(){const effective=mode.value||snapshot.modes[group.group_id].default;const r=group.ranking_modes[effective];const names=keys=>keys.map(k=>report.items[k].filename).join('、');
    advice.textContent=modes[effective]+(effective==='relaxed'?'：实验结果，请复核。':'')+'\n'+(effective==='assist'?'候选顺序：':'推荐：')+(names(effective==='assist'?r.ranked:r.recommended)||'暂无，请人工检查')+(r.scale_guard_triggered?'\n主体大小或姿态差异较大，排序可能不可靠。':'')+(r.tie_sets.length?'\n分数接近：'+r.tie_sets.map(names).join('；'):'')+(r.unranked.length?'\n未排序：'+names(r.unranked):'')+'\n相对排序不代表已合焦。';}
-  adviceUpdates.push(updateAdvice);updateAdvice();let savedMode=mode.value;mode.onchange=()=>act(async()=>{mode.disabled=true;try{snapshot.modes[group.group_id]=await api(`/snapshots/${snapshot.id}/groups/${group.group_id}/mode`,{mode:mode.value||null});savedMode=mode.value;updateAdvice();$('#message').textContent='本组模式已保存，人工选择未改变。';}catch(e){mode.value=savedMode;throw e;}finally{mode.disabled=false;}});
+  adviceUpdates.push(updateAdvice);updateAdvice();let savedMode=mode.value;mode.onchange=()=>act(()=>withReview(async()=>{mode.disabled=true;try{snapshot.modes[group.group_id]=await api(`/snapshots/${snapshot.id}/groups/${group.group_id}/mode`,{mode:mode.value||null});savedMode=mode.value;updateAdvice();$('#message').textContent='本组模式已保存，人工选择未改变。';}catch(e){mode.value=savedMode;throw e;}finally{mode.disabled=false;}}));
   const comparable=group.version_ids.filter(k=>report.items[k].evidence.bounds);
   if(comparable.length){
    const details=el('details'),summary=el('summary','并排比较主体原像素');details.append(summary);
@@ -45,12 +57,15 @@ function render(){
   }
   const grid=el('div');grid.className='photos';
   for(const key of group.version_ids){const item=report.items[key],version=snapshot.version_map[key],decision=snapshot.decisions[version];const card=el('article');card.className='photo';
+   const splitBox=el('input');splitBox.type='checkbox';
+   const splitLabel=el('label',`选择 ${item.filename} 拆组 `);splitLabel.append(splitBox);card.append(splitLabel);
+   splitBox.onchange=()=>{if(splitBox.checked)splitSelection.add(key);else splitSelection.delete(key);splitCount.textContent=` 已选 ${splitSelection.size}/${group.version_ids.length} 张`;split.disabled=!splitSelection.size||splitSelection.size===group.version_ids.length;};
    const image=el('img');image.loading='lazy';image.alt=item.filename;image.src=media(version);image.onerror=()=>{image.alt='照片不可用或已变化，请重新分析';};
    const select=el('select');options(select,[['undecided','待定'],['keep','保留'],['reject','拒绝（仅标记）']]);select.value=decision?.decision??'undecided';select.setAttribute('aria-label',item.filename+' 人工决定');
    const note=el('textarea');note.placeholder='备注（可选）';note.setAttribute('aria-label',item.filename+' 备注');note.maxLength=4000;note.value=decision?.note??'';
    const save=el('button','保存人工标记'),feedback=el('span',decision?' 已保存':' 尚未标记');
    select.onchange=note.oninput=()=>{unsaved.add(version);feedback.textContent=' 尚未保存';};
-   save.onclick=()=>act(async()=>{save.disabled=select.disabled=note.disabled=true;try{snapshot.decisions[version]=await api(`/snapshots/${snapshot.id}/decisions/${version}`,{decision:select.value,note:note.value});unsaved.delete(version);feedback.textContent=' 已保存';}finally{save.disabled=select.disabled=note.disabled=false;}});
+   save.onclick=()=>act(()=>withReview(async()=>{save.disabled=select.disabled=note.disabled=true;try{snapshot.decisions[version]=await api(`/snapshots/${snapshot.id}/decisions/${version}`,{decision:select.value,note:note.value});unsaved.delete(version);feedback.textContent=' 已保存';}finally{save.disabled=select.disabled=note.disabled=false;}}));
    card.append(el('h3',item.filename),image,el('p',item.evidence.status==='review'?'当前无法可靠评分，请人工查看。':''),select,note,save,feedback);grid.append(card);
   }section.append(grid);host.append(section);
  }
@@ -58,7 +73,37 @@ function render(){
 $('#start').onclick=()=>act(async()=>{await api('/start',{source:Number($('#source').value),relative:$('#relative').value,gap:Number($('#gap').value),span:Number($('#span').value)});$('#message').textContent='已提交选片任务。';await refresh();});
 $('#stop').onclick=()=>act(async()=>{await api('/stop',{});$('#message').textContent='已请求停止，等待当前照片处理完毕。';});
 $('#default-mode').onchange=()=>{defaultDirty=true;};
-$('#save-default').onclick=()=>act(async()=>{const mode=$('#default-mode').value;$('#default-mode').disabled=$('#save-default').disabled=true;try{await api('/default-mode',{mode});defaultDirty=false;if(snapshot){Object.values(snapshot.modes).forEach(m=>m.default=mode);adviceUpdates.forEach(f=>f());}$('#message').textContent='默认模式已保存，跟随默认的组已更新，人工选择不变。';await refresh();}finally{$('#default-mode').disabled=$('#save-default').disabled=false;}});
-$('#open').onclick=()=>act(async()=>{if(!$('#history').value)return;if(unsaved.size&&!confirm('有尚未保存的人工标记，仍要打开另一份结果吗？'))return;snapshot=await api('/snapshots/'+$('#history').value);render();});
+$('#save-default').onclick=()=>act(()=>withReview(async()=>{const mode=$('#default-mode').value;$('#default-mode').disabled=$('#save-default').disabled=true;try{await api('/default-mode',{mode});defaultDirty=false;if(snapshot){Object.values(snapshot.modes).forEach(m=>m.default=mode);adviceUpdates.forEach(f=>f());}$('#message').textContent='默认模式已保存，跟随默认的组已更新，人工选择不变。';await refresh();}finally{$('#default-mode').disabled=$('#save-default').disabled=false;}}));
+async function withReview(fn){
+ if(reviewBusy)throw Error('正在保存或打开结果，请稍候。');
+ reviewBusy=true;$('#results').inert=true;
+ const controls=['#open','#open-revision','#parent-revision','#save-default','#default-mode'];
+ const previous=controls.map(id=>$(id).disabled);controls.forEach(id=>$(id).disabled=true);
+ try{return await fn();}finally{reviewBusy=false;$('#results').inert=false;controls.forEach((id,i)=>$(id).disabled=previous[i]);$('#parent-revision').disabled=!snapshot?.report.revision;}
+}
+async function openSnapshot(id){
+ const [next,history]=await Promise.all([api('/snapshots/'+id),api('/snapshots/'+id+'/history')]);
+ snapshot=next;render();
+ const numbers=new Map(history.map((entry,i)=>[entry.id,i+1]));
+ const names={analysis:'原始分析',split:'拆组',merge:'合组'};
+ const label=entry=>`版本 ${numbers.get(entry.id)} · ${names[entry.action]||entry.action}`+(entry.parent_snapshot_id?` · 基于版本 ${numbers.get(entry.parent_snapshot_id)}`:'');
+ options($('#revisions'),history.map(entry=>[entry.id,label(entry)]));$('#revisions').value=id;
+ $('#revision-current').textContent='当前查看：'+label(history.find(entry=>entry.id===id));
+ $('#revision-panel').hidden=false;
+}
+function requireSaved(){if(unsaved.size)throw Error('请先保存尚未保存的人工标记，再调整分组或切换版本。');}
+async function submitRegroup(action,groups,items){
+ requireSaved();
+ return withReview(async()=>{
+  const signature=JSON.stringify([snapshot.id,action,[...groups].sort(),[...items].sort()]);
+  if(pendingRegroup?.signature!==signature)pendingRegroup={signature,key:crypto.randomUUID()};
+  const result=await api(`/snapshots/${snapshot.id}/regroup`,{request_key:pendingRegroup.key,action,group_ids:groups,item_keys:items});
+  await openSnapshot(result.snapshot_id);pendingRegroup=null;
+  $('#message').textContent='分组调整已保存为新版本，原版本和人工标记保留。';
+ });
+}
+$('#open').onclick=()=>act(()=>withReview(async()=>{if(!$('#history').value)return;requireSaved();await openSnapshot($('#history').value);}));
+$('#open-revision').onclick=()=>act(()=>withReview(async()=>{requireSaved();await openSnapshot($('#revisions').value);}));
+$('#parent-revision').onclick=()=>act(()=>withReview(async()=>{requireSaved();const parent=snapshot?.report.revision?.parent_snapshot_id;if(parent)await openSnapshot(parent);}));
 window.addEventListener('beforeunload',event=>{if(unsaved.size){event.preventDefault();event.returnValue='';}});
 act(refresh);setInterval(()=>act(refresh),3000);

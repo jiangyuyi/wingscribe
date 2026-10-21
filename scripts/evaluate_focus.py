@@ -37,6 +37,7 @@ def main():
     from src.core.culling import group_captures
     from src.core.culling_input import read_jpeg
     from src.core.focus import analyze_focus, rank_group
+    from src.core.focus_modes import report_modes
     args.output.mkdir(parents=True)
     media = args.output / "media"
     media.mkdir()
@@ -72,6 +73,8 @@ def main():
     for group in group_captures(captures, max_gap_seconds=args.gap, max_span_seconds=args.span):
         groups.append({**asdict(group), "ranking": asdict(rank_group(group, [evidence[k] for k in group.version_ids]))})
     groups.sort(key=lambda g: items[g["version_ids"][0]]["captured_at"] or "")
+    for group in groups:
+        group["ranking_modes"] = report_modes(group, items)
     with args.model.open("rb") as stream:
         model_hash = hashlib.file_digest(stream, "sha256").hexdigest()
     report = dict(items=items, groups=groups, experiment=dict(gap=args.gap, span=args.span,

@@ -15,11 +15,24 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
     if schema not in (1, 2):
         raise ValueError("Unsupported label schema")
     confidence_counts = dict(similar=0, uncertain=0, tentative=0, confident=0, none_acceptable=0)
+    mode_counts = dict(safe=0, assist=0, relaxed=0)
+    default_mode = labels.get("default_mode", "safe")
+    if default_mode not in mode_counts or labels.get("mode_version", "focus-advice-v1") != "focus-advice-v1":
+        raise ValueError("Invalid mode preferences")
     for label in labels.get("groups", []):
         key = label["group_id"]
         if key not in groups or key in seen:
             raise ValueError("Unknown or duplicate labelled group")
         seen.add(key)
+        mode = label.get("mode", "safe")
+        if mode not in mode_counts:
+            raise ValueError("Invalid focus mode")
+        if "mode_override" in label:
+            override = label["mode_override"]
+            if override not in (*mode_counts, "inherit") or mode != (default_mode if override == "inherit" else override):
+                raise ValueError("Inconsistent mode selection")
+        if mode != "safe" and mode not in groups[key].get("ranking_modes", {}):
+            raise ValueError("Report does not contain this focus mode")
         if label.get("reviewed") is not True:
             continue
         valid = label.get("grouping")
@@ -38,6 +51,7 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
                 raise ValueError("No acceptable photos conflicts with selection")
             confidence_counts[confidence] += 1
         judged += 1
+        mode_counts[mode] += 1
         if valid != "correct":
             rejected_groups += 1
             continue
@@ -48,7 +62,8 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
         if not best:
             continue
         eligible += 1
-        picks = groups[key]["ranking"]["recommended"]
+        picks = (groups[key]["ranking"] if mode == "safe" else
+                 groups[key]["ranking_modes"][mode])["recommended"]
         recommended += bool(picks)
         hits1 += bool(set(picks[:1]) & set(best))
         hits3 += bool(set(picks[:3]) & set(best))
@@ -68,6 +83,7 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
         "unreviewed_groups": len(groups) - judged,
         "label_schema_version": schema,
         "reviewed_certainty_counts": confidence_counts,
+        "reviewed_mode_counts": mode_counts,
         "scope": "exploratory single-session labels; not an independent test benchmark",
     }
 
@@ -75,6 +91,7 @@ def evaluate_labels(report: dict, labels: dict) -> dict:
 def render_review(report: dict) -> str:
     """Offline review; no network, labels export locally, scores hidden initially."""
     cards = []
+    has_modes = bool(report["groups"]) and all("ranking_modes" in g for g in report["groups"])
     for number, group in enumerate(report["groups"], 1):
         gid = html.escape(group["group_id"], quote=True)
         photos = []
@@ -127,7 +144,11 @@ def render_review(report: dict) -> str:
                 '<div class="viewport"><img alt="主体细节"></div></div>' for side in ("A", "B")
             ) + '</div></div>' if options else '<p>本组无可用主体裁切，请查看完整测试副本。</p>'
         )
-        cards.append(f'<section data-group="{gid}"><h2>第 {number} 组 · {len(photos)} 张</h2>'
+        mode_control = ('<label>本组模式 <select class="group-mode"><option value="inherit">跟随本页默认</option>'
+                        '<option value="safe">稳妥推荐</option><option value="assist">辅助比较</option>'
+                        '<option value="relaxed">宽松推荐（实验）</option></select></label>'
+                        '<pre class="algorithm mode-result" hidden></pre>') if has_modes else ''
+        cards.append(f'<section data-group="{gid}"><h2>第 {number} 组 · {len(photos)} 张</h2>' + mode_control +
                      '<label>分组是否合理？ <select class="grouping"><option value="uncertain">尚不确定</option>'
                      '<option value="correct">合理，是可比较的一组</option>'
                      '<option value="incorrect">不合理，需要拆分或合并</option></select></label> '
@@ -138,7 +159,8 @@ def render_review(report: dict) -> str:
                      '<option value="confident">有把握的最佳集合</option>'
                      '<option value="none_acceptable">全部不可接受</option></select></label> '
                      '<label><input type="checkbox" class="reviewed">本组已看完（可不选最佳照片）</label>'
-                     f'{compare}<div class="grid">{"".join(photos)}</div><pre class="algorithm" hidden>{ranking}</pre></section>')
+                     f'{compare}<div class="grid">{"".join(photos)}</div>' +
+                     ('' if has_modes else f'<pre class="algorithm" hidden>{ranking}</pre>') + '</section>')
     rid = json.dumps(report["report_id"]).replace("<", "\\u003c")
     return '''<!doctype html><html lang="zh"><meta charset="utf-8"><title>WingScribe 选片探索标注</title>
 <style>body{font:16px system-ui;margin:24px;background:#f5f6f8;color:#17212b}
@@ -158,21 +180,29 @@ article{background:white;padding:15px;min-width:0}.preview{display:block;width:1
 <button onclick="document.querySelectorAll('.algorithm').forEach(e=>e.hidden=!e.hidden)">显示／隐藏算法结果</button>
 <button onclick="saveLabels()">导出本地标注 JSON</button>
 <label>恢复本页标注 <input type="file" id="import-labels" accept=".json"></label><p id="message" role="status"></p>
-''' + "".join(cards) + '''
+''' + ('''<label>本页默认模式 <select id="default-mode"><option value="safe">稳妥推荐</option>
+<option value="assist">辅助比较</option><option value="relaxed">宽松推荐（实验）</option></select></label>
+<p>单组可覆盖本页默认；切换不会改变人工勾选。模式随标注导出保存。宽松推荐仍需复核，不会删除照片。</p>''' if has_modes else '') + "".join(cards) + '''
 <script>
 const reportId = ''' + rid + ''';
+''' + ('const modeData = ' + json.dumps({g['group_id']: {
+    'modes': g['ranking_modes'], 'names': {k: report['items'][k]['filename'] for k in g['version_ids']}}
+    for g in report['groups']}, ensure_ascii=False).replace('<', '\\u003c') + ';\n' +
+    Path(__file__).with_name('focus_modes_review.js').read_text(encoding='utf-8') if has_modes else '') + '''
 function saveLabels(){
  const groups=[...document.querySelectorAll('section')].map(s=>({
  group_id:s.dataset.group, reviewed:s.querySelector('.reviewed').checked,
  grouping:s.querySelector('.grouping').value,certainty:s.querySelector('.certainty').value,
- best:[...s.querySelectorAll('article input:checked')].map(e=>e.value)}));
+ best:[...s.querySelectorAll('article input:checked')].map(e=>e.value),
+ ...(typeof modeSelection==='function'?modeSelection(s):{})}));
  for(const g of groups){
   if(g.reviewed && ((g.certainty==='confident' && !g.best.length) ||
      (g.certainty==='none_acceptable' && g.best.length))){
    document.querySelector('#message').textContent='请检查选择把握：有把握的最佳集合需勾选照片，全部不可接受不能同时勾选最佳照片。';return;
   }
  }
- const blob=new Blob([JSON.stringify({schema_version:2,report_id:reportId,groups},null,2)],{type:'application/json'});
+ const blob=new Blob([JSON.stringify({schema_version:2,report_id:reportId,groups,
+ ...(typeof modePreferences==='function'?modePreferences():{})},null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download='focus-labels.json';a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
  document.querySelector('#message').textContent='已发起下载；请确认浏览器保存的文件。';

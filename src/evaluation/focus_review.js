@@ -46,6 +46,7 @@ document.querySelector('#import-labels').addEventListener('change',async event=>
   const data=JSON.parse(await event.target.files[0].text());
   if(data.report_id!==reportId || ![1,2].includes(data.schema_version??1))throw Error('报告不匹配');
   const sections=[...document.querySelectorAll('section')], seen=new Set(), actions=[];
+  const applyModes=typeof prepareModeImport==='function'?prepareModeImport(data):()=>{};
   for(const group of data.groups){
    const section=sections.find(s=>s.dataset.group===group.group_id);
    if(!section || seen.has(group.group_id))throw Error('分组不匹配');
@@ -62,6 +63,6 @@ document.querySelector('#import-labels').addEventListener('change',async event=>
     section.querySelector('.reviewed').checked=group.reviewed;
     inputs.forEach(i=>i.checked=group.best.includes(i.value));});
   }
-  actions.forEach(a=>a());message.textContent='已恢复标注。旧格式没有把握信息，请补选后再导出。';
+  actions.forEach(a=>a());applyModes();message.textContent='已恢复标注和可用的模式设置。旧格式没有把握信息，请补选后再导出。';
  }catch(e){message.textContent='未导入：'+e.message;}
 });

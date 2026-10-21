@@ -1,10 +1,10 @@
 """Explicit culling advice modes; human choices are never inputs or outputs."""
 from dataclasses import asdict
 
-from src.core.culling import CaptureGroup
+from src.core.culling import CaptureGroup, FOCUS_MODES
 from src.core.focus import FocusEvidence, FocusPolicy, rank_group
 
-MODES = ("safe", "assist", "relaxed")
+MODES = FOCUS_MODES
 MODE_VERSION = "focus-advice-v1"
 
 

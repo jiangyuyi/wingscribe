@@ -1,0 +1,182 @@
+"""Local culling snapshots and human choices; never performs photo operations."""
+import hashlib
+import json
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+from uuid import uuid4
+
+from src.storage.catalogue import _json, _now
+from src.core.culling import FOCUS_MODES as MODES
+
+TABLES = {'culling_snapshots', 'culling_members', 'culling_decisions', 'culling_preferences', 'culling_group_modes'}
+DDL = (
+    '''CREATE TABLE culling_snapshots (
+       id TEXT PRIMARY KEY, run_key TEXT NOT NULL UNIQUE, payload_hash TEXT NOT NULL,
+       report_json TEXT NOT NULL, created_at TEXT NOT NULL)''',
+    '''CREATE TABLE culling_members (
+       snapshot_id TEXT NOT NULL REFERENCES culling_snapshots(id), group_id TEXT NOT NULL,
+       item_key TEXT NOT NULL, version_id TEXT NOT NULL REFERENCES asset_versions(id),
+       PRIMARY KEY(snapshot_id,item_key), UNIQUE(snapshot_id,version_id))''',
+    '''CREATE TABLE culling_decisions (
+       version_id TEXT PRIMARY KEY REFERENCES asset_versions(id),
+       decision TEXT NOT NULL CHECK(decision IN ('keep','undecided','reject')),
+       note TEXT NOT NULL, updated_at TEXT NOT NULL)''',
+    '''CREATE TABLE culling_preferences (
+       id INTEGER PRIMARY KEY CHECK(id=1), mode TEXT NOT NULL CHECK(mode IN ('safe','assist','relaxed')))''',
+    '''CREATE TABLE culling_group_modes (
+       snapshot_id TEXT NOT NULL REFERENCES culling_snapshots(id), group_id TEXT NOT NULL,
+       mode TEXT NOT NULL CHECK(mode IN ('safe','assist','relaxed')),
+       PRIMARY KEY(snapshot_id,group_id))''',
+    "INSERT INTO culling_preferences VALUES (1,'safe')",
+)
+
+
+class CullingStore:
+    def __init__(self, db_path: str | Path):
+        self.db_path = Path(db_path).absolute()
+
+    @contextmanager
+    def _connection(self, *, write=False):
+        conn = sqlite3.connect(self.db_path.as_uri() + '?mode=rw', uri=True, timeout=30)
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys=ON')
+        try:
+            if write:
+                conn.execute('BEGIN IMMEDIATE')
+            yield conn
+            if write:
+                conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def initialize(self, *, backup_dir: str | Path) -> Path | None:
+        """Explicit additive migration after AssetCatalogue initialization."""
+        with self._connection(write=True) as conn:
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if 'asset_versions' not in tables:
+                raise ValueError('Initialize the asset catalogue first')
+            if 'culling_schema_migrations' in tables:
+                versions = [r[0] for r in conn.execute('SELECT version FROM culling_schema_migrations ORDER BY version')]
+                if versions != [1] or not TABLES.issubset(tables):
+                    raise ValueError('Unsupported or incomplete culling schema')
+                return None
+            if TABLES & tables:
+                raise ValueError('Unversioned culling tables; restore a verified backup')
+            directory = Path(backup_dir)
+            directory.mkdir(parents=True, exist_ok=True)
+            backup = directory / f'before-culling-{uuid4().hex}.db'
+            source = sqlite3.connect(self.db_path.as_uri() + '?mode=ro', uri=True)
+            destination = sqlite3.connect(backup)
+            try:
+                source.backup(destination)
+                if destination.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                    raise RuntimeError('Backup integrity check failed')
+            finally:
+                source.close()
+                destination.close()
+            for statement in DDL:
+                conn.execute(statement)
+            conn.execute('CREATE TABLE culling_schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)')
+            conn.execute('INSERT INTO culling_schema_migrations VALUES (1,?)', (_now(),))
+            return backup
+
+    def save_snapshot(self, run_key: str, report: dict, version_map: dict[str, str]) -> str:
+        """Freeze a complete report, mapping its local item IDs to registered versions."""
+        if not run_key or not report.get('report_id'):
+            raise ValueError('Run key and report identity are required')
+        items = report['items']
+        if not items or set(version_map) != set(items) or len(set(version_map.values())) != len(items):
+            raise ValueError('Expected a unique version mapping for every input')
+        members, groups = {}, set()
+        for group in report['groups']:
+            gid = group['group_id']
+            if not gid or gid in groups or not group['version_ids']:
+                raise ValueError('Invalid or duplicate group')
+            groups.add(gid)
+            for key in group['version_ids']:
+                if key not in items or key in members:
+                    raise ValueError('Each input must belong to exactly one group')
+                members[key] = gid
+        if set(members) != set(items):
+            raise ValueError('Ungrouped input')
+        payload = _json({'report': report, 'version_map': version_map})
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        with self._connection(write=True) as conn:
+            for key, version in version_map.items():
+                row = conn.execute('SELECT fingerprint FROM asset_versions WHERE id=?', (version,)).fetchone()
+                sha = items[key].get('sha256', '')
+                if len(sha) != 64 or any(c not in '0123456789abcdef' for c in sha):
+                    raise ValueError('Expected a complete SHA-256 for each input')
+                if not row or row['fingerprint'] != 'sha256:' + sha:
+                    raise ValueError('Unknown version or input fingerprint mismatch')
+            old = conn.execute('SELECT id,payload_hash FROM culling_snapshots WHERE run_key=?', (run_key,)).fetchone()
+            if old:
+                if old['payload_hash'] != digest:
+                    raise ValueError('Run key already has different results')
+                return old['id']
+            sid = uuid4().hex
+            conn.execute('INSERT INTO culling_snapshots VALUES (?,?,?,?,?)', (sid, run_key, digest, _json(report), _now()))
+            conn.executemany('INSERT INTO culling_members VALUES (?,?,?,?)',
+                             [(sid, members[k], k, v) for k, v in version_map.items()])
+            return sid
+
+    def get_snapshot(self, snapshot_id: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute('SELECT * FROM culling_snapshots WHERE id=?', (snapshot_id,)).fetchone()
+            if not row:
+                return None
+            result = dict(row)
+            result['report'] = json.loads(result.pop('report_json'))
+            result['version_map'] = {r['item_key']: r['version_id'] for r in conn.execute(
+                'SELECT item_key,version_id FROM culling_members WHERE snapshot_id=?', (snapshot_id,))}
+            return result
+
+    def set_decision(self, version_id: str, decision: str, *, note: str = '') -> None:
+        if decision not in {'keep', 'undecided', 'reject'} or not isinstance(note, str):
+            raise ValueError('Invalid human decision')
+        with self._connection(write=True) as conn:
+            conn.execute('''INSERT INTO culling_decisions VALUES (?,?,?,?)
+                ON CONFLICT(version_id) DO UPDATE SET decision=excluded.decision,
+                note=excluded.note, updated_at=excluded.updated_at''', (version_id, decision, note, _now()))
+
+    def get_decision(self, version_id: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute('SELECT * FROM culling_decisions WHERE version_id=?', (version_id,)).fetchone()
+            return dict(row) if row else None
+
+    def set_default_mode(self, mode: str) -> None:
+        if mode not in MODES:
+            raise ValueError('Unknown mode')
+        with self._connection(write=True) as conn:
+            conn.execute('UPDATE culling_preferences SET mode=? WHERE id=1', (mode,))
+
+    @staticmethod
+    def _require_group(conn, snapshot_id, group_id):
+        if not conn.execute('SELECT 1 FROM culling_members WHERE snapshot_id=? AND group_id=?',
+                            (snapshot_id, group_id)).fetchone():
+            raise ValueError('Unknown analysis group')
+
+    def set_group_mode(self, snapshot_id: str, group_id: str, mode: str | None) -> None:
+        if mode is not None and mode not in MODES:
+            raise ValueError('Unknown mode')
+        with self._connection(write=True) as conn:
+            self._require_group(conn, snapshot_id, group_id)
+            if mode is None:
+                conn.execute('DELETE FROM culling_group_modes WHERE snapshot_id=? AND group_id=?', (snapshot_id, group_id))
+            else:
+                conn.execute('''INSERT INTO culling_group_modes VALUES (?,?,?)
+                    ON CONFLICT(snapshot_id,group_id) DO UPDATE SET mode=excluded.mode''', (snapshot_id, group_id, mode))
+
+    def get_mode(self, snapshot_id: str, group_id: str) -> dict:
+        with self._connection() as conn:
+            conn.execute('BEGIN')  # Default and override belong to one read snapshot.
+            self._require_group(conn, snapshot_id, group_id)
+            default = conn.execute('SELECT mode FROM culling_preferences WHERE id=1').fetchone()[0]
+            override = conn.execute('SELECT mode FROM culling_group_modes WHERE snapshot_id=? AND group_id=?',
+                                    (snapshot_id, group_id)).fetchone()
+            return {'default': default, 'override': override[0] if override else None,
+                    'effective': override[0] if override else default}

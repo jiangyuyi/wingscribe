@@ -8,6 +8,7 @@ from typing import Iterable, Sequence
 
 
 RECOMMENDATION_COUNT = 3
+FOCUS_MODES = ("safe", "assist", "relaxed")
 
 
 @dataclass(frozen=True)

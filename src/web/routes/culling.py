@@ -37,6 +37,13 @@ class Decision(BaseModel):
     note:str=Field(default='',max_length=4000)
 
 
+class Regroup(BaseModel):
+    request_key: str = Field(min_length=1, max_length=128)
+    action: Literal['split', 'merge']
+    group_ids: list[str] = Field(min_length=1, max_length=1000)
+    item_keys: list[str] = Field(default_factory=list, max_length=10000)
+
+
 def invoke(fn,*args,**kwargs):
     try:
         return fn(*args,**kwargs)
@@ -111,3 +118,18 @@ def decision(sid:str,version_id:str,body:Decision,request:Request):
         raise HTTPException(404,'照片不属于此次分析')
     invoke(manager.store.set_decision,version_id,body.decision,note=body.note)
     return manager.store.get_decision(version_id)
+
+
+@router.post('/api/culling/snapshots/{sid}/regroup')
+def regroup(sid: str, body: Regroup, request: Request):
+    store = request.app.state.culling.store
+    # Validate existence before opening the write transaction (also handles a fresh database).
+    invoke(request.app.state.culling.snapshot, sid)
+    result = invoke(store.revise_groups, sid, body.request_key, body.action, body.group_ids, body.item_keys)
+    return {'snapshot_id': result}
+
+
+@router.get('/api/culling/snapshots/{sid}/history')
+def history(sid: str, request: Request):
+    invoke(request.app.state.culling.snapshot, sid)
+    return invoke(request.app.state.culling.store.revision_history, sid)

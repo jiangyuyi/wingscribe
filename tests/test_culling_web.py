@@ -88,3 +88,25 @@ def test_pipeline_restore_does_not_mislabel_culling_job(web):
     from src.web.task_manager import TaskManager
     manager=TaskManager(config_override=app.state.runtime.config)
     assert manager.job_id is None
+
+
+def test_regroup_api_and_history(web):
+    app, client, root = web
+    Image.new('RGB', (100, 100), 'white').save(root/'second.jpg')
+    sid = analyze(web)
+    original = client.get('/api/culling/snapshots/'+sid).json()
+    body = {'request_key': 'web-merge', 'action': 'merge',
+            'group_ids': [g['group_id'] for g in original['report']['groups']]}
+    url = f'/api/culling/snapshots/{sid}/regroup'
+    assert client.post(url, json=body, headers={'Origin': 'https://evil.example'}).status_code == 403
+    response = client.post(url, json=body)
+    assert response.status_code == 200
+    child = response.json()['snapshot_id']
+    assert client.post(url, json=body).json()['snapshot_id'] == child
+    derived = client.get('/api/culling/snapshots/'+child).json()
+    assert len(derived['report']['groups']) == 1
+    assert derived['version_map'] == original['version_map']
+    history = client.get(f'/api/culling/snapshots/{child}/history').json()
+    assert len(history) == 2 and history[1]['parent_snapshot_id'] == sid
+    assert client.post(url, json={**body, 'group_ids': ['absent']}).status_code == 400
+    assert client.get('/api/culling/snapshots/absent/history').status_code == 404

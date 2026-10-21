@@ -119,6 +119,10 @@ class CullingStore:
 
     def save_snapshot(self, run_key: str, report: dict, version_map: dict[str, str]) -> str:
         """Freeze a complete report, mapping its local item IDs to registered versions."""
+        with self._connection(write=True) as conn:
+            return self._save_snapshot(conn, run_key, report, version_map)
+
+    def _save_snapshot(self, conn, run_key, report, version_map):
         if not run_key or not report.get('report_id'):
             raise ValueError('Run key and report identity are required')
         items = report['items']
@@ -138,24 +142,23 @@ class CullingStore:
             raise ValueError('Ungrouped input')
         payload = _json({'report': report, 'version_map': version_map})
         digest = hashlib.sha256(payload.encode()).hexdigest()
-        with self._connection(write=True) as conn:
-            for key, version in version_map.items():
-                row = conn.execute('SELECT fingerprint FROM asset_versions WHERE id=?', (version,)).fetchone()
-                sha = items[key].get('sha256', '')
-                if len(sha) != 64 or any(c not in '0123456789abcdef' for c in sha):
-                    raise ValueError('Expected a complete SHA-256 for each input')
-                if not row or row['fingerprint'] != 'sha256:' + sha:
-                    raise ValueError('Unknown version or input fingerprint mismatch')
-            old = conn.execute('SELECT id,payload_hash FROM culling_snapshots WHERE run_key=?', (run_key,)).fetchone()
-            if old:
-                if old['payload_hash'] != digest:
-                    raise ValueError('Run key already has different results')
-                return old['id']
-            sid = uuid4().hex
-            conn.execute('INSERT INTO culling_snapshots VALUES (?,?,?,?,?)', (sid, run_key, digest, _json(report), _now()))
-            conn.executemany('INSERT INTO culling_members VALUES (?,?,?,?)',
-                             [(sid, members[k], k, v) for k, v in version_map.items()])
-            return sid
+        for key, version in version_map.items():
+            row = conn.execute('SELECT fingerprint FROM asset_versions WHERE id=?', (version,)).fetchone()
+            sha = items[key].get('sha256', '')
+            if len(sha) != 64 or any(c not in '0123456789abcdef' for c in sha):
+                raise ValueError('Expected a complete SHA-256 for each input')
+            if not row or row['fingerprint'] != 'sha256:' + sha:
+                raise ValueError('Unknown version or input fingerprint mismatch')
+        old = conn.execute('SELECT id,payload_hash FROM culling_snapshots WHERE run_key=?', (run_key,)).fetchone()
+        if old:
+            if old['payload_hash'] != digest:
+                raise ValueError('Run key already has different results')
+            return old['id']
+        sid = uuid4().hex
+        conn.execute('INSERT INTO culling_snapshots VALUES (?,?,?,?,?)', (sid, run_key, digest, _json(report), _now()))
+        conn.executemany('INSERT INTO culling_members VALUES (?,?,?,?)',
+                         [(sid, members[k], k, v) for k, v in version_map.items()])
+        return sid
 
     def get_snapshot(self, snapshot_id: str) -> dict | None:
         with self._connection() as conn:
@@ -166,6 +169,51 @@ class CullingStore:
             result['report'] = json.loads(result.pop('report_json'))
             result['version_map'] = {r['item_key']: r['version_id'] for r in conn.execute(
                 'SELECT item_key,version_id FROM culling_members WHERE snapshot_id=?', (snapshot_id,))}
+            return result
+
+    def revise_groups(self, parent_id: str, request_key: str, action: str,
+                      group_ids: list[str], item_keys: list[str]) -> str:
+        """Atomically publish regrouped evidence and inherit explicit modes."""
+        from src.core.culling_revision import regroup
+
+        if not request_key:
+            raise ValueError('请求键不能为空')
+        with self._connection(write=True) as conn:
+            parent = conn.execute('SELECT report_json FROM culling_snapshots WHERE id=?',
+                                  (parent_id,)).fetchone()
+            if not parent:
+                raise LookupError('分析结果不存在')
+            report, parents = regroup(json.loads(parent[0]), parent_id, action, group_ids, item_keys)
+            mapping = {r['item_key']: r['version_id'] for r in conn.execute(
+                'SELECT item_key,version_id FROM culling_members WHERE snapshot_id=?', (parent_id,))}
+            run_key = 'regroup:' + request_key
+            existed = conn.execute('SELECT id FROM culling_snapshots WHERE run_key=?', (run_key,)).fetchone()
+            sid = self._save_snapshot(conn, run_key, report, mapping)
+            if existed:
+                return sid  # Retry must not overwrite later human mode changes.
+            overrides = dict(conn.execute('SELECT group_id,mode FROM culling_group_modes WHERE snapshot_id=?',
+                                          (parent_id,)).fetchall())
+            for gid, sources in parents.items():
+                values = {overrides.get(source) for source in sources}
+                if len(values) == 1 and None not in values:
+                    conn.execute('INSERT INTO culling_group_modes VALUES (?,?,?)', (sid, gid, values.pop()))
+            return sid
+
+    def revision_history(self, snapshot_id: str) -> list[dict]:
+        """Return the original analysis and all its immutable revision branches."""
+        with self._connection() as conn:
+            rows = conn.execute('SELECT id,created_at,report_json FROM culling_snapshots ORDER BY created_at,id').fetchall()
+            reports = {r['id']: json.loads(r['report_json']) for r in rows}
+            if snapshot_id not in reports:
+                raise LookupError('分析结果不存在')
+            root = reports[snapshot_id].get('revision', {}).get('root_snapshot_id', snapshot_id)
+            result = []
+            for row in rows:
+                revision = reports[row['id']].get('revision', {})
+                if row['id'] == root or revision.get('root_snapshot_id') == root:
+                    result.append({'id': row['id'], 'created_at': row['created_at'],
+                                   'parent_snapshot_id': revision.get('parent_snapshot_id'),
+                                   'action': revision.get('action', 'analysis')})
             return result
 
     def set_decision(self, version_id: str, decision: str, *, note: str = '') -> None:

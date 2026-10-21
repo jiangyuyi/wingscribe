@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WingScribe · 选片</title><link href="/lib/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#f5f6f8;color:#17212b}.panel{background:white;border-radius:12px;padding:20px;margin:18px 0}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}.photo{border:1px solid #ddd;border-radius:8px;padding:12px}.photo img{width:100%;max-height:240px;object-fit:contain}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.viewport{height:460px;overflow:auto;background:#26313b}.viewport img{max-width:none}.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:end}label{display:block}select,input,button,textarea{padding:8px;max-width:100%}textarea{width:100%}pre{white-space:pre-wrap}#message{min-height:1.5em}@media(max-width:700px){.pair{grid-template-columns:1fr}}</style></head>
+<body><main class="container py-4"><nav><a href="/">← 相册</a> · <a href="/admin">管理与任务</a> · <a href="/settings">设置</a></nav>
+<h1 class="mt-3">选片</h1><p>按连续拍摄组比较 JPEG，建议最多 3 张。评分仍属实验；“拒绝”仅保存标记，不会移动或删除照片。</p>
+<section class="panel"><h2 class="h5">开始分析</h2><div class="toolbar">
+<label>照片来源<select id="source"></select></label><label>来源内子目录（可留空）<input id="relative" placeholder="例如 20261014北京奥森北园"></label>
+<label>相邻间隔（秒）<input id="gap" type="number" min="0.1" value="5"></label><label>最长组跨度（秒）<input id="span" type="number" min="0.1" value="30"></label>
+<button id="start" class="btn btn-primary">开始选片</button><button id="stop" class="btn btn-outline-secondary">停止任务</button></div>
+<p class="mt-2 text-secondary">时间参数是实验起点，可按拍摄情况调整。相同文件和分析设置会复用缓存；停止会等待当前照片处理完毕。</p>
+<pre id="progress" aria-live="polite"></pre></section>
+<section class="panel"><div class="toolbar"><label>默认模式<select id="default-mode"><option value="safe">稳妥推荐</option><option value="assist">辅助比较</option><option value="relaxed">宽松推荐（实验）</option></select></label><button id="save-default">保存默认模式</button>
+<label>已保存的分析<select id="history"></select></label><button id="open">打开结果</button></div><p id="message" role="status"></p></section>
+<div id="results"></div></main><script src="/lib/culling.js"></script></body></html>

@@ -25,6 +25,8 @@ from src.utils.settings import first_run_defaults, with_defaults
 import yaml
 from src.core.io.path_generator import PathGenerator
 from src.web.routes.recognition import router as recognition_router
+from src.web.routes.culling import router as culling_router
+from src.web.culling_service import CullingWeb
 from src.web import task_manager as task_manager_module
 from src.web.task_manager import TaskManager as ExtractedTaskManager
 from src.web import taxonomy_service
@@ -118,6 +120,7 @@ class WebRuntime:
         try:
             yield
         finally:
+            await asyncio.to_thread(app.state.culling.close)
             if self.task_manager.is_running:
                 self.task_manager.stop()
                 await asyncio.to_thread(self.task_manager.wait)
@@ -675,9 +678,11 @@ def create_app(base_dir: Path = BASE_DIR, *, config_override=None) -> FastAPI:
     app = FastAPI(lifespan=runtime.lifespan)
     runtime.app = app
     app.state.runtime = runtime
+    app.state.culling = CullingWeb(runtime)
     app.state.recognizer_factory = RecognizerFactory.configured(runtime.config)
     app.state.batch_service = BatchRecognitionService(recognizer_factory=app.state.recognizer_factory)
     app.include_router(recognition_router)
+    app.include_router(culling_router)
     static_dir = BASE_DIR / "src/web/static"
     if static_dir.exists():
         app.mount("/lib", StaticFiles(directory=str(static_dir), follow_symlink=True), name="lib")

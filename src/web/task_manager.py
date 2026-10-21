@@ -1,6 +1,7 @@
 import logging
 import threading
 import sqlite3
+import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,7 +78,8 @@ class TaskManager:
             except JobBusyError:
                 # The current owner remains authoritative; this manager cannot stop it.
                 return
-            rows = catalogue._read('SELECT * FROM processing_jobs ORDER BY created_at DESC,id DESC LIMIT 1', ())
+            rows = [row for row in catalogue._read('SELECT * FROM processing_jobs ORDER BY created_at DESC,id DESC', ())
+                    if json.loads(row['parameters_json']).get('kind') != 'culling'][:1]
             if rows:
                 saved = rows[0]
                 self.persisted_job = saved

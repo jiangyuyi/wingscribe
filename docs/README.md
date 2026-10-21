@@ -8,6 +8,7 @@
 | --- | --- |
 | 安装、启动、首次处理、排错 | [安装与使用](user/getting-started.md) |
 | 配置字段、路径与写回行为 | [配置指南](user/configuration.md) |
+| JPEG 分组选片、模式及人工标记 | [选片使用说明](user/culling.md) |
 | 网络照片目录 | [NAS 设置](user/nas.md) |
 | AviList 名录与中文显示名 | [分类数据](user/taxonomy.md) |
 | 模块职责与数据流 | [架构](development/architecture.md) |

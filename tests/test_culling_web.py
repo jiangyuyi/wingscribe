@@ -126,6 +126,13 @@ def test_subject_change_preserves_history_choices_modes_and_cache(web):
     cached = store.get_cached_result(version, original['report']['items'][key]['cache_key'])
     body = {'request_key': 'subject-test', 'version_id': version, 'detection_index': 1}
     url = f'/api/culling/snapshots/{sid}/subject'
+    preview_url = f'/api/culling/snapshots/{sid}/subjects/{version}'
+    preview = client.get(preview_url+'?index=1')
+    assert preview.status_code == 200 and preview.headers['content-type'] == 'image/jpeg'
+    assert preview.headers['cache-control'] == 'no-store'
+    assert preview.content != client.get(preview_url+'?index=0').content
+    assert client.get(preview_url+'?index=999').status_code == 400
+    assert client.get(preview_url+'?index=-1').status_code == 422
     assert client.post(url, json=body, headers={'Origin': 'https://evil.example'}).status_code == 403
     response = client.post(url, json=body)
     assert response.status_code == 200
@@ -146,6 +153,7 @@ def test_subject_change_preserves_history_choices_modes_and_cache(web):
     assert store.get_mode(child, gid)['override'] == 'relaxed'
     assert client.post(url, json={**body, 'detection_index': None}).status_code == 400
     assert client.post(url, json={**body, 'request_key': 'changed'}).status_code == 409
+    assert client.get(preview_url).status_code == 409
     assert len(store.revision_history(child)) == 3
 
 

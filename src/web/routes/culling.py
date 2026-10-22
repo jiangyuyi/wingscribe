@@ -1,7 +1,7 @@
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -146,3 +146,9 @@ def subject(sid: str, body: Subject, request: Request):
     result = invoke(request.app.state.culling.change_subject, sid, body.request_key,
                     body.version_id, body.detection_index)
     return {'snapshot_id': result}
+
+
+@router.get('/api/culling/snapshots/{sid}/subjects/{version_id}')
+def subject_preview(sid: str, version_id: str, request: Request, index: int | None = Query(default=None, ge=0)):
+    data = invoke(request.app.state.culling.subject_preview, sid, version_id, index)
+    return Response(data, media_type='image/jpeg', headers={'Cache-Control': 'no-store'})

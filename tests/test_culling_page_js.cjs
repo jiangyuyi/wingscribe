@@ -60,3 +60,25 @@ test('history load failure leaves existing result and unsaved edits intact',asyn
  await assert.rejects(e.run("withReview(()=>openSnapshot('new'))"),/history unavailable/);
  assert.equal(e.run('snapshot.id'),'old');assert.equal(e.run('unsaved.has("bird")'),true);
 });
+
+test('subject selection retries the same key and preserves explicit index zero',async()=>{
+ const e=setup();let fail=true;
+ e.env.testApi=async(url,body)=>{
+  e.calls.push({url,body});
+  if(url.endsWith('/subject')){if(fail)throw Error('network');return {snapshot_id:'child'};}
+  if(url.endsWith('/history'))return [{id:'old',action:'analysis'},{id:'child',action:'subject',parent_snapshot_id:'old'}];
+  return {id:'child',report:{revision:{parent_snapshot_id:'old'}}};
+ };
+ await assert.rejects(e.run("submitSubject('bird',0)"),/network/);
+ fail=false;await e.run("submitSubject('bird',0)");
+ const posts=e.calls.filter(c=>c.body);
+ assert.equal(posts[0].body.detection_index,0);
+ assert.equal(posts[0].body.request_key,posts[1].body.request_key);
+ assert.match(e.get('#revision-current').textContent,/主体改选/);
+});
+
+test('subject edits respect unsaved manual choices',async()=>{
+ const e=setup();e.run("unsaved.add('bird')");
+ await assert.rejects(e.run("submitSubject('bird',null)"),/先保存/);
+ assert.equal(e.calls.length,0);
+});

@@ -206,3 +206,34 @@ class CullingWeb:
         output = io.BytesIO()
         image.save(output,format='PNG' if crop else 'JPEG')
         return output.getvalue(), 'image/png' if crop else 'image/jpeg'
+
+    def subject_preview(self, sid: str, version_id: str, index: int | None):
+        from PIL import Image, ImageDraw
+        from src.core.culling import largest_subject
+
+        snapshot = self.snapshot(sid)
+        frame, _, key = self._read_version(snapshot, version_id)
+        boxes = snapshot['report']['items'][key]['boxes']
+        if index is not None and not 0 <= index < len(boxes):
+            raise ValueError('无效的主体编号')
+        automatic = largest_subject(boxes, width=frame.size[0], height=frame.size[1])
+        selected = index if index is not None else (automatic.detection_index if automatic else None)
+        image = Image.fromarray(frame.pixels)
+        image.thumbnail((1000, 750))
+        sx, sy = image.width / frame.size[0], image.height / frame.size[1]
+        draw = ImageDraw.Draw(image)
+        for i, box in enumerate(boxes):
+            subject = largest_subject([box], width=frame.size[0], height=frame.size[1])
+            if subject is None:
+                continue
+            x1, y1, x2, y2 = subject.bbox
+            bounds = (x1 * sx, y1 * sy, x2 * sx, y2 * sy)
+            color = '#ffdd00' if i == selected else '#00cfff'
+            draw.rectangle(bounds, outline=color, width=4 if i == selected else 2)
+            label = str(i + 1)
+            x, y = max(0, min(bounds[0], image.width - 30)), max(0, min(bounds[1], image.height - 22))
+            draw.rectangle((x, y, x + 30, y + 22), fill=color)
+            draw.text((x + 4, y + 3), label, fill='black')
+        output = io.BytesIO()
+        image.save(output, format='JPEG')
+        return output.getvalue()

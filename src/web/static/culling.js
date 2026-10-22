@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s);
 let snapshot=null, loading=false, defaultDirty=false, adviceUpdates=[];
 const unsaved=new Set();
-let reviewBusy=false, pendingRegroup=null;
+let reviewBusy=false, pendingRegroup=null, pendingSubject=null;
 const modes={safe:'稳妥推荐',assist:'辅助比较',relaxed:'宽松推荐（实验）'};
 const states={completed:'已完成',failed:'有失败',stopped:'已停止',interrupted:'上次中断',running:'处理中',pending:'等待中'};
 function el(tag,text){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;}
@@ -23,7 +23,7 @@ function render(){
  adviceUpdates=[];unsaved.clear();
  const host=$('#results');host.replaceChildren();const report=snapshot.report;
  host.append(el('p',report.input_set_complete?'本次输入已处理完毕。':'这是一份部分结果，请查看任务失败或停止原因。'));
- host.append(el('p',report.revision?'这是人工分组修订，以下统计来自原分析；本次未重新推理。':'这是原始自动分组。'));
+ host.append(el('p',report.revision?'这是人工修订；下方统计来自原分析。分组调整只重排建议，主体改选只重评分该照片。':'这是原始自动分组。'));
  host.append(el('p',`缓存命中 ${report.cache_hits??0} 张，新计算 ${report.computed??0} 张。`));
  const mergeSelection=new Set();
  const merge=el('button','合并所选组'),mergeCount=el('span',' 已选 0 组');merge.disabled=true;
@@ -66,7 +66,21 @@ function render(){
    const save=el('button','保存人工标记'),feedback=el('span',decision?' 已保存':' 尚未标记');
    select.onchange=note.oninput=()=>{unsaved.add(version);feedback.textContent=' 尚未保存';};
    save.onclick=()=>act(()=>withReview(async()=>{save.disabled=select.disabled=note.disabled=true;try{snapshot.decisions[version]=await api(`/snapshots/${snapshot.id}/decisions/${version}`,{decision:select.value,note:note.value});unsaved.delete(version);feedback.textContent=' 已保存';}finally{save.disabled=select.disabled=note.disabled=false;}}));
-   card.append(el('h3',item.filename),image,el('p',item.evidence.status==='review'?'当前无法可靠评分，请人工查看。':''),select,note,save,feedback);grid.append(card);
+   const subjectPanel=el('details');subjectPanel.append(el('summary','查看／改选评分主体'));
+   if(item.boxes?.length){
+    const pick=el('select');pick.setAttribute('aria-label',item.filename+' 评分主体');
+    options(pick,[['','自动选择最大主体'],...item.boxes.map((box,i)=>[String(i),`主体 ${i+1}`])]);
+    pick.value=item.subject_override==null?'':String(item.subject_override);
+    const current=el('p',`已保存：${item.subject_override==null?'自动选择':'手动选择'} · ${item.evidence.detection_index==null?'无有效主体':'主体 '+(item.evidence.detection_index+1)}`);
+    const preview=el('img');preview.alt=item.filename+' 候选主体框';preview.style.maxHeight='none';
+    const sid=snapshot.id;
+    const load=()=>{preview.src=`/api/culling/snapshots/${sid}/subjects/${version}`+(pick.value===''?'':`?index=${pick.value}`);};
+    pick.onchange=load;subjectPanel.addEventListener('toggle',()=>{if(subjectPanel.open&&!preview.src)load();});
+    preview.onerror=()=>{$('#message').textContent='主体预览不可用，请检查来源或重新分析。';};
+    const apply=el('button','应用主体并重新评分');apply.onclick=()=>act(()=>submitSubject(version,pick.value===''?null:Number(pick.value)));
+    subjectPanel.append(current,pick,el('p','黄色为待选主体，蓝色为其他框；选择后点击应用才保存。'),preview,apply);
+   }else{subjectPanel.append(el('p','未检测到有效候选主体，暂不能手动改选。'));}
+   card.append(el('h3',item.filename),image,subjectPanel,el('p',item.evidence.status==='review'?'当前无法可靠评分，请人工查看。':''),select,note,save,feedback);grid.append(card);
   }section.append(grid);host.append(section);
  }
 }
@@ -85,13 +99,13 @@ async function openSnapshot(id){
  const [next,history]=await Promise.all([api('/snapshots/'+id),api('/snapshots/'+id+'/history')]);
  snapshot=next;render();
  const numbers=new Map(history.map((entry,i)=>[entry.id,i+1]));
- const names={analysis:'原始分析',split:'拆组',merge:'合组'};
+ const names={analysis:'原始分析',split:'拆组',merge:'合组',subject:'主体改选'};
  const label=entry=>`版本 ${numbers.get(entry.id)} · ${names[entry.action]||entry.action}`+(entry.parent_snapshot_id?` · 基于版本 ${numbers.get(entry.parent_snapshot_id)}`:'');
  options($('#revisions'),history.map(entry=>[entry.id,label(entry)]));$('#revisions').value=id;
  $('#revision-current').textContent='当前查看：'+label(history.find(entry=>entry.id===id));
  $('#revision-panel').hidden=false;
 }
-function requireSaved(){if(unsaved.size)throw Error('请先保存尚未保存的人工标记，再调整分组或切换版本。');}
+function requireSaved(){if(unsaved.size)throw Error('请先保存尚未保存的人工标记，再调整分组、主体或切换版本。');}
 async function submitRegroup(action,groups,items){
  requireSaved();
  return withReview(async()=>{
@@ -100,6 +114,16 @@ async function submitRegroup(action,groups,items){
   const result=await api(`/snapshots/${snapshot.id}/regroup`,{request_key:pendingRegroup.key,action,group_ids:groups,item_keys:items});
   await openSnapshot(result.snapshot_id);pendingRegroup=null;
   $('#message').textContent='分组调整已保存为新版本，原版本和人工标记保留。';
+ });
+}
+async function submitSubject(version,index){
+ requireSaved();
+ return withReview(async()=>{
+  const signature=JSON.stringify([snapshot.id,version,index]);
+  if(pendingSubject?.signature!==signature)pendingSubject={signature,key:crypto.randomUUID()};
+  const result=await api(`/snapshots/${snapshot.id}/subject`,{request_key:pendingSubject.key,version_id:version,detection_index:index});
+  await openSnapshot(result.snapshot_id);pendingSubject=null;
+  $('#message').textContent='主体选择已保存为新版本；该张已重新评分，人工标记保留。';
  });
 }
 $('#open').onclick=()=>act(()=>withReview(async()=>{if(!$('#history').value)return;requireSaved();await openSnapshot($('#history').value);}));

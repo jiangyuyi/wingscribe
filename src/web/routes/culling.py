@@ -44,6 +44,12 @@ class Regroup(BaseModel):
     item_keys: list[str] = Field(default_factory=list, max_length=10000)
 
 
+class Subject(BaseModel):
+    request_key: str = Field(min_length=1, max_length=128)
+    version_id: str = Field(min_length=1, max_length=128)
+    detection_index: int | None = Field(default=None, ge=0, strict=True)
+
+
 def invoke(fn,*args,**kwargs):
     try:
         return fn(*args,**kwargs)
@@ -133,3 +139,10 @@ def regroup(sid: str, body: Regroup, request: Request):
 def history(sid: str, request: Request):
     invoke(request.app.state.culling.snapshot, sid)
     return invoke(request.app.state.culling.store.revision_history, sid)
+
+
+@router.post('/api/culling/snapshots/{sid}/subject')
+def subject(sid: str, body: Subject, request: Request):
+    result = invoke(request.app.state.culling.change_subject, sid, body.request_key,
+                    body.version_id, body.detection_index)
+    return {'snapshot_id': result}

@@ -216,6 +216,57 @@ class CullingStore:
                                    'action': revision.get('action', 'analysis')})
             return result
 
+    def subject_retry(self, request_key: str, operation: dict) -> str | None:
+        with self._connection() as conn:
+            return self._subject_retry(conn, request_key, operation)
+
+    @staticmethod
+    def _subject_retry(conn, request_key, operation):
+        row = conn.execute('SELECT id,report_json FROM culling_snapshots WHERE run_key=?',
+                           ('subject:' + request_key,)).fetchone()
+        if row:
+            if json.loads(row['report_json']).get('revision', {}).get('operation') != operation:
+                raise ValueError('请求键已用于不同的主体操作')
+            return row['id']
+        return None
+
+    def save_subject_revision(self, parent_id: str, request_key: str, operation: dict,
+                              evidence: dict) -> str:
+        """Internal publication boundary for server-validated focus evidence."""
+        from src.core.focus_modes import report_modes
+
+        with self._connection(write=True) as conn:
+            existing = self._subject_retry(conn, request_key, operation)
+            if existing:
+                return existing
+            row = conn.execute('SELECT report_json FROM culling_snapshots WHERE id=?', (parent_id,)).fetchone()
+            if not row:
+                raise LookupError('分析结果不存在')
+            report = json.loads(row[0])
+            mapping = {r['item_key']: r['version_id'] for r in conn.execute(
+                'SELECT item_key,version_id FROM culling_members WHERE snapshot_id=?', (parent_id,))}
+            version = operation['version_id']
+            key = next((k for k, v in mapping.items() if v == version), None)
+            if key is None or evidence['version_id'] != key or evidence['input_sha256'] != report['items'][key]['sha256']:
+                raise ValueError('主体证据与照片版本不匹配')
+            report['items'][key]['evidence'] = evidence
+            report['items'][key]['subject_override'] = operation['detection_index']
+            for group in report['groups']:
+                if key in group['version_ids']:
+                    group['ranking_modes'] = report_modes(group, report['items'])
+                    group['ranking'] = group['ranking_modes']['safe']
+            report['revision'] = {
+                'parent_snapshot_id': parent_id,
+                'root_snapshot_id': report.get('revision', {}).get('root_snapshot_id', parent_id),
+                'action': 'subject', 'operation': operation,
+            }
+            report.pop('report_id', None)
+            report['report_id'] = hashlib.sha256(_json(report).encode()).hexdigest()
+            sid = self._save_snapshot(conn, 'subject:' + request_key, report, mapping)
+            conn.execute('INSERT INTO culling_group_modes SELECT ?,group_id,mode '
+                         'FROM culling_group_modes WHERE snapshot_id=?', (sid, parent_id))
+            return sid
+
     def set_decision(self, version_id: str, decision: str, *, note: str = '') -> None:
         if decision not in {'keep', 'undecided', 'reject'} or not isinstance(note, str):
             raise ValueError('Invalid human decision')

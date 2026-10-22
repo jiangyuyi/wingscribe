@@ -139,8 +139,7 @@ class CullingWeb:
         result['modes'] = {g['group_id']:self.store.get_mode(sid,g['group_id']) for g in result['report']['groups']}
         return result
 
-    def media(self, sid, version_id, crop):
-        snapshot = self.snapshot(sid)
+    def _read_version(self, snapshot, version_id):
         if version_id not in snapshot['version_map'].values():
             raise LookupError('照片不属于此次分析')
         rows = self._read('''SELECT a.relative_path,s.root_path,v.fingerprint FROM asset_versions v
@@ -151,11 +150,52 @@ class CullingWeb:
         if not path.is_relative_to(root) or not any(path.is_relative_to(r) for r in self.sources()):
             raise ValueError('照片已不在启用的来源范围内')
         from src.core.culling_input import read_jpeg
-        from PIL import Image
         frame = read_jpeg(path)
         if 'sha256:'+frame.sha256 != row['fingerprint']:
             raise RuntimeError('照片内容已变化，请重新分析')
         key = next(k for k,v in snapshot['version_map'].items() if v==version_id)
+        return frame, path, key
+
+    def change_subject(self, sid: str, request_key: str, version_id: str,
+                       detection_index: int | None) -> str:
+        from dataclasses import replace
+        from src.core.focus import ALGORITHM_VERSION, FocusPolicy, analyze_focus
+        from src.core.culling import largest_subject
+
+        snapshot = self.snapshot(sid)
+        operation = dict(parent_snapshot_id=sid, version_id=version_id,
+                         detection_index=detection_index)
+        existing = self.store.subject_retry(request_key, operation)
+        if existing:
+            return existing
+        if version_id not in snapshot['version_map'].values():
+            raise LookupError('照片不属于此次分析')
+        key = next(k for k, v in snapshot['version_map'].items() if v == version_id)
+        item = snapshot['report']['items'][key]
+        if item['evidence']['algorithm'] != ALGORITHM_VERSION:
+            raise ValueError('评分算法版本已变化，请重新分析后改选主体')
+        boxes = item['boxes']
+        if detection_index is not None and (
+            type(detection_index) is not int or not 0 <= detection_index < len(boxes)
+        ):
+            raise ValueError('无效的主体编号')
+        frame, path, key = self._read_version(snapshot, version_id)
+        selected = boxes if detection_index is None else [boxes[detection_index]]
+        if detection_index is not None and largest_subject(selected, width=frame.size[0], height=frame.size[1]) is None:
+            raise ValueError('所选主体框无效')
+        evidence = analyze_focus(frame, selected, version_id=key,
+                                 policy=FocusPolicy(**item['evidence']['policy']))
+        if detection_index is not None:
+            evidence = replace(evidence, detection_index=detection_index)
+        with path.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != frame.sha256:
+                raise RuntimeError('评分期间照片内容变化，请重新分析')
+        return self.store.save_subject_revision(sid, request_key, operation, evidence.to_dict())
+
+    def media(self, sid, version_id, crop):
+        from PIL import Image
+        snapshot = self.snapshot(sid)
+        frame, _, key = self._read_version(snapshot, version_id)
         bounds = snapshot['report']['items'][key]['evidence']['bounds']
         if crop and not bounds:
             raise LookupError('没有有效主体区域')

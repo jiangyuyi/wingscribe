@@ -30,6 +30,23 @@ def analyze(web):
     return result['jobs'][0]['snapshot_id']
 
 
+def test_quarantine_preview_only_saved_reject_and_same_origin(web):
+    app, client, root = web
+    sid = analyze(web)
+    url = f'/api/culling/snapshots/{sid}/quarantine-preview'
+    assert client.post(url).json()['count'] == 0
+    snapshot = app.state.culling.snapshot(sid)
+    version = next(iter(snapshot['version_map'].values()))
+    app.state.culling.store.set_decision(version, 'reject')
+    response = client.post(url)
+    assert response.status_code == 200
+    assert response.json()['ready'] and response.json()['count'] == 1
+    assert (root/'bird.jpg').is_file()
+    assert not (root/'.wingscribe-quarantine').exists()
+    assert client.post(url, headers={'Origin':'https://evil.example'}).status_code == 403
+    assert client.post('/api/culling/snapshots/missing/quarantine-preview').status_code == 404
+
+
 def test_web_task_review_modes_decisions_and_preview(web):
     app,client,root=web
     assert client.get('/culling').status_code==200

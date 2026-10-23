@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Generator, Optional, List
 from .provider import StorageProvider, FileEntry
 from .path_utils import is_within_directory
+from src.core.quarantine_paths import QUARANTINE_DIR, is_quarantine
 
 class SecurityViolationError(Exception):
     pass
@@ -16,7 +17,8 @@ class LocalProvider(StorageProvider):
         '$RECYCLE.BIN', 'System Volume Information', # Windows
         '.Trash', '.trash', '.Trashes', # Linux/macOS
         '@eaDir', '.@__thumb', # Metadata folders
-        '#snapshot' # Snapshots
+        '#snapshot', # Snapshots
+        QUARANTINE_DIR,
     }
 
     def __init__(self, base_dir: str = None):
@@ -37,6 +39,8 @@ class LocalProvider(StorageProvider):
         return path
 
     def list_dir(self, path: str, recursive: bool = False) -> Generator[FileEntry, None, None]:
+        if is_quarantine(Path(path)):
+            raise SecurityViolationError('Quarantine directories cannot be scanned')
         if self.strict:
             yield from self._list_dir_strict(path, recursive)
             return
@@ -49,6 +53,8 @@ class LocalProvider(StorageProvider):
         
         for item in iterator:
             try:
+                if is_quarantine(item):
+                    continue
                 if self.base_dir and not is_within_directory(item, self.base_dir):
                     continue
                 # Skip hidden files or system dirs if needed

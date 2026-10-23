@@ -14,6 +14,7 @@ from src.core.focus import ALGORITHM_VERSION, FocusEvidence, FocusPolicy, analyz
 from src.core.focus_modes import MODE_VERSION, report_modes
 from src.storage.catalogue import _json
 from src.storage.job_session import JobSession
+from src.core.quarantine_paths import QUARANTINE_DIR, is_quarantine
 
 CACHE_PROTOCOL = 'oriented-jpeg-focus-v1'
 
@@ -57,11 +58,14 @@ def _linked(path: Path) -> bool:
 
 
 def jpeg_paths(root: Path):
+    if is_quarantine(root):
+        raise ValueError('隔离目录不能作为照片来源')
     def failed(error):
         raise error
     for directory, children, names in os.walk(root, followlinks=False, onerror=failed):
         children[:] = sorted(name for name in children
-                             if not _linked(Path(directory)/name)
+                             if name.casefold() != QUARANTINE_DIR
+                             and not _linked(Path(directory)/name)
                              and (Path(directory)/name).resolve().is_relative_to(root))
         for name in sorted(names):
             path = Path(directory)/name

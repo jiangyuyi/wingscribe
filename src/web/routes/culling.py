@@ -152,3 +152,11 @@ def subject(sid: str, body: Subject, request: Request):
 def subject_preview(sid: str, version_id: str, request: Request, index: int | None = Query(default=None, ge=0)):
     data = invoke(request.app.state.culling.subject_preview, sid, version_id, index)
     return Response(data, media_type='image/jpeg', headers={'Cache-Control': 'no-store'})
+
+
+@router.post('/api/culling/snapshots/{sid}/quarantine-preview')
+def quarantine_preview(sid: str, request: Request):
+    from src.application.quarantine import QuarantinePreview
+    manager = request.app.state.culling
+    invoke(manager.snapshot, sid)
+    return invoke(QuarantinePreview(manager.catalogue, manager.store, manager.sources()).build, sid)

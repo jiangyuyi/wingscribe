@@ -51,8 +51,8 @@ Source: "build-gpu\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion re
 Source: "build-gpu\data\references\*"; DestDir: "{app}\data\references"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
 ; Tools
-Source: "tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Components: main
-Source: "tools\exiftool_files\*"; DestDir: "{app}\tools\exiftool_files"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
+Source: "build-gpu\tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Components: main
+Source: "build-gpu\tools\exiftool_files\*"; DestDir: "{app}\tools\exiftool_files"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
 ; Documentation
 Source: "build-gpu\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main

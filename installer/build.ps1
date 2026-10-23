@@ -27,7 +27,7 @@ $modeLower = $Mode.ToLower()
 $BUILD_MODE_DIR = "build-$modeLower"
 $BUILD_DIR = Join-Path $INSTALLER_DIR $BUILD_MODE_DIR
 $WHEELS_DIR = Join-Path $INSTALLER_DIR "wheels-$modeLower"
-$TOOLS_DIR = Join-Path $INSTALLER_DIR "tools"
+$TOOLS_DIR = Join-Path $BUILD_DIR "tools"
 $ASSETS_DIR = Join-Path $INSTALLER_DIR "assets"
 
 # Colors
@@ -46,88 +46,9 @@ Log-Info "Building version: $Version"
 # Step 1: Download Python 3.11 Embedded
 #===============================================================================
 function Download-Python {
-    Log-Step "Downloading Python 3.11.8 embeddable package..."
-
-    $pythonUrl = "https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip"
-    $pythonZip = Join-Path $BUILD_DIR "python-3.11.8-embed-amd64.zip"
-    $pythonDir = Join-Path $BUILD_DIR "python"
-
-    if (-not (Test-Path $pythonDir)) {
-        if (-not (Test-Path $pythonZip)) {
-            Log-Info "Downloading from $pythonUrl..."
-            Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonZip -UseBasicParsing
-            Log-Success "Python downloaded"
-        }
-
-        Log-Info "Extracting Python..."
-        Expand-Archive -Path $pythonZip -DestinationPath $pythonDir -Force
-        Log-Success "Python extracted to $pythonDir"
-    } else {
-        Log-Info "Python already exists, skipping download"
-    }
-
-    # Modify python311._pth to include site-packages
-    $pthFile = Join-Path $pythonDir "python311._pth"
-    if (Test-Path $pthFile) {
-        $pthContent = Get-Content $pthFile
-        $pthText = ($pthContent -join "`r`n")
-        $needsRewrite = $false
-
-        # Remove BOM corruption from first line if present.
-        if ($pthContent.Count -gt 0 -and $pthContent[0].StartsWith([char]0xFEFF)) {
-            $pthContent[0] = $pthContent[0].TrimStart([char]0xFEFF)
-            $pthText = ($pthContent -join "`r`n")
-            $needsRewrite = $true
-            Log-Info "Cleaning BOM from python311._pth"
-        }
-
-        if ($pthText -notmatch "(?m)^Lib/site-packages\s*$") {
-            Log-Info "Modifying python311._pth to enable site-packages..."
-            $newLines = @($pthContent)
-            if ($pthText -notmatch "(?m)^import site\s*$") {
-                $newLines += "Lib/site-packages"
-                $newLines += "import site"
-            } else {
-                $newLines += "Lib/site-packages"
-            }
-            # IMPORTANT: _pth must not contain UTF BOM, otherwise first line becomes invalid path.
-            [System.IO.File]::WriteAllLines($pthFile, $newLines, [System.Text.UTF8Encoding]::new($false))
-            $needsRewrite = $false
-            Log-Success "Python configured for site-packages"
-        }
-
-        if ($needsRewrite) {
-            [System.IO.File]::WriteAllLines($pthFile, $pthContent, [System.Text.UTF8Encoding]::new($false))
-            Log-Success "python311._pth rewritten without BOM"
-        }
-    }
-
-    # Ensure pip is available in embeddable Python
-    $pythonExe = Join-Path $pythonDir "python.exe"
-    $pipReady = $false
-    if (Test-Path $pythonExe) {
-        try {
-            & $pythonExe -m pip --version *> $null
-            if ($LASTEXITCODE -eq 0) {
-                $pipReady = $true
-            }
-        } catch {
-            $pipReady = $false
-        }
-    }
-    if ((-not $pipReady) -and (Test-Path $pythonExe)) {
-        Log-Info "Installing pip for embeddable Python..."
-        $getPipUrl = "https://bootstrap.pypa.io/get-pip.py"
-        $getPipFile = Join-Path $BUILD_DIR "get-pip.py"
-        try {
-            Invoke-WebRequest -Uri $getPipUrl -OutFile $getPipFile -UseBasicParsing
-            & $pythonExe $getPipFile --no-warn-script-location
-            Remove-Item $getPipFile -Force
-            Log-Success "pip installed"
-        } catch {
-            Log-Warn "Failed to install pip: $_"
-        }
-    }
+    Log-Step "Preparing hash-pinned Python and pip runtime..."
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\installer_runtime.py") --mode $modeLower
+    if ($LASTEXITCODE -ne 0) { throw "Pinned Python runtime preparation failed" }
 }
 
 #===============================================================================
@@ -148,124 +69,9 @@ function Download-PyTorchWheels {
 # Step 3: Prepare ExifTool
 #===============================================================================
 function Prepare-ExifTool {
-    Log-Step "Preparing ExifTool..."
-
-    $exifExe = Join-Path $TOOLS_DIR "exiftool.exe"
-    $exifFilesDir = Join-Path $TOOLS_DIR "exiftool_files"
-    Ensure-Directory $TOOLS_DIR
-
-    # Check if already exists in installer/tools with required runtime files
-    if ((Test-Path $exifExe) -and (Test-Path $exifFilesDir)) {
-        Log-Info "ExifTool already exists at $exifExe with exiftool_files/"
-        return $true
-    }
-
-    # Clean stale/incomplete exiftool layout
-    if (Test-Path $exifExe) {
-        Remove-Item $exifExe -Force -ErrorAction SilentlyContinue
-    }
-    if (Test-Path $exifFilesDir) {
-        Remove-Item $exifFilesDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    Log-Info "Preparing full ExifTool runtime (exe + exiftool_files)..."
-    $localExifZip = Join-Path $TOOLS_DIR "exiftool-runtime.zip"
-    $downloadedExifZip = Join-Path $BUILD_DIR "exiftool-download.zip"
-    $prepared = $false
-
-    $extractFromZip = {
-        param([string]$zipPath)
-        if (-not (Test-Path $zipPath)) {
-            return $false
-        }
-        $tempExtract = Join-Path $BUILD_DIR "exiftool-extract"
-        if (Test-Path $tempExtract) {
-            Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Expand-Archive -Path $zipPath -DestinationPath $tempExtract -Force
-        $foundExe = Get-ChildItem -Path $tempExtract -Filter "exiftool*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $foundExe) {
-            return $false
-        }
-        Copy-Item $foundExe.FullName -Destination $exifExe -Force
-        $sourceDir = Split-Path $foundExe.FullName -Parent
-        $sourceFilesDir = Join-Path $sourceDir "exiftool_files"
-        if (Test-Path $sourceFilesDir) {
-            Copy-Item $sourceFilesDir -Destination $exifFilesDir -Recurse -Force
-            return ((Test-Path $exifExe) -and (Test-Path $exifFilesDir))
-        }
-        return $false
-    }
-
-    # 1) Prefer repository bundled runtime archive for CI stability.
-    if (Test-Path $localExifZip) {
-        try {
-            $prepared = & $extractFromZip $localExifZip
-            if ($prepared) {
-                Log-Info "Prepared ExifTool from bundled archive: $localExifZip"
-            }
-        } catch {
-            Log-Warn "Failed to extract bundled ExifTool archive: $_"
-        }
-    }
-
-    # 2) Fallback: download archive at build time.
-    if (-not $prepared) {
-        $exifVersion = "13.26"
-        $exifUrls = @(
-            "https://github.com/exiftool/exiftool/releases/download/$exifVersion/exiftool-$exifVersion-win64.zip",
-            "https://exiftool.org/exiftool-$exifVersion_64.zip"
-        )
-        foreach ($exifUrl in $exifUrls) {
-            try {
-                Invoke-WebRequest -Uri $exifUrl -OutFile $downloadedExifZip -UseBasicParsing
-                $prepared = & $extractFromZip $downloadedExifZip
-                if ($prepared) {
-                    Log-Info "Downloaded ExifTool runtime from: $exifUrl"
-                    break
-                }
-            } catch {
-                Log-Warn "Failed to download ExifTool package from $exifUrl : $_"
-            } finally {
-                if (Test-Path $downloadedExifZip) {
-                    Remove-Item $downloadedExifZip -Force -ErrorAction SilentlyContinue
-                }
-            }
-        }
-    }
-
-    # Fallback: copy from system exiftool install if available
-    if (-not $prepared) {
-        try {
-            $sysCmd = Get-Command exiftool -ErrorAction Stop
-            $sysExe = $sysCmd.Source
-            $sysDir = Split-Path $sysExe -Parent
-            $sysFilesDir = Join-Path $sysDir "exiftool_files"
-            if ((Test-Path $sysExe) -and (Test-Path $sysFilesDir)) {
-                Copy-Item $sysExe -Destination $exifExe -Force
-                Copy-Item $sysFilesDir -Destination $exifFilesDir -Recurse -Force
-                $prepared = $true
-                Log-Info "Copied ExifTool runtime from system install"
-            }
-        } catch {
-            # No system exiftool available, keep failure below
-        }
-    }
-
-    if (-not $prepared) {
-        Log-Warn "Failed to prepare ExifTool runtime (missing exiftool_files)"
-        return $false
-    }
-
-    # Final check: executable must run
-    & $exifExe -ver *> $null
-    if ($LASTEXITCODE -ne 0) {
-        Log-Warn "ExifTool executable test failed"
-        return $false
-    }
-
-    Log-Success "ExifTool runtime prepared"
-    return $true
+    Log-Step "Preparing pinned bundled ExifTool runtime..."
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\installer_runtime.py") --mode $modeLower --component exiftool | Out-Host
+    return ($LASTEXITCODE -eq 0)
 }
 
 #===============================================================================
@@ -277,34 +83,6 @@ function Install-Dependencies {
     Log-Step "Installing locked wheels offline..."
     & $pythonExe (Join-Path $PROJECT_ROOT "scripts\installer_dependencies.py") install --mode $modeLower
     if ($LASTEXITCODE -ne 0) { throw "Locked offline dependency installation failed" }
-}
-
-#===============================================================================
-# Step 4.5: Copy critical Windows runtime DLLs for PyTorch
-#===============================================================================
-function Prepare-WindowsRuntimeDlls {
-    Log-Step "Preparing Windows runtime DLLs..."
-
-    $pythonDir = Join-Path $BUILD_DIR "python"
-    $system32 = Join-Path $env:WINDIR "System32"
-    $dlls = @(
-        "libomp140.x86_64.dll",
-        "vcomp140.dll",
-        "vcruntime140.dll",
-        "vcruntime140_1.dll",
-        "msvcp140.dll"
-    )
-
-    foreach ($dll in $dlls) {
-        $src = Join-Path $system32 $dll
-        $dst = Join-Path $pythonDir $dll
-        if (Test-Path $src) {
-            Copy-Item $src -Destination $dst -Force
-            Log-Info "  Copied $dll"
-        } else {
-            Log-Warn "  Runtime DLL not found: $src"
-        }
-    }
 }
 
 #===============================================================================
@@ -539,17 +317,16 @@ function Invoke-Build {
         if (-not (Prepare-ExifTool)) { throw "ExifTool preparation failed" }
     }
 
-    # Even cached/skip mode must have an executable ExifTool runtime.
-    $exifExe = Join-Path $TOOLS_DIR "exiftool.exe"
-    if (-not (Test-Path -LiteralPath $exifExe)) { throw "ExifTool runtime is missing" }
-    & $exifExe -ver
-    if ($LASTEXITCODE -ne 0) { throw "ExifTool runtime self-test failed" }
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\installer_runtime.py") --mode $modeLower --component exiftool --check
+    if ($LASTEXITCODE -ne 0) { throw "Pinned ExifTool runtime verification failed" }
 
     # Download embeddable Python runtime
     if (-not $SkipPython) {
         Download-Python
-        Prepare-WindowsRuntimeDlls
     }
+
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\installer_runtime.py") --mode $modeLower --check
+    if ($LASTEXITCODE -ne 0) { throw "Pinned Python runtime verification failed" }
 
     if ($SkipDepsInstall) {
         Log-Warn "SkipDepsInstall enabled: skipping pip dependency install step"

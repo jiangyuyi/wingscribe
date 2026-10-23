@@ -51,7 +51,7 @@ GPU 包使用 CUDA 12.8 版 PyTorch，CPU/GPU 均遵循 uv.lock 的固定版本�
 
 源码载荷只包含配置样例、明确列出的运行脚本、参考名录和文档；不会打包 config/settings.yaml、secrets.yaml 或重置数据库脚本。再次暂存会清理生成目录中的旧配置。payload-manifest.json 记录所复制文件的 SHA-256。
 
-当前 B7b-1/2 已接入载荷与依赖，运行时下载及 Inno 升级/卸载边界仍在 B7b-3 审查，**暂未完成整包安装验收**，以 [B7 计划](../docs/development/b7-packaging-plan.md) 为准。
+当前已接入载荷、锁定依赖及固定运行时；Python 3.11.8/pip 25.0.1 下载使用国内镜像直连及上游摘要，ExifTool 13.40 使用仓库固定归档。SkipPython/SkipExifTool 仍逐文件校验缓存；工具源归档保存在 installer/tools，打包使用各 build/tools。旧版升级卸载日志仍需专项验证，**暂未完成整包安装验收**，以 [B7 计划](../docs/development/b7-packaging-plan.md) 为准。
 
 ## 本地快速回归（强烈推荐）
 

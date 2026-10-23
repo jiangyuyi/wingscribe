@@ -17,7 +17,7 @@ B7a 验收：CPU/cu128 导出确定性、每项精确锁定带哈希、不包含
 
 `python scripts/export_installer_lock.py --uv <uv可执行文件>` 离线生成两种依赖清单及 manifest；`--check` 检查导出是否与源码锁一致；`--wheel <wheel路径>` 校验缓存文件名与完整 SHA-256 是否匹配锁文件。更新 pyproject.toml/uv.lock 后必须重新导出并审查差异。
 
-旧 build.ps1 尚未消费新清单，B7a 不代表安装包已完成依赖迁移；继续按 B7b 改造后再执行隔离构建。
+B7a 阶段曾未接入旧构建；现 B7b-1/2 已接入。完整安装包验收仍按 B7c/d 执行。
 
 ## B7b 分批执行顺序（2026-10-23）
 
@@ -36,3 +36,14 @@ PyTorch 镜像参考：[南京大学镜像说明](https://help.mirrors.nju.edu.c
 - B7c 用全新独立目录验收首次启动和 CPU/GPU 运行，再做有配置/数据库的升级和卸载实验；正式安装目录及照片不参与实验。
 
 依据：[Inno 卸载删除规则](https://jrsoftware.org/ishelp/topic_uninstalldeletesection.htm)、[卸载日志追加行为](https://jrsoftware.org/ishelp/topic_setup_uninstalllogmode.htm)。
+
+
+### B7b-3b 运行时固定与安全解压（2026-10-23）
+
+- Python 保持既有 3.11.8 embeddable，SHA-256 取自 python.org 对应发布的 Sigstore messageDigest；这不是声称完成 Sigstore 签名链验证，也不是升级到开发环境 3.11.17。后续替换运行时需独立评估并验证。
+- pip 固定 25.0.1 wheel，哈希来自 PyPI 发布 JSON；直接离线解压引导，移除浮动 get-pip.py。二者首次实际下载均走华为镜像直连，官方哈希一致；支持 Range 续传、忽略 Range 时重下、完整哈希才接受缓存。
+- ExifTool 使用仓库已跟踪的 13.40 ZIP，固定仓库归档 SHA-256（不是上游校验值），取消失效的 13.26 下载与系统任意版本回退；解压到各变体 build/tools，逐文件复验缓存并执行版本检查。上游归档来源链仍待发布前补证。
+- 所有 ZIP 写入前检查 Windows 路径、越界、设备名、ADS、大小写重复、文件/目录冲突和链接；复用构建路径 reparse point 防护。_pth 无 BOM；不再从本机 System32 覆盖固定运行时 DLL。
+- CPU/GPU 的 Python、pip、ExifTool 均已独立运行验证；依赖安装、整包启动、升级与卸载仍属于 B7c/d。旧安装日志风险仍然保留，不能对正式安装目录做覆盖验收。
+
+来源：[Python 3.11.8](https://www.python.org/downloads/release/python-3118/)、[Python 归档摘要](https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip.sigstore)、[pip 25.0.1 元数据](https://pypi.org/pypi/pip/25.0.1/json)。

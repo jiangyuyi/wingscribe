@@ -55,6 +55,10 @@ Source: "tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Comp
 Source: "tools\exiftool_files\*"; DestDir: "{app}\tools\exiftool_files"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
 ; Documentation
+Source: "build-cpu\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
+Source: "build-cpu\payload-manifest.json"; DestDir: "{app}"; Flags: ignoreversion; Components: main
+Source: "build-cpu\pyproject.toml"; DestDir: "{app}"; Flags: ignoreversion; Components: main
+Source: "build-cpu\uv.lock"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build-cpu\README.md"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build-cpu\CLAUDE.md"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build-cpu\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion; Components: main

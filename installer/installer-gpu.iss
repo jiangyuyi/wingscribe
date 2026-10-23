@@ -55,6 +55,10 @@ Source: "tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Comp
 Source: "tools\exiftool_files\*"; DestDir: "{app}\tools\exiftool_files"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
 ; Documentation
+Source: "build-gpu\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
+Source: "build-gpu\payload-manifest.json"; DestDir: "{app}"; Flags: ignoreversion; Components: main
+Source: "build-gpu\pyproject.toml"; DestDir: "{app}"; Flags: ignoreversion; Components: main
+Source: "build-gpu\uv.lock"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build-gpu\README.md"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build-gpu\CLAUDE.md"; DestDir: "{app}"; Flags: ignoreversion; Components: main
 Source: "build-gpu\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion; Components: main

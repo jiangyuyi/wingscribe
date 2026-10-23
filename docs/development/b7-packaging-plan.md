@@ -18,3 +18,11 @@ B7a 验收：CPU/cu128 导出确定性、每项精确锁定带哈希、不包含
 `python scripts/export_installer_lock.py --uv <uv可执行文件>` 离线生成两种依赖清单及 manifest；`--check` 检查导出是否与源码锁一致；`--wheel <wheel路径>` 校验缓存文件名与完整 SHA-256 是否匹配锁文件。更新 pyproject.toml/uv.lock 后必须重新导出并审查差异。
 
 旧 build.ps1 尚未消费新清单，B7a 不代表安装包已完成依赖迁移；继续按 B7b 改造后再执行隔离构建。
+
+## B7b 分批执行顺序（2026-10-23）
+
+1. B7b-1 先收口源码载荷：固定配置/运行脚本/参考数据白名单，清除构建缓存中的旧个人配置；每次清理前确认绝对路径和 reparse point 边界。带齐文档、AviList 和所选带哈希依赖，生成载荷 SHA-256 清单；独立暂存检查不启动旧构建、不修改用户配置。
+2. B7b-2 接入锁定安装与缓存版本自检：统一 CPU/cu128 版本，所有 wheel 完整校验，先下载后离线安装。可信国内镜像直连，明确失败回退，不读取系统 pip 配置或悄悄沿用代理。
+3. B7b-3 审查 Python/ExifTool 下载及运行时优化、Inno 升级/卸载边界，完成后才运行 B7c 完整隔离构建；不能将载荷检查当作安装包成功。
+
+PyTorch 镜像参考：[南京大学镜像说明](https://help.mirrors.nju.edu.cn/pytorch/) 及 [SJTU 镜像说明](https://mirror.sjtu.edu.cn/docs/pytorch-wheels)。版本是否可用以实际下载及 uv.lock 哈希为准，不改版本迁就镜像。

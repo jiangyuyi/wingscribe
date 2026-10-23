@@ -7,8 +7,8 @@
 - `build.ps1`: 构建脚本（准备运行时、依赖、源码、自检）
 - `installer.iss`: CPU 安装包 Inno Setup 脚本
 - `installer-gpu.iss`: GPU 安装包 Inno Setup 脚本
-- `requirements-cpu.txt` / `requirements-gpu.txt`: 依赖清单
-- `wheels-cpu/` / `wheels-gpu/`: PyTorch 本地 wheel 缓存
+- `locks/cpu.txt` / `locks/cu128.txt`: 从 uv.lock 导出的带哈希运行依赖；requirements-cpu/gpu.txt 仅为兼容入口
+- `wheels-cpu/` / `wheels-gpu/`: 完整运行依赖 wheel 缓存（两者可复用相同文件）
 - `models/`: 预置模型（必须包含 `yolo26n.pt`）
 - `tools/`: ExifTool 运行时（`exiftool.exe` + `exiftool_files/`）
 - `build-cpu/` / `build-gpu/`: 构建输出目录（自动生成）
@@ -18,7 +18,7 @@
 
 1. Windows 10/11
 2. PowerShell 可执行脚本（或使用 `-ExecutionPolicy Bypass`）
-3. Inno Setup 6.x（`ISCC.exe`）
+3. Windows Python 3.11（含 pip，作为构建工具）；可用 `-BuildPython <python.exe绝对路径>` 指定；Inno Setup 6.x（`ISCC.exe`）
 4. 首次构建需要网络下载依赖；后续可走缓存快速构建
 
 ## 标准构建流程
@@ -45,11 +45,13 @@ iscc /DAppVersion=1.0.0 .\installer-gpu.iss
 
 产物：`Output/WingScribe-Setup-GPU-<version>.exe`
 
-GPU 包使用 CUDA 12.8 版 PyTorch，以支持 RTX 50 系列（Blackwell）。本地构建可通过参数指定兼容的 wheel 镜像：
+GPU 包使用 CUDA 12.8 版 PyTorch，CPU/GPU 均遵循 uv.lock 的固定版本。下载器先验证离线缓存，再使用南京大学 PyTorch 镜像及清华 PyPI 镜像，国内镜像显式直连、不继承本机代理；镜像失败才明确回退官方来源。完成全量哈希校验后离线安装，不使用开发机的 pip 配置。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode gpu -Version 1.0.0 -PyTorchWheelBase https://mirrors.nju.edu.cn/pytorch/whl
-```
+`-PyTorchWheelBase` 自定义地址和 `-RefreshWheels` 整批清缓存已停用；损坏缓存会自动改名保留证据，再下载相同锁定版本。更新依赖后先运行 `python scripts/export_installer_lock.py --uv <uv路径>`，再构建。
+
+源码载荷只包含配置样例、明确列出的运行脚本、参考名录和文档；不会打包 config/settings.yaml、secrets.yaml 或重置数据库脚本。再次暂存会清理生成目录中的旧配置。payload-manifest.json 记录所复制文件的 SHA-256。
+
+当前 B7b-1/2 已接入载荷与依赖，运行时下载及 Inno 升级/卸载边界仍在 B7b-3 审查，**暂未完成整包安装验收**，以 [B7 计划](../docs/development/b7-packaging-plan.md) 为准。
 
 ## 本地快速回归（强烈推荐）
 
@@ -67,14 +69,14 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode gpu -SkipWheels -Skip
 ```
 
 说明：
-- `-SkipDepsInstall`: 跳过 pip 安装（依赖不变时可大幅提速）
-- `-RefreshWheels`: 强制清理并重下 torch wheel（仅在怀疑缓存损坏时使用）
+- `-SkipDepsInstall`: 跳过安装，但仍按所选锁文件检查所有运行依赖版本与 PyTorch 变体；旧缓存不匹配会失败。
+- `-SkipWheels`: 只跳过下载；安装仍离线校验完整缓存及哈希，缺包时中止。
 
 ## 内置自检内容
 
 `build.ps1` 会在打包前执行：
 
-1. `import torch, fastapi, uvicorn`
+1. 核验运行时与 CPU/cu128 锁的版本一致，再 `import torch, fastapi, uvicorn`
 2. 加载 `data/models/yolo26n.pt`
 3. 检查 Web 静态资源（bootstrap/css/js/favicon）
 4. 运行 `scripts/start_web.bat --self-test`
@@ -89,7 +91,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode gpu -SkipWheels -Skip
 
 ### 2) `Expected wheel not found`
 
-说明 `wheels-cpu/` 或 `wheels-gpu/` 缺少与当前脚本版本匹配的 wheel。补齐后重试，或执行 `-RefreshWheels`。
+说明 `wheels-cpu/` 或 `wheels-gpu/` 缺少与当前脚本版本匹配的 wheel。使用锁定下载器补齐后重试；不要整批删除已验证缓存。
 
 ### 3) PowerShell 执行策略报错
 

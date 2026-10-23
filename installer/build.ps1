@@ -13,6 +13,7 @@ param(
     [ValidateSet("cpu", "gpu")]
     [string]$Mode = "cpu",
     [string]$Version = "1.0.0",
+    [string]$BuildPython = "python",
     [string]$PyTorchWheelBase = "https://download.pytorch.org/whl"
 )
 
@@ -21,24 +22,6 @@ $ProgressPreference = "SilentlyContinue"
 
 $PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
 $INSTALLER_DIR = $PSScriptRoot
-$pytorchBuilds = @{
-    cpu = @{
-        TorchVersion = "2.4.1"
-        TorchvisionVersion = "0.19.1"
-        WheelChannel = "cpu"
-    }
-    gpu = @{
-        TorchVersion = "2.10.0"
-        TorchvisionVersion = "0.25.0"
-        WheelChannel = "cu128"
-    }
-}
-$pytorchBuild = $pytorchBuilds[$Mode.ToLower()]
-$TORCH_VERSION = $pytorchBuild.TorchVersion
-$TORCHVISION_VERSION = $pytorchBuild.TorchvisionVersion
-$PYTORCH_WHEEL_CHANNEL = $pytorchBuild.WheelChannel
-$PYTORCH_WHEEL_BASE = $PyTorchWheelBase.TrimEnd("/")
-
 # Build output directory depends on mode
 $modeLower = $Mode.ToLower()
 $BUILD_MODE_DIR = "build-$modeLower"
@@ -151,68 +134,14 @@ function Download-Python {
 # Step 2: Download PyTorch wheels (CPU or GPU)
 #===============================================================================
 function Download-PyTorchWheels {
-    Log-Step "Downloading PyTorch $Mode wheels..."
-
-    if ($Mode -eq "gpu") {
-        $wheels = @(
-            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torch-$TORCH_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl",
-            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torchvision-$TORCHVISION_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl"
-        )
-    } else {
-        $wheels = @(
-            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torch-$TORCH_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl",
-            "$PYTORCH_WHEEL_BASE/$PYTORCH_WHEEL_CHANNEL/torchvision-$TORCHVISION_VERSION%2B$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl"
-        )
+    Log-Step "Fetching complete hash-locked runtime wheel set..."
+    if ($RefreshWheels) { throw "RefreshWheels no longer deletes caches; remove only a diagnosed corrupt file before retrying" }
+    if ($PyTorchWheelBase -ne "https://download.pytorch.org/whl") {
+        throw "Custom PyTorchWheelBase is not used by the locked fetcher; configure trusted indexes in installer_dependencies.py"
     }
-
-    Ensure-Directory $WHEELS_DIR
-
-    # Also check common wheels directory as fallback
-    $commonWheelsDir = Join-Path $INSTALLER_DIR "wheels"
-
-    if ($RefreshWheels) {
-        Log-Info "RefreshWheels enabled: clearing cached torch wheels..."
-        Get-ChildItem -Path $WHEELS_DIR -Filter "torch*.whl" -ErrorAction SilentlyContinue |
-            ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
-    }
-
-    foreach ($wheel in $wheels) {
-        $fileName = Split-Path $wheel -Leaf
-        $filePath = Join-Path $WHEELS_DIR ($fileName -replace "%2B", "+")
-
-        # Check in mode-specific directory first, then common directory.
-        # Re-download only when file is missing or looks incomplete.
-        $needsDownload = $true
-        if (Test-Path $filePath) {
-            $minBytes = if ($fileName -like "torch-*") { 150MB } else { 1MB }
-            $existing = Get-Item $filePath -ErrorAction SilentlyContinue
-            if ($existing -and $existing.Length -ge $minBytes) {
-                $needsDownload = $false
-                Log-Info "$fileName already exists, reusing cache"
-            } else {
-                Log-Warn "$fileName exists but looks incomplete, re-downloading"
-                Remove-Item $filePath -Force -ErrorAction SilentlyContinue
-            }
-        }
-
-        if ($needsDownload) {
-            $commonPath = Join-Path $commonWheelsDir ($fileName -replace "%2B", "+")
-            if (Test-Path $commonPath) {
-                Copy-Item $commonPath -Destination $filePath -Force
-                Log-Info "$fileName copied from common wheels directory"
-            } else {
-                Log-Info "Downloading $fileName..."
-                try {
-                    Invoke-WebRequest -Uri $wheel -OutFile $filePath -UseBasicParsing
-                } catch {
-                    $errMsg = $_.Exception.Message
-                    Log-Warn "Failed to download $fileName - $($errMsg)"
-                }
-            }
-        }
-    }
-
-    Log-Success "PyTorch wheels downloaded"
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\installer_dependencies.py") fetch --mode $modeLower
+    if ($LASTEXITCODE -ne 0) { throw "Locked wheel fetch failed" }
+    Log-Success "Complete wheel set verified"
 }
 
 #===============================================================================
@@ -343,75 +272,11 @@ function Prepare-ExifTool {
 # Step 4: Install dependencies into embedded Python runtime
 #===============================================================================
 function Install-Dependencies {
-    Log-Step "Installing Python dependencies..."
-    $pythonDir = Join-Path $BUILD_DIR "python"
-    $pythonExe = Join-Path $pythonDir "python.exe"
-    if (-not (Test-Path $pythonExe)) {
-        throw "Embedded Python not found: $pythonExe"
-    }
-
-    # Ensure site-packages directory exists
-    $sitePackages = Join-Path $pythonDir "Lib\site-packages"
-    Ensure-Directory $sitePackages
-
-    # Bootstrap pip if needed
-    $pipReady = $false
-    try {
-        & $pythonExe -m pip --version *> $null
-        if ($LASTEXITCODE -eq 0) {
-            $pipReady = $true
-        }
-    } catch {
-        $pipReady = $false
-    }
-    if (-not $pipReady) {
-        Log-Info "pip not found in embedded Python, bootstrapping..."
-        $getPipUrl = "https://bootstrap.pypa.io/get-pip.py"
-        $getPipFile = Join-Path $BUILD_DIR "get-pip.py"
-        try {
-            Invoke-WebRequest -Uri $getPipUrl -OutFile $getPipFile -UseBasicParsing
-            & $pythonExe $getPipFile --no-warn-script-location
-            Remove-Item $getPipFile -Force
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to bootstrap pip"
-            }
-        } catch {
-            throw "Failed to install pip: $_"
-        }
-    }
-
-    # First install PyTorch from local wheels
-    Log-Info "Installing PyTorch from local wheels into embedded Python..."
-    $torchWheels = @(
-        (Join-Path $WHEELS_DIR "torch-$TORCH_VERSION+$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl"),
-        (Join-Path $WHEELS_DIR "torchvision-$TORCHVISION_VERSION+$PYTORCH_WHEEL_CHANNEL-cp311-cp311-win_amd64.whl")
-    )
-    foreach ($wheel in $torchWheels) {
-        if (-not (Test-Path $wheel)) {
-            throw "Expected wheel not found: $wheel"
-        }
-        $wheelName = Split-Path $wheel -Leaf
-        Log-Info "  Installing $wheelName..."
-        & $pythonExe -m pip install --no-index --no-deps $wheel
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to install wheel: $wheelName"
-        }
-    }
-
-    # Then install other dependencies from PyPI
-    Log-Info "Installing other dependencies into embedded Python..."
-    if ($Mode -eq "gpu") {
-        $requirementsFile = Join-Path $INSTALLER_DIR "requirements-gpu.txt"
-    } else {
-        $requirementsFile = Join-Path $INSTALLER_DIR "requirements-cpu.txt"
-    }
-    & $pythonExe -m pip install -r $requirementsFile --find-links $WHEELS_DIR --upgrade-strategy only-if-needed
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to install dependencies from $requirementsFile"
-    }
-
-    Log-Success "Dependencies installed"
+    $pythonExe = Join-Path $BUILD_DIR "python\python.exe"
+    if (-not (Test-Path -LiteralPath $pythonExe)) { throw "Embedded Python not found: $pythonExe" }
+    Log-Step "Installing locked wheels offline..."
+    & $pythonExe (Join-Path $PROJECT_ROOT "scripts\installer_dependencies.py") install --mode $modeLower
+    if ($LASTEXITCODE -ne 0) { throw "Locked offline dependency installation failed" }
 }
 
 #===============================================================================
@@ -490,44 +355,12 @@ function Prepare-WindowsRuntimeDlls {
 # Step 5: Copy WingScribe source code
 #===============================================================================
 function Copy-SourceCode {
-    Log-Step "Copying WingScribe source code..."
-
-    $sourceDir = Join-Path $BUILD_DIR "src"
-
-    # Remove existing if any
-    if (Test-Path $sourceDir) {
-        Remove-Item $sourceDir -Recurse -Force
+    Log-Step "Staging audited source, examples and documentation..."
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\installer_payload.py") --mode $modeLower
+    if ($LASTEXITCODE -ne 0) {
+        throw "Payload staging failed; do not package this build"
     }
-
-    # Copy from project root
-    $dirsToCopy = @("src", "config", "scripts")
-    foreach ($dir in $dirsToCopy) {
-        $source = Join-Path $PROJECT_ROOT $dir
-        if (Test-Path $source) {
-            Copy-Item -Path $source -Destination (Join-Path $BUILD_DIR $dir) -Recurse -Force
-            Log-Info "  Copied $dir/"
-        }
-    }
-
-    # Copy only necessary data subdirectories (references for IOC bird data)
-    $dataRefsSource = Join-Path $PROJECT_ROOT "data\references"
-    $dataRefsDest = Join-Path $BUILD_DIR "data\references"
-    if (Test-Path $dataRefsSource) {
-        Ensure-Directory $dataRefsDest
-        Copy-Item -Path "$dataRefsSource\*" -Destination $dataRefsDest -Recurse -Force
-        Log-Info "  Copied data/references/"
-    }
-
-    # Copy individual files
-    $filesToCopy = @("requirements.txt", "README.md", "CLAUDE.md")
-    foreach ($file in $filesToCopy) {
-        $source = Join-Path $PROJECT_ROOT $file
-        if (Test-Path $source) {
-            Copy-Item -Path $source -Destination (Join-Path $BUILD_DIR $file) -Force
-        }
-    }
-
-    Log-Success "Source code copied"
+    Log-Success "Audited payload staged (personal configuration excluded)"
 }
 
 #===============================================================================
@@ -541,7 +374,7 @@ function Download-YoloModel {
 
     # Get YOLO model name from config
     $yoloModelFull = "data/models/yolo26n.pt"
-    $configFile = Join-Path $PROJECT_ROOT "config\settings.yaml"
+    $configFile = Join-Path $PROJECT_ROOT "config\settings.example.yaml"
     if (Test-Path $configFile) {
         $configContent = Get-Content $configFile -Raw
         if ($configContent -match 'yolo_model:\s*(\S+\.pt)') {
@@ -663,6 +496,9 @@ function Test-EmbeddedRuntime {
         throw "Self-test failed: embedded python not found"
     }
 
+    & $pythonExe (Join-Path $PROJECT_ROOT "scripts\installer_dependencies.py") check --mode $modeLower
+    if ($LASTEXITCODE -ne 0) { throw "Cached runtime differs from the locked variant" }
+
     & $pythonExe -c "import torch,fastapi,uvicorn; print(torch.__version__)"
     if ($LASTEXITCODE -ne 0) {
         throw "Self-test failed: python import check failed"
@@ -721,6 +557,8 @@ function Ensure-Directory {
 # Main Build Process
 #===============================================================================
 function Invoke-Build {
+    & $BuildPython (Join-Path $PROJECT_ROOT "scripts\export_installer_lock.py") --check
+    if ($LASTEXITCODE -ne 0) { throw "Installer lock is stale or build Python is unavailable" }
     $modeUpper = $Mode.ToUpper()
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan

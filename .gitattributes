@@ -1,3 +1,7 @@
 # The pinned catalogue checksum must remain stable on Windows checkouts.
 /data/references/avilist-v2025b.csv text eol=lf
 /data/references/avilist-v2025b.json text eol=lf
+# Installer manifest fingerprints must survive Windows checkout conversion.
+/uv.lock text eol=lf
+/pyproject.toml text eol=lf
+/installer/locks/*.txt text eol=lf

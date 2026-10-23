@@ -47,3 +47,11 @@ PyTorch 镜像参考：[南京大学镜像说明](https://help.mirrors.nju.edu.c
 - CPU/GPU 的 Python、pip、ExifTool 均已独立运行验证；依赖安装、整包启动、升级与卸载仍属于 B7c/d。旧安装日志风险仍然保留，不能对正式安装目录做覆盖验收。
 
 来源：[Python 3.11.8](https://www.python.org/downloads/release/python-3118/)、[Python 归档摘要](https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip.sigstore)、[pip 25.0.1 元数据](https://pypi.org/pypi/pip/25.0.1/json)。
+
+
+## B7c 隔离验收执行顺序
+
+1. B7c-1：在 build-cpu/build-gpu 的独立解释器安装带哈希清单（全程离线）；验证全量版本、pip check、torch 变体及 FastAPI/OpenCLIP/Ultralytics 导入。记录 GPU 是否真的可用，不能把 CPU 导入等同 CUDA 推理。
+2. B7c-2：重新暂存无个人配置的源码，启动独立端口、首次配置页面；只用独立数据库和已授权样本副本验证识别/选片/隔离恢复。避免使用正式 settings.yaml 和正式库。
+3. B7c-3：编译安装器并在独立目录做新装测试；旧版升级/卸载另建含测试配置、数据库和照片的夹具，核实旧卸载日志影响及备份恢复。无法验证时保持阻止覆盖正式目录的发布门槛，不改用户安装状态。
+4. B7d：干净 Windows、真实 NAS 故障以及正式发布信息仍独立保留，不以当前主机上的通过代替。

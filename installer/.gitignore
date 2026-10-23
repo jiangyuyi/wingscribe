@@ -10,6 +10,7 @@ tools/exiftool_files/
 wheels/
 wheels-cpu/
 wheels-gpu/
+runtime-cache/
 
 # Python
 __pycache__/

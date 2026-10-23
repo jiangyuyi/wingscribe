@@ -454,3 +454,11 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 查明仓库 ExifTool 归档实际为 13.40、旧 GitHub 13.26 地址为 404；改用固定仓库归档哈希，取消网络与任意系统版本回退，各 build/tools 独立暂存。该哈希只证明仓库归档一致性，上游来源链待发布前补证。
 - 32 项安装器测试通过；CPU/GPU 的 Python/pip 及 ExifTool 运行和缓存校验通过。ExifTool 在沙箱中出现 DLL 重定位错误，授权提升后仅执行 -ver 成功；未读取照片。尚未完整构建、编译安装器或验收旧版升级卸载。
 - 接下来进入 B7c-1：CPU/GPU 隔离目录从完整缓存离线安装依赖，校验版本、依赖一致性与导入；随后再做首次启动和闭环。
+
+
+## B7c-1 双变体隔离依赖与运算验证（2026-10-23）
+
+- CPU/GPU 均使用 build-*/python 的 Python 3.11.8，从本地完整带哈希缓存离线安装成功；精确版本校验及 pip check 均通过，无重新联网下载。日志 .codex-tmp/b7c-cpu-install.log、b7c-gpu-install.log。
+- 独立解释器实际导入 torch、torchvision、fastapi、open_clip、ultralytics 成功，CPU torch 2.10.0+cpu、GPU 2.10.0+cu128。两者 CPU 张量求和结果 4.0；GPU 检测到 NVIDIA GeForce RTX 5060 Laptop GPU，CUDA 可用，CUDA 张量结果 4.0 并同步成功。
+- 证据 .codex-tmp/b7c-cpu-smoke.json、b7c-gpu-smoke.json。Ultralytics 首次因配置目录未创建转入不可写备用路径，显式建立隔离配置目录后复验通过；B7c-2 构建自检需保持此隔离要求。
+- 安装器 32 项定向测试及 PowerShell 语法检查通过。只验证了运行时、依赖和张量，不等同真实模型推理、页面启动、完整安装或升级卸载验收。下一项 B7c-2 无个人配置的首次启动及授权样本副本闭环。

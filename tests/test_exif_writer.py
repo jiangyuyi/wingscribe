@@ -17,6 +17,13 @@ from PIL import Image
 from src.metadata.exif_writer import ExifWriter
 
 
+@pytest.fixture
+def resolved_exiftool(monkeypatch):
+    """Subprocess unit tests must not depend on the host's installed tools."""
+    monkeypatch.setattr(ExifWriter, '_resolve_exiftool', lambda self: 'exiftool')
+
+
+@pytest.mark.usefixtures('resolved_exiftool')
 class TestExifWriter:
     """Test ExifWriter class."""
 
@@ -110,6 +117,7 @@ class TestExifWriterExiftoolNotFound:
         assert result is False
 
 
+@pytest.mark.usefixtures('resolved_exiftool')
 class TestExifWriterErrorHandling:
     """Test error handling."""
 
@@ -126,6 +134,7 @@ class TestExifWriterErrorHandling:
             writer = ExifWriter("exiftool")
             result = writer.write_metadata(f.name, {"XPTitle": "Test"})
             assert result is False
+            mock_run.assert_called_once()
 
         if os.path.exists(f.name):
             os.remove(f.name)
@@ -142,11 +151,13 @@ class TestExifWriterErrorHandling:
             writer = ExifWriter("exiftool")
             result = writer.write_metadata(f.name, {"XPTitle": "Test"})
             assert result is False
+            mock_run.assert_called_once()
 
         if os.path.exists(f.name):
             os.remove(f.name)
 
 
+@pytest.mark.usefixtures('resolved_exiftool')
 class TestExifWriterEncoding:
     """Test encoding handling."""
 

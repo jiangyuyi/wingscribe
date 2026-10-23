@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "sha256": {
+    "uv.lock": "32ec0e1c5d72134c52c96860a1e97900bdf3cdddc9422d6f76b337446409a766",
+    "pyproject.toml": "94291f3f18f1bfad7b3f0caec4a6a0a954c6003b50ecefcc985009b3514cc6fd",
+    "installer/locks/cpu.txt": "73ffe4be44fbf676d081e6481ac6815f71b46a3cc4c68504083cf1620b2f0975",
+    "installer/locks/cu128.txt": "42005d8ec14bde2c803ddca65bbd9a3e1e2b527ec9db71694ff9d8c040706570"
+  }
+}

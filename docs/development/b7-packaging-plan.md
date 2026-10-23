@@ -26,3 +26,13 @@ B7a 验收：CPU/cu128 导出确定性、每项精确锁定带哈希、不包含
 3. B7b-3 审查 Python/ExifTool 下载及运行时优化、Inno 升级/卸载边界，完成后才运行 B7c 完整隔离构建；不能将载荷检查当作安装包成功。
 
 PyTorch 镜像参考：[南京大学镜像说明](https://help.mirrors.nju.edu.cn/pytorch/) 及 [SJTU 镜像说明](https://mirror.sjtu.edu.cn/docs/pytorch-wheels)。版本是否可用以实际下载及 uv.lock 哈希为准，不改版本迁就镜像。
+
+
+### B7b-3 边界收口顺序
+
+- 先移除新安装器的递归卸载删除规则，保留应用运行后产生的配置、数据库、备份和照片；取消依赖安装后的裁剪，保持 wheel 安装内容完整。ExifTool 缺失或无法执行必须阻止构建成功。
+- 旧版 Inno 默认追加卸载日志，删除新脚本中的规则并不能证明旧版升级后的卸载安全；升级迁移需独立验证旧日志影响，未完成前不能宣称支持覆盖旧安装目录。不会自动运行旧卸载器或删改其日志。
+- 随后固定 Python、pip 引导、ExifTool 的下载版本与可信哈希，审查缓存及解压边界；完整构建必须等这些检查完成。当前旧 Python 下载仍为 3.11.8，不能将开发解释器 3.11.17 当成安装运行时已升级。
+- B7c 用全新独立目录验收首次启动和 CPU/GPU 运行，再做有配置/数据库的升级和卸载实验；正式安装目录及照片不参与实验。
+
+依据：[Inno 卸载删除规则](https://jrsoftware.org/ishelp/topic_uninstalldeletesection.htm)、[卸载日志追加行为](https://jrsoftware.org/ishelp/topic_setup_uninstalllogmode.htm)。

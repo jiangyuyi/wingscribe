@@ -280,50 +280,6 @@ function Install-Dependencies {
 }
 
 #===============================================================================
-# Step 4.6: Optimize embedded Python footprint
-#===============================================================================
-function Optimize-PythonRuntime {
-    Log-Step "Optimizing embedded Python footprint..."
-
-    $sitePackages = Join-Path $BUILD_DIR "python\Lib\site-packages"
-    if (-not (Test-Path $sitePackages)) {
-        return
-    }
-
-    $dirsToRemove = @(
-        "pandas\tests",
-        "numpy\tests",
-        "scipy\tests",
-        "matplotlib\tests",
-        "setuptools\tests",
-        "pip\_vendor\rich\test"
-    )
-
-    foreach ($rel in $dirsToRemove) {
-        $target = Join-Path $sitePackages $rel
-        if (Test-Path $target) {
-            Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
-            Log-Info "  Removed $rel"
-        }
-    }
-
-    Get-ChildItem -Path $sitePackages -Recurse -Filter "*.whl" -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-        }
-
-    # Remove development link libraries from PyTorch runtime (.lib are not needed at runtime)
-    $torchLibDir = Join-Path $sitePackages "torch\lib"
-    if (Test-Path $torchLibDir) {
-        Get-ChildItem -Path $torchLibDir -Filter "*.lib" -ErrorAction SilentlyContinue |
-            ForEach-Object {
-                Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-                Log-Info "  Removed torch/lib/$($_.Name)"
-            }
-    }
-}
-
-#===============================================================================
 # Step 4.5: Copy critical Windows runtime DLLs for PyTorch
 #===============================================================================
 function Prepare-WindowsRuntimeDlls {
@@ -580,8 +536,14 @@ function Invoke-Build {
     }
 
     if (-not $SkipExifTool) {
-        Prepare-ExifTool
+        if (-not (Prepare-ExifTool)) { throw "ExifTool preparation failed" }
     }
+
+    # Even cached/skip mode must have an executable ExifTool runtime.
+    $exifExe = Join-Path $TOOLS_DIR "exiftool.exe"
+    if (-not (Test-Path -LiteralPath $exifExe)) { throw "ExifTool runtime is missing" }
+    & $exifExe -ver
+    if ($LASTEXITCODE -ne 0) { throw "ExifTool runtime self-test failed" }
 
     # Download embeddable Python runtime
     if (-not $SkipPython) {
@@ -594,7 +556,7 @@ function Invoke-Build {
     } else {
         Install-Dependencies
     }
-    Optimize-PythonRuntime
+    # Keep installed wheel contents intact; no post-install package trimming.
     Copy-SourceCode
     Download-YoloModel
     Copy-StartupScripts

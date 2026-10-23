@@ -89,11 +89,6 @@ Name: "{autodesktop}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; W
 ; User will be directed to the web-based configuration page on first visit
 Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Service (GPU)"; StatusMsg: "Starting Web service..."; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-; Delete all application files and user data
-Type: filesandordirs; Name: "{app}\src"
-Type: filesandordirs; Name: "{app}\config"
-Type: filesandordirs; Name: "{app}\scripts"
-Type: filesandordirs; Name: "{app}\tools"
-Type: filesandordirs; Name: "{app}\data"
-
+; No recursive uninstall deletion: preserve application-created configuration,
+; databases, backups and photographs. Inno removes its tracked payload only.
+; Legacy upgrade/uninstall logs require separate validation before release.

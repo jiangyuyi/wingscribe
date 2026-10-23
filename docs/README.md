@@ -16,6 +16,7 @@
 | 当前能力、实现缺口、后续事项 | [项目状态](development/status.md) |
 | 是否重写与分阶段改造 | [工程评估与改造计划](development/modernization-plan-2026-10-16.md) |
 | 当前批次与验证结果 | [实施记录](development/execution-log.md)、[锁定开发环境](development/environment.md) |
+| 拒绝原片隔离与恢复、安装器后续工作 | [B6e 隔离计划](development/b6e-quarantine-plan.md)、[B7 构建计划](development/b7-packaging-plan.md) |
 | 工具升级与替换选择 | [工具链调研](research/toolchain-review-2026-10-16.md) |
 | JPEG 合焦选片与后续 RAW | [选片功能方案](research/focus-culling-plan.md) |
 | 开发、测试与文档维护规则 | [贡献指南](development/contributing.md) |

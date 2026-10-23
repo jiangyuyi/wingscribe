@@ -50,6 +50,15 @@ class Subject(BaseModel):
     detection_index: int | None = Field(default=None, ge=0, strict=True)
 
 
+class QuarantineExecute(BaseModel):
+    operation_id: str = Field(pattern=r'^[0-9a-f]{32}$')
+    preview_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+class RestoreExecute(BaseModel):
+    preview_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 def invoke(fn,*args,**kwargs):
     try:
         return fn(*args,**kwargs)
@@ -160,3 +169,34 @@ def quarantine_preview(sid: str, request: Request):
     manager = request.app.state.culling
     invoke(manager.snapshot, sid)
     return invoke(QuarantinePreview(manager.catalogue, manager.store, manager.sources()).build, sid)
+
+
+def quarantine_executor(request):
+    from src.application.quarantine_execution import QuarantineExecutor
+    manager = request.app.state.culling
+    return QuarantineExecutor(manager.catalogue, manager.store, manager.sources())
+
+
+@router.post('/api/culling/snapshots/{sid}/quarantine')
+def quarantine_execute(sid: str, body: QuarantineExecute, request: Request):
+    invoke(request.app.state.culling.snapshot, sid)
+    return invoke(quarantine_executor(request).execute, sid, body.operation_id, body.preview_hash)
+
+
+@router.get('/api/culling/quarantine')
+def quarantine_history(request: Request):
+    if not request.app.state.runtime.db_path.exists():
+        return []
+    return invoke(quarantine_executor(request).journal.list_operations)
+
+
+@router.post('/api/culling/quarantine/{oid}/restore-preview')
+def restore_preview(oid: str, request: Request):
+    executor = quarantine_executor(request)
+    return invoke(executor.restore_preview, oid)
+
+
+@router.post('/api/culling/quarantine/{oid}/restore')
+def restore_execute(oid: str, body: RestoreExecute, request: Request):
+    executor = quarantine_executor(request)
+    return invoke(executor.restore, oid, body.preview_hash)

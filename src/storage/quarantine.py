@@ -39,7 +39,11 @@ class QuarantineJournal:
                 error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY(operation_id,version_id))''')
 
     def get(self, operation_id):
+        if not self.store.db_path.exists():
+            return None
         with self.store._connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='quarantine_operations'").fetchone():
+                return None
             row = conn.execute('SELECT * FROM quarantine_operations WHERE id=?', (operation_id,)).fetchone()
             if row is None:
                 return None
@@ -47,6 +51,19 @@ class QuarantineJournal:
                         restore_hash=row['restore_hash'],
                         states={r['version_id']: dict(r) for r in conn.execute(
                             'SELECT * FROM quarantine_items WHERE operation_id=?', (operation_id,))})
+
+    def list_operations(self):
+        if not self.store.db_path.exists():
+            return []
+        with self.store._connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='quarantine_operations'").fetchone():
+                return []
+            # Never hide an unresolved move merely because newer operations exist.
+            ids = [r[0] for r in conn.execute('''SELECT id FROM quarantine_operations o
+                WHERE EXISTS (SELECT 1 FROM quarantine_items i WHERE i.operation_id=o.id AND i.state!='restored')
+                OR id IN (SELECT id FROM quarantine_operations ORDER BY created_at DESC LIMIT 50)
+                ORDER BY created_at DESC''')]
+        return [self.get(oid) for oid in ids]
 
     def save(self, plan):
         with self.store._connection(write=True) as conn:

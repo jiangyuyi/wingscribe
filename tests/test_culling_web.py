@@ -47,6 +47,34 @@ def test_quarantine_preview_only_saved_reject_and_same_origin(web):
     assert client.post('/api/culling/snapshots/missing/quarantine-preview').status_code == 404
 
 
+def test_quarantine_execute_and_restore_api(web):
+    import os
+    if os.name != 'nt':
+        pytest.skip('Windows no-replace rename contract')
+    app, client, root = web
+    assert client.get('/api/culling/quarantine').json() == []
+    assert client.post('/api/culling/quarantine/missing/restore-preview', json={}).status_code == 404
+    sid = analyze(web)
+    version = next(iter(app.state.culling.snapshot(sid)['version_map'].values()))
+    app.state.culling.store.set_decision(version, 'reject')
+    plan = client.post(f'/api/culling/snapshots/{sid}/quarantine-preview').json()
+    body = {k:plan[k] for k in ['operation_id','preview_hash']}
+    url = f'/api/culling/snapshots/{sid}/quarantine'
+    assert client.post(url, json=body, headers={'Origin':'https://evil.example'}).status_code == 403
+    assert client.post(url, json={**body,'preview_hash':'0'*64}).status_code == 400
+    response = client.post(url, json=body)
+    assert response.status_code == 200 and not (root/'bird.jpg').exists()
+    assert client.post(url, json=body).status_code == 200
+    assert len(client.get('/api/culling/quarantine').json()) == 1
+    oid = plan['operation_id']
+    restore = client.post(f'/api/culling/quarantine/{oid}/restore-preview', json={}).json()
+    body = {'preview_hash':restore['preview_hash']}
+    assert restore['ready']
+    assert client.post(f'/api/culling/quarantine/{oid}/restore', json=body).status_code == 200
+    assert client.post(f'/api/culling/quarantine/{oid}/restore', json=body).status_code == 200
+    assert (root/'bird.jpg').is_file()
+
+
 def test_web_task_review_modes_decisions_and_preview(web):
     app,client,root=web
     assert client.get('/culling').status_code==200

@@ -93,11 +93,13 @@ async function withReview(fn){
  reviewBusy=true;$('#results').inert=true;
  const controls=['#open','#open-revision','#parent-revision','#save-default','#default-mode'];
  const previous=controls.map(id=>$(id).disabled);controls.forEach(id=>$(id).disabled=true);
- try{return await fn();}finally{reviewBusy=false;$('#results').inert=false;controls.forEach((id,i)=>$(id).disabled=previous[i]);$('#parent-revision').disabled=!snapshot?.report.revision;}
+ $('#quarantine-panel').inert=true;
+ try{return await fn();}finally{reviewBusy=false;$('#results').inert=false;$('#quarantine-panel').inert=false;controls.forEach((id,i)=>$(id).disabled=previous[i]);$('#parent-revision').disabled=!snapshot?.report.revision;}
 }
 async function openSnapshot(id){
  const [next,history]=await Promise.all([api('/snapshots/'+id),api('/snapshots/'+id+'/history')]);
  snapshot=next;render();
+ $('#quarantine-preview-result').replaceChildren();
  const numbers=new Map(history.map((entry,i)=>[entry.id,i+1]));
  const names={analysis:'原始分析',split:'拆组',merge:'合组',subject:'主体改选'};
  const label=entry=>`版本 ${numbers.get(entry.id)} · ${names[entry.action]||entry.action}`+(entry.parent_snapshot_id?` · 基于版本 ${numbers.get(entry.parent_snapshot_id)}`:'');
@@ -130,4 +132,66 @@ $('#open').onclick=()=>act(()=>withReview(async()=>{if(!$('#history').value)retu
 $('#open-revision').onclick=()=>act(()=>withReview(async()=>{requireSaved();await openSnapshot($('#revisions').value);}));
 $('#parent-revision').onclick=()=>act(()=>withReview(async()=>{requireSaved();const parent=snapshot?.report.revision?.parent_snapshot_id;if(parent)await openSnapshot(parent);}));
 window.addEventListener('beforeunload',event=>{if(unsaved.size){event.preventDefault();event.returnValue='';}});
-act(refresh);setInterval(()=>act(refresh),3000);
+const quarantineStates={pending:'待执行',moving:'隔离中／待核对，可重试',quarantined:'已隔离',restoring:'恢复中／待核对，可重试',restored:'已恢复',failed:'失败'};
+function showQuarantineResult(operation){
+ const section=el('section');section.className='panel';
+ section.append(el('h3',`操作 ${operation.plan.operation_id.slice(0,8)} · ${operation.created_at.slice(0,19)}`));
+ const list=el('ul');
+ for(const item of operation.plan.items){const status=operation.states[item.version_id];
+  list.append(el('li',`${item.original_path} → ${item.destination_path}\n${quarantineStates[status.state]||status.state}${status.error?'：'+status.error:''}`));
+ }section.append(list);
+ const values=Object.values(operation.states).map(s=>s.state);
+ if(values.some(s=>['pending','moving'].includes(s))){const retry=el('button','核对并重试未完成隔离');retry.onclick=()=>act(()=>confirmQuarantine(operation.plan));section.append(retry);}
+ if(values.some(s=>['quarantined','restoring'].includes(s))){const restore=el('button','预览恢复清单');restore.onclick=()=>act(()=>previewRestore(operation.plan.operation_id));section.append(restore);}
+ return section;
+}
+async function loadQuarantineHistory(){
+ const operations=await api('/quarantine');
+ $('#quarantine-operations').replaceChildren(...operations.map(showQuarantineResult));
+ if(!operations.length)$('#quarantine-operations').append(el('p','暂无隔离操作。'));
+}
+async function previewQuarantine(){
+ requireSaved();if(!snapshot)throw Error('请先打开需要复核的分析结果。');
+ return withReview(async()=>{
+  $('#message').textContent='正在核对拒绝原片的完整内容，NAS 来源可能需要一些时间……';
+  const plan=await api(`/snapshots/${snapshot.id}/quarantine-preview`,{});
+  const host=$('#quarantine-preview-result');host.replaceChildren();
+  host.append(el('h3',`待隔离 ${plan.count} 张 · ${(plan.total_bytes/1024/1024).toFixed(1)} MB`));
+  const list=el('ul');for(const item of plan.items)list.append(el('li',`${item.original_path||item.version_id} → ${item.destination_path||'无法确定'}${item.error?'；不能执行：'+item.error:''}`));host.append(list);
+  host.append(el('p',plan.ready?'请核对上面的原路径与目标。确认后移动这些原片；不会处理保留和未决定照片。':'没有可执行清单，或存在需要解决的冲突。'));
+  const button=el('button','确认隔离上述原片');button.disabled=!plan.ready;
+  button.onclick=()=>act(()=>confirmQuarantine(plan));host.append(button);
+  $('#message').textContent='预览已生成；尚未移动任何照片。';
+ });
+}
+async function confirmQuarantine(plan){
+ requireSaved();
+ return withReview(async()=>{
+  $('#message').textContent='正在核对并执行隔离，请等待逐项结果……';
+  const operation=await api(`/snapshots/${plan.snapshot_id}/quarantine`,{operation_id:plan.operation_id,preview_hash:plan.preview_hash});
+  $('#quarantine-preview-result').replaceChildren(showQuarantineResult(operation));
+  $('#message').textContent='隔离执行结果已保存，请查看逐项状态；有错误的项目不会伪装成成功。';
+  await loadQuarantineHistory();
+ });
+}
+async function previewRestore(oid){
+ requireSaved();return withReview(async()=>{
+  $('#message').textContent='正在核对恢复路径与文件内容……';
+  const plan=await api(`/quarantine/${oid}/restore-preview`,{}),host=$('#quarantine-preview-result');host.replaceChildren();
+  host.append(el('h3',`待恢复 ${plan.items.length} 张`));
+  const list=el('ul');for(const item of plan.items)list.append(el('li',`${item.quarantine_path} → ${item.original_path}${item.error?'；不能执行：'+item.error:''}`));host.append(list);
+  const button=el('button','确认恢复到上述原路径');button.disabled=!plan.ready;button.onclick=()=>act(()=>confirmRestore(plan));host.append(button);
+  $('#message').textContent='恢复预览已生成；尚未移动任何照片。';
+ });
+}
+async function confirmRestore(plan){
+ requireSaved();return withReview(async()=>{
+  $('#message').textContent='正在执行恢复，请等待逐项结果……';
+  const operation=await api(`/quarantine/${plan.operation_id}/restore`,{preview_hash:plan.preview_hash});
+  $('#quarantine-preview-result').replaceChildren(showQuarantineResult(operation));
+  $('#message').textContent='恢复执行结果已保存，请查看逐项状态。';await loadQuarantineHistory();
+ });
+}
+$('#quarantine-preview').onclick=()=>act(previewQuarantine);
+$('#quarantine-history').onclick=()=>act(()=>withReview(loadQuarantineHistory));
+act(refresh);act(loadQuarantineHistory);setInterval(()=>act(refresh),3000);

@@ -1,10 +1,13 @@
 import hashlib
+import os
 
 import pytest
 
 from test_quarantine_preview import setup, preview
 from src.application.quarantine_execution import QuarantineExecutor
 from src.storage.job_session import JobSession, JobBusyError
+
+pytestmark = pytest.mark.skipif(os.name != 'nt', reason='Windows no-replace rename contract')
 
 
 def executor(setup):
@@ -197,3 +200,18 @@ def test_windows_rename_never_replaces_destination(tmp_path):
     with pytest.raises(FileExistsError):
         rename_no_replace(a, b)
     assert a.read_bytes() == b'original' and b.read_bytes() == b'existing'
+
+
+def test_history_never_hides_older_unrestored_operation(setup):
+    import json
+    service = executor(setup)
+    plan = preview(setup)
+    execute(service, plan)
+    with service.store._connection(write=True) as conn:
+        for index in range(51):
+            oid = f'archived-{index}'
+            conn.execute('INSERT INTO quarantine_operations VALUES (?,?,?,NULL)',
+                         (oid,json.dumps({**plan,'operation_id':oid}),f'2099-{index:02}'))
+    operations = service.journal.list_operations()
+    assert len(operations) == 51
+    assert any(o['plan']['operation_id'] == plan['operation_id'] for o in operations)

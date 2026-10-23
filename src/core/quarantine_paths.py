@@ -18,10 +18,12 @@ def checked_path(root: Path, relative: Path) -> Path:
     """
     if relative.is_absolute() or relative.drive or '..' in relative.parts:
         raise ValueError('路径必须位于照片来源内')
+    candidates = list(reversed(root.parents)) + [root]
     current = root
-    for part in (None, *relative.parts):
-        if part is not None:
-            current = current / part
+    for part in relative.parts:
+        current = current / part
+        candidates.append(current)
+    for current in candidates:
         try:
             info = current.lstat()
         except FileNotFoundError:

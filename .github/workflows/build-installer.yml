@@ -187,6 +187,23 @@ jobs:
             Write-Host "Found: $($_.FullName)"
           }
 
+      - name: Setup verification Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify downloaded installer artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          foreach ($mode in @('CPU', 'GPU')) {
+            $name = "WingScribe-Setup-$mode-$version.sha256.json"
+            $manifests = @(Get-ChildItem artifacts -Recurse -File -Filter $name)
+            if ($manifests.Count -ne 1) { throw "Expected exactly one manifest for $mode" }
+            python scripts/installer_artifacts.py --verify $manifests[0].FullName
+            if ($LASTEXITCODE -ne 0) { throw "Downloaded $mode installer verification failed" }
+          }
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:

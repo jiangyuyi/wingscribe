@@ -33,7 +33,8 @@ def test_missing_volume_and_empty_executable_rejected(tmp_path):
 
 def test_manifest_cannot_read_outside_directory(tmp_path):
     manifest = tmp_path / 'manifest.json'
-    manifest.write_text(json.dumps({'format': 1, 'files': [{'name': '../private'}]}))
+    manifest.write_text(json.dumps({'format': 1, 'mode': 'cpu', 'version': '1.2.3',
+                                   'files': [{'name': '../private'}, {'name': 'WingScribe-Setup-CPU-1.2.3.exe'}]}))
     with pytest.raises(ValueError, match='filename'):
         verify_manifest(manifest)
 
@@ -63,3 +64,21 @@ def test_gpu_ci_upload_and_release_include_volumes():
         assert 'GPU-${{ steps.get_version.outputs.version }}.sha256.json' in paths
     script = (root / 'installer/installer-gpu.iss').read_text(encoding='utf-8-sig')
     assert 'Compression=lzma2\nSolidCompression=yes\nDiskSpanning=yes' in script
+
+
+@pytest.mark.parametrize('change', ['duplicate', 'missing_exe', 'missing_volume'])
+def test_incomplete_manifest_is_rejected(tmp_path, change):
+    stem = 'WingScribe-Setup-GPU-1.2.3'
+    (tmp_path / f'{stem}.exe').write_bytes(b'installer')
+    (tmp_path / f'{stem}-1.bin').write_bytes(b'volume')
+    manifest = write_manifest(tmp_path, 'gpu', '1.2.3')
+    data = json.loads(manifest.read_text())
+    if change == 'duplicate':
+        data['files'].append(data['files'][0])
+    elif change == 'missing_exe':
+        data['files'] = data['files'][1:]
+    else:
+        data['files'] = data['files'][:1]
+    manifest.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        verify_manifest(manifest)

@@ -44,13 +44,26 @@ def verify_manifest(manifest: Path) -> None:
     data = json.loads(manifest.read_text(encoding='utf-8'))
     if data.get('format') != 1 or not data.get('files'):
         raise ValueError('Invalid artifact manifest')
+    mode, version = data.get('mode'), data.get('version')
+    if mode not in ('cpu', 'gpu') or not isinstance(version, str) or not re.fullmatch(r'\d+(?:\.\d+){2,3}', version):
+        raise ValueError('Invalid manifest mode/version')
+    stem = f'WingScribe-Setup-{mode.upper()}-{version}'
+    names = [record['name'] for record in data['files']]
+    if len(set(names)) != len(names) or f'{stem}.exe' not in names:
+        raise ValueError('Duplicate artifacts or missing executable')
+    volumes = []
     for record in data['files']:
         name = record['name']
-        if not re.fullmatch(r'WingScribe-Setup-(CPU|GPU)-\d+(?:\.\d+){2,3}(?:-\d+\.bin|\.exe)', name):
+        match = re.fullmatch(re.escape(stem) + r'(?:-(\d+)\.bin|\.exe)', name)
+        if not match:
             raise ValueError('Invalid artifact filename')
+        if match[1]:
+            volumes.append(int(match[1]))
         path = manifest.parent / name
         if path.is_symlink() or not path.is_file() or path.stat().st_size != record['size'] or digest(path) != record['sha256']:
             raise ValueError(f'Artifact verification failed: {name}')
+    if sorted(volumes) != list(range(1, len(volumes) + 1)) or (mode == 'gpu' and not volumes):
+        raise ValueError('Missing installer volumes')
 
 
 if __name__ == '__main__':

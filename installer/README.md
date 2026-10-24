@@ -117,7 +117,7 @@ CPU/GPU 共用 [发布验收清单](../docs/development/release-checklist.md)。
 
 快捷方式图标引用 `src/web/static/favicon.ico`；现有 `.iss` 未引用旧素材说明中的 `assets/app-icon.ico`、`wizard-side.bmp` 或 `wizard-small.bmp`，这些不作为构建必需文件。
 
-根 README 的完整文档在 [项目仓库](https://github.com/jiangyuyi/wingscribe/tree/master/docs)，当前构建未打包整个 docs 目录。
+根 README 的完整文档在 [项目仓库](https://github.com/jiangyuyi/wingscribe/tree/master/docs)，当前构建按载荷白名单包含离线 docs 目录。
 
 ## 启动与配置
 
@@ -131,3 +131,15 @@ BAT/PowerShell 均调用 scripts/launch_web.py；首次配置由 Web 页面完�
 打包模型仅包含指纹已校验的 `yolo26n.pt`，不会递归收集 BioCLIP 缓存、下载分片或实验文件。BioCLIP 安装获取仍按模型配置流程单独完成。
 
 新安装器用 `installer-format.txt` 标记安全日志代际。若目标目录有旧卸载日志且没有匹配标记，则拒绝覆盖；应先备份配置和数据、使用新的空目录，不能先执行旧卸载器。该保护不等于旧安装目录自动迁移完成。
+
+
+编译成功后记录文件摘要：
+
+```powershell
+python scripts/installer_artifacts.py --directory installer/Output --mode cpu --version 1.2.3
+python scripts/installer_artifacts.py --verify installer/Output/WingScribe-Setup-CPU-1.2.3.sha256.json
+```
+
+清单包含 EXE 与同版本已生成分卷的大小和 SHA-256；先确认编译成功，再生成清单。它用于检查传输完整性，不是发行者签名。CI 保留清单并随正式发布附上。
+
+GPU 正式包采用 lzma2 压缩分卷：下载同版本 EXE、全部 `-N.bin` 和 SHA-256 清单，放在同一目录后启动 EXE。不要仅保留 EXE。CPU 正式包仍为单 EXE。

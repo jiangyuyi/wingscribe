@@ -27,6 +27,7 @@ DiskSpanning=yes
 #else
 Compression=lzma2
 SolidCompression=yes
+DiskSpanning=yes
 #endif
 AllowNoIcons=yes
 CreateAppDir=yes

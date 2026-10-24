@@ -109,13 +109,19 @@ jobs:
           & $iscc "/DAppVersion=$version" $iss
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
 
+      - name: Record installer hashes
+        shell: pwsh
+        run: |
+          python scripts/installer_artifacts.py --directory installer/Output --mode "${{ matrix.mode }}" --version "${{ steps.get_version.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { throw "Installer hash manifest failed" }
+
       - name: Get installer size
         shell: pwsh
         run: |
           $modeUpper = "${{ matrix.mode }}".ToUpper()
           $version = "${{ steps.get_version.outputs.version }}"
-          $installer = Get-Item "installer/Output/WingScribe-Setup-$modeUpper-$version.exe"
-          $sizeInMB = [math]::Round($installer.Length / 1MB, 2)
+          $installer = Get-ChildItem "installer/Output/WingScribe-Setup-$modeUpper-$version*" | Where-Object { $_.Extension -in @(".exe", ".bin") }
+          $sizeInMB = [math]::Round(($installer | Measure-Object Length -Sum).Sum / 1MB, 2)
           Write-Host "Installer size: $sizeInMB MB"
 
       - name: Upload CPU installer artifact
@@ -123,7 +129,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: WingScribe-Installer-${{ steps.get_version.outputs.version }}-${{ matrix.mode }}
-          path: installer/Output/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
+          path: |
+            installer/Output/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
+            installer/Output/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.sha256.json
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload GPU installer artifact
@@ -131,7 +140,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: WingScribe-Installer-${{ steps.get_version.outputs.version }}-${{ matrix.mode }}
-          path: installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
+          path: |
+            installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
+            installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}-*.bin
+            installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.sha256.json
+          if-no-files-found: error
           retention-days: 30
 
   release:
@@ -180,7 +193,10 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           files: |
             artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
+            artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.sha256.json
             artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
+            artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}-*.bin
+            artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.sha256.json
           draft: false
           prerelease: false
           body: |
@@ -195,6 +211,7 @@ jobs:
               - 使用 CPU 进行 AI 推理，速度较慢但兼容性好
 
             - **GPU 版本**: `WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe`
+              - 同时下载该版本的全部 `.bin` 分卷，与 EXE 放在同一目录
               - 需要 NVIDIA 显卡（支持 CUDA）
               - 使用 GPU 进行 AI 推理，速度更快
 

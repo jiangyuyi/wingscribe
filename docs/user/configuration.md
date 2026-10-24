@@ -141,7 +141,7 @@ recognition:
     url: "填写实际懂鸟服务 URL"
 ```
 
-根据所选模式只填写所需部分。旧 secrets 样例中的顶层 `hf_api_key` 和 `dongniao_api_key` 不供流水线实际读取。统一 REST 云适配器使用 `cloud.*` 结构，见 [识别 API](../reference/recognition-api.md)。
+根据所选模式只填写所需部分。当前 secrets 样例已使用上述嵌套结构；历史配置中的顶层 `hf_api_key` 和 `dongniao_api_key` 不供流水线实际读取，需手动转入对应嵌套字段。统一 REST 云适配器使用 `cloud.*` 结构，见 [识别 API](../reference/recognition-api.md)。云端线上验证仍未完成。
 
 ## 3. 启动参数
 

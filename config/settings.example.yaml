@@ -91,8 +91,8 @@ recognition:
   local:
     # 选项: bioclip, bioclip-2 (推荐), bioclip-2.5-vith14 (实验，约 4GB 权重)
     model_type: "bioclip-2"
-    batch_size: 512            # 文本编码批次大小 (通常不需要修改)
-    inference_batch_size: 16   # 图片推理批次大小，显存不足(低于 8G)时请调小
+    batch_size: 512            # 预留字段；当前文本编码固定为 512，修改此项无效
+    inference_batch_size: 16   # 已读取但尚未用于切分批次，不能靠调小此值降低显存
 
 web:
   # Web 服务器监听地址

@@ -3,6 +3,18 @@ from pathlib import Path
 from src.utils.config_loader import load_config, validate_paths_config
 
 
+def test_distributed_examples_merge_without_losing_local_settings():
+    root = Path(__file__).resolve().parents[1]
+    config = load_config(str(root / 'config/settings.example.yaml'),
+                         str(root / 'config/secrets.example.yaml'))
+    assert config['recognition']['mode'] == 'local'
+    assert config['recognition']['local']['model_type'] == 'bioclip-2'
+    assert config['recognition']['api'] == {'key': '', 'url': ''}
+    assert config['recognition']['dongniao'] == {'key': '', 'url': ''}
+    assert 'hf_api_key' not in config
+    assert 'dongniao_api_key' not in config
+
+
 def test_load_config_merges_cloud_secrets(tmp_path: Path):
     settings_path = tmp_path / "settings.yaml"
     secrets_path = tmp_path / "secrets.yaml"

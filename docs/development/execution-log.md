@@ -512,3 +512,5 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - secrets.example.yaml 改用流水线实际读取的 recognition.api/dongniao.key/url；修正“样例本身被忽略”的错误提示，公开样例不得填入真实密钥。settings.example.yaml 的两个未接入批次参数明确标注有效性边界，不改变默认值或运行行为。
 - 实际加载两个分发样例并深合并，验证仍保留 local/BioCLIP2 设置及正确密钥结构；配置与载荷 11 项测试通过。只改样例，不读取或写入用户 secrets/settings。
 - 当前已暂存、正在编译的 GPU 测试包不包含本次样例变更；发布前需从最终提交重新暂存和构建，不把旧测试包视为最终发行载荷。
+
+- GPU 0.0.0.3→0.0.0.4 新装、自检、实际 CUDA、升级、卸载已全部通过，5 个用户文件夹具 SHA-256 保留；证据 `b7c3-gpu-upgrade-report.json`，测试包摘要 `b7c3-packages/WingScribe-Setup-GPU-0.0.0.4.sha256.json` 已实际复验。CPU/GPU 同代跨版本文件保留闭环均完成；不等同旧代际业务迁移。

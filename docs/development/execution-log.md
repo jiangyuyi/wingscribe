@@ -498,3 +498,7 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - GPU 正式 lzma2 编译实际报错超过 2100000000 字节上限，已开启正式分卷；CI 上传及 Release 附件同时包含 GPU 全部分卷。修复后的正式编译正在 `.codex-tmp/b7c3-production-spanned` 运行，不能将启动编译写成通过。
 - 新增 `scripts/installer_artifacts.py`：编译成功后记录 EXE/分卷大小与 SHA-256，验证传输后内容；GPU 缺分卷、空文件、卷编号缺口及越界文件名会被拒绝。CI 保留摘要清单，42 项安装器定向测试通过。现有三套已完成测试包的摘要存于 `b7c3-packages/*.sha256.json`。
 - 更新发布验收模板，明确用户文件保留、旧日志拒绝、真实 NAS 与干净环境、分卷和摘要门槛。未发布或上传安装包。
+
+- 本轮全量回归完成：812 passed、1 skipped、6 条既有 Pydantic 弃用警告，91.44 秒；日志 `b7c3-regression.log`。
+- 用户选择另行规划本机虚拟机环境，已写入 [B7d 方案](b7d-vm-plan.md)。本机为 Windows 11 家庭版，有现存 hypervisor；没有启用系统功能、安装虚拟机软件或重启。
+- ExifTool 13.40 官方校验清单已找到：64 位原始 ZIP SHA-256 `ac0c44150a3e99c97bb054a03db92ae97be5fcffa802dcc3c21fc58c62fb8ac6`，来源 https://exiftool.org/checksums-13.40.txt 。官方历史 ZIP 下载返回 404，尚未取得原包逐文件对照；仓库重新整理 ZIP 的哈希不等于原包哈希，不据此解除来源链门槛。

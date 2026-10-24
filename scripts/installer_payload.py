@@ -20,7 +20,7 @@ CONFIG_FILES = (
 )
 RUNTIME_SCRIPTS = ('config_wizard.py', 'run_culling.py', 'migrate_avilist.py',
                    'download_model.py', 'check_gpu.py', 'backup_db.ps1')
-STARTUP_SCRIPTS = ('start_web.bat', 'start_web.ps1', 'init_env.py')
+STARTUP_SCRIPTS = ('start_web.bat', 'start_web.ps1', 'launch_web.py')
 REFERENCE_FILES = (
     'avilist-v2025b.csv', 'avilist-v2025b.json', 'inaturalist_china_provinces.json',
     'bird_order_mapping.csv', 'bird_order_mapping_complete.csv',

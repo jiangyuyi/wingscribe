@@ -138,88 +138,6 @@ function Download-YoloModel {
 }
 
 #===============================================================================
-# Step 6: Copy startup scripts
-#===============================================================================
-function Copy-StartupScripts {
-    Log-Step "Copying startup scripts..."
-
-    $scriptsDir = Join-Path $BUILD_DIR "scripts"
-    $installerScriptsDir = Join-Path $INSTALLER_DIR "scripts"
-    Ensure-Directory $scriptsDir
-
-    # Copy start_web.bat from installer/scripts directory
-    $sourceBat = Join-Path $installerScriptsDir "start_web.bat"
-    if (Test-Path $sourceBat) {
-        Copy-Item $sourceBat -Destination (Join-Path $scriptsDir "start_web.bat") -Force
-        Log-Info "  Copied start_web.bat"
-    } else {
-        Log-Warn "  start_web.bat not found in installer/scripts/, creating minimal version..."
-        # Fallback to creating the file if it doesn't exist
-        $batContent = @"
-@echo off
-setlocal
-set "SCRIPT_DIR=%~dp0"
-set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
-pushd "%SCRIPT_DIR%\.."
-set "APP_ROOT=%CD%"
-popd
-cd /d "%APP_ROOT%"
-if not exist "src\web\app.py" (
-    echo Error: Cannot find src\web\app.py
-    echo Current directory: %CD%
-    pause
-    exit /b 1
-)
-if not exist "%APP_ROOT%\python\python.exe" (
-    echo Error: Embedded Python not found
-    pause
-    exit /b 1
-)
-"%APP_ROOT%\python\python.exe" "%APP_ROOT%\src\web\app.py"
-pause
-"@
-        $batContent | Out-File (Join-Path $scriptsDir "start_web.bat") -Encoding ASCII
-    }
-
-    # Copy start_web.ps1 from installer/scripts directory if it exists
-    $sourcePs = Join-Path $installerScriptsDir "start_web.ps1"
-    if (Test-Path $sourcePs) {
-        Copy-Item $sourcePs -Destination (Join-Path $scriptsDir "start_web.ps1") -Force
-        Log-Info "  Copied start_web.ps1"
-    }
-
-    # Copy init_env.py for environment initialization
-    $sourceInitEnv = Join-Path $installerScriptsDir "init_env.py"
-    if (Test-Path $sourceInitEnv) {
-        Copy-Item $sourceInitEnv -Destination (Join-Path $scriptsDir "init_env.py") -Force
-        Log-Info "  Copied init_env.py"
-    }
-
-    Log-Success "Startup scripts copied"
-}
-
-#===============================================================================
-# Step 7: Prepare first-run wizard
-#===============================================================================
-function Prepare-FirstRunWizard {
-    Log-Step "Preparing first-run configuration wizard..."
-
-    $wizardScript = Join-Path $PROJECT_ROOT "scripts\config_wizard.py"
-    $wizardDest = Join-Path $BUILD_DIR "scripts\config_wizard.py"
-
-    if (-not (Test-Path $wizardScript)) {
-        # Create the wizard script if it doesn't exist
-        Log-Info "Creating config wizard script..."
-        # ... wizard creation will be in a separate task
-    }
-
-    if (Test-Path $wizardScript) {
-        Copy-Item $wizardScript -Destination $wizardDest -Force
-        Log-Success "Config wizard copied"
-    }
-}
-
-#===============================================================================
 # Step 8: Self-test runtime before packaging
 #===============================================================================
 function Test-EmbeddedRuntime {
@@ -336,8 +254,6 @@ function Invoke-Build {
     # Keep installed wheel contents intact; no post-install package trimming.
     Copy-SourceCode
     Download-YoloModel
-    Copy-StartupScripts
-    Prepare-FirstRunWizard
     Test-EmbeddedRuntime
 
     Write-Host ""

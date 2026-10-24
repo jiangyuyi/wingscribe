@@ -462,3 +462,14 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 独立解释器实际导入 torch、torchvision、fastapi、open_clip、ultralytics 成功，CPU torch 2.10.0+cpu、GPU 2.10.0+cu128。两者 CPU 张量求和结果 4.0；GPU 检测到 NVIDIA GeForce RTX 5060 Laptop GPU，CUDA 可用，CUDA 张量结果 4.0 并同步成功。
 - 证据 .codex-tmp/b7c-cpu-smoke.json、b7c-gpu-smoke.json。Ultralytics 首次因配置目录未创建转入不可写备用路径，显式建立隔离配置目录后复验通过；B7c-2 构建自检需保持此隔离要求。
 - 安装器 32 项定向测试及 PowerShell 语法检查通过。只验证了运行时、依赖和张量，不等同真实模型推理、页面启动、完整安装或升级卸载验收。下一项 B7c-2 无个人配置的首次启动及授权样本副本闭环。
+
+
+## B7c-2 首次启动与样本闭环（2026-10-24）
+
+- 发现 BAT 会调用旧 init_env.py 自动修复/改写配置，PowerShell 则进入另一套向导；统一为 launch_web.py，由 Web 页面负责首次配置。缺失/错误配置不自动创建或改写，Ultralytics 配置显式放入应用 data/runtime-config，两个启动器传递参数和退出码。
+- 移除构建中覆盖白名单载荷的重复启动脚本/向导复制，init_env.py 不再打包；自检现创建真实 Web 应用，不再仅导入 torch。35 项安装器测试通过，含缺失/错误/有效配置保留、端口参数和自检不启动服务。
+- CPU 暂存服务 127.0.0.1:8881：首次配置页面 HTTP 200，API is_first_run=true，未生成 settings.yaml/secrets.yaml；构造错误配置后 API 返回错误且字节不变。沙箱内启动停滞未监听端口，核实并停止该测试进程后，在本机权限环境验证成功。CPU BAT、GPU PowerShell 实际 --self-test 均通过。
+- GPU 安装暂存解释器、暂存源码及模型副本，8 张已授权 JPEG 再复制到 .codex-tmp/b7c2-real；禁用在线模型获取，独立配置/数据库/输出，关闭原片写回。真实流水线约 64.4 秒处理 8 张、生成 6 个归档结果，分类版本、EXIF/IPTC 和两层副本 SHA-256 校验通过。
+- 同一安装环境实际 CUDA 选片分析 8 张，无失败；独立选片库人为标记一张测试副本为拒绝，执行预览→隔离→恢复，最终全部副本哈希不变、数据库完整性/外键通过。此操作仅在测试副本上，不修改真实照片或用户人工决定。
+- 证据：b7c2-first-run.json、b7c2-invalid-config.json；b7c2-real/report.json、culling.log、quarantine-report.json。Web 首次页面以 HTTP 验证；选片及恢复以实际服务/CLI 验证，未声称本轮完成浏览器逐按钮验收。
+- 下一项 B7c-3 编译与隔离新装/旧版升级卸载。当前 build-gpu 含为验收额外复制的模型目录及下载残留，正式编译前需重新明确模型白名单，不可将本轮实验目录直接作为发布载荷。仍未完成干净 Windows、NAS 故障或正式发布。

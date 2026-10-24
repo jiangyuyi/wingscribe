@@ -118,3 +118,7 @@ CPU/GPU 共用 [发布验收清单](../docs/development/release-checklist.md)。
 快捷方式图标引用 `src/web/static/favicon.ico`；现有 `.iss` 未引用旧素材说明中的 `assets/app-icon.ico`、`wizard-side.bmp` 或 `wizard-small.bmp`，这些不作为构建必需文件。
 
 根 README 的完整文档在 [项目仓库](https://github.com/jiangyuyi/wingscribe/tree/master/docs)，当前构建未打包整个 docs 目录。
+
+## 启动与配置
+
+BAT/PowerShell 均调用 scripts/launch_web.py；首次配置由 Web 页面完成，启动时不自动修复、覆盖 settings.yaml 或创建 secrets.yaml。可传 --host/--port；--self-test 创建应用检查但不监听端口。模型库偏好写入应用 data/runtime-config。旧 init_env.py 不再随安装载荷发布。

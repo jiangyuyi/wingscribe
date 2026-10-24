@@ -122,3 +122,12 @@ CPU/GPU 共用 [发布验收清单](../docs/development/release-checklist.md)。
 ## 启动与配置
 
 BAT/PowerShell 均调用 scripts/launch_web.py；首次配置由 Web 页面完成，启动时不自动修复、覆盖 settings.yaml 或创建 secrets.yaml。可传 --host/--port；--self-test 创建应用检查但不监听端口。模型库偏好写入应用 data/runtime-config。旧 init_env.py 不再随安装载荷发布。
+
+
+## 安装器隔离验收
+
+编译测试包传 `/DValidationBuild=1 /DAppVersion=0.0.0.3`。测试包使用独立 AppId，不写卸载注册项、不创建快捷方式、不自动启动应用；为缩短重复验证时间，测试模式无压缩并允许分卷，`.exe` 与全部 `.bin` 必须放在同一目录。它不是发布包。正式模式保留 lzma2 压缩。
+
+打包模型仅包含指纹已校验的 `yolo26n.pt`，不会递归收集 BioCLIP 缓存、下载分片或实验文件。BioCLIP 安装获取仍按模型配置流程单独完成。
+
+新安装器用 `installer-format.txt` 标记安全日志代际。若目标目录有旧卸载日志且没有匹配标记，则拒绝覆盖；应先备份配置和数据、使用新的空目录，不能先执行旧卸载器。该保护不等于旧安装目录自动迁移完成。

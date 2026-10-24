@@ -9,6 +9,10 @@
 #define AppExeName "start_web.bat"
 
 [Setup]
+#ifdef ValidationBuild
+AppId=WingScribe-Isolated-gpu-B7c3
+CreateUninstallRegKey=no
+#endif
 AppName={#AppName} (GPU)
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
@@ -16,8 +20,14 @@ DefaultDirName={userdocs}\WingScribe-GPU
 DefaultGroupName={#AppName} GPU
 OutputDir=Output
 OutputBaseFilename=WingScribe-Setup-GPU-{#AppVersion}
+#ifdef ValidationBuild
+Compression=none
+SolidCompression=no
+DiskSpanning=yes
+#else
 Compression=lzma2
 SolidCompression=yes
+#endif
 AllowNoIcons=yes
 CreateAppDir=yes
 DisableDirPage=no
@@ -54,6 +64,9 @@ Source: "build-gpu\data\references\*"; DestDir: "{app}\data\references"; Flags: 
 Source: "build-gpu\tools\exiftool.exe"; DestDir: "{app}\tools"; Flags: ignoreversion; Components: main
 Source: "build-gpu\tools\exiftool_files\*"; DestDir: "{app}\tools\exiftool_files"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
+; Installation generation
+Source: "build-gpu\installer-format.txt"; DestDir: "{app}"; Flags: ignoreversion; Components: main
+
 ; Documentation
 Source: "build-gpu\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 Source: "build-gpu\payload-manifest.json"; DestDir: "{app}"; Flags: ignoreversion; Components: main
@@ -65,7 +78,7 @@ Source: "build-gpu\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion; Co
 
 [Files]
 ; YOLO model files
-Source: "build-gpu\data\models\*"; DestDir: "{app}\data\models"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "build-gpu\data\models\yolo26n.pt"; DestDir: "{app}\data\models"; Flags: ignoreversion
 
 [Dirs]
 ; Create data directories
@@ -75,6 +88,7 @@ Name: "{app}\data\models"
 Name: "{app}\data\processed"
 Name: "{app}\data\references"
 
+#ifndef ValidationBuild
 [Icons]
 ; Start menu
 Name: "{group}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; WorkingDir: {app}; IconFilename: "{app}\src\web\static\favicon.ico"
@@ -89,6 +103,23 @@ Name: "{autodesktop}\WingScribe GPU"; Filename: "{app}\scripts\start_web.bat"; W
 ; User will be directed to the web-based configuration page on first visit
 Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Service (GPU)"; StatusMsg: "Starting Web service..."; Flags: nowait postinstall skipifsilent
 
+#endif
+
 ; No recursive uninstall deletion: preserve application-created configuration,
 ; databases, backups and photographs. Inno removes its tracked payload only.
 ; Legacy upgrade/uninstall logs require separate validation before release.
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Entry: TFindRec;
+  Marker: AnsiString;
+begin
+  Result := '';
+  if FindFirst(ExpandConstant('{app}\unins*.dat'), Entry) then begin
+    FindClose(Entry);
+    if (not LoadStringFromFile(ExpandConstant('{app}\installer-format.txt'), Marker)) or
+       (Trim(String(Marker)) <> 'wingscribe-safe-v1') then
+      Result := 'Legacy installation detected. Back up configuration and data, then choose a new empty installation directory. Do not run the old uninstaller before backing up your data.';
+  end;
+end;

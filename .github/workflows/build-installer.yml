@@ -68,18 +68,17 @@ jobs:
       - name: Download Inno Setup
         shell: pwsh
         run: |
-          # Download Inno Setup 6
-          $isUrl = "https://files.jrsoftware.org/is/6/isetup-6.4.1.exe"
-          $isPath = "C:\innosetup.exe"
-          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
-            Write-Host "Downloading Inno Setup..."
-            Invoke-WebRequest -Uri $isUrl -OutFile $isPath -UseBasicParsing
-            Write-Host "Installing Inno Setup..."
-            Start-Process $isPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\InnoSetup" -Wait
-            Remove-Item $isPath
-          } else {
-            Write-Host "Inno Setup already installed"
-          }
+          $isUrl = "https://github.com/jrsoftware/issrc/releases/download/is-6_4_1/innosetup-6.4.1.exe"
+          $isPath = Join-Path $env:RUNNER_TEMP "innosetup-6.4.1.exe"
+          $toolDir = Join-Path $env:RUNNER_TEMP "wingscribe-inno-6.4.1"
+          Invoke-WebRequest -Uri $isUrl -OutFile $isPath -UseBasicParsing
+          $expectedHash = "F41760E1F1AE15D2089BB6AB162E21720B92AE7506ED70667B39200063D68E34"
+          if ((Get-FileHash $isPath -Algorithm SHA256).Hash -ne $expectedHash) { throw "Inno Setup hash mismatch" }
+          $signature = Get-AuthenticodeSignature $isPath
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Martijn Laan*') { throw "Inno Setup signature mismatch" }
+          $setup = Start-Process $isPath -WindowStyle Hidden -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER','/NOICONS','/TASKS=""',('/DIR="'+$toolDir+'"')) -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed" }
+          "WINGSCRIBE_ISCC=$toolDir\ISCC.exe" >> $env:GITHUB_ENV
 
       - name: Run build script
         shell: pwsh
@@ -99,10 +98,8 @@ jobs:
       - name: Build installer with Inno Setup
         shell: pwsh
         run: |
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) {
-            $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
-          }
+          $iscc = $env:WINGSCRIBE_ISCC
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "Pinned Inno Setup compiler missing" }
           $version = "${{ steps.get_version.outputs.version }}"
           $iss = ".\installer\installer.iss"
           if ("${{ matrix.mode }}" -eq "gpu") {
@@ -110,6 +107,7 @@ jobs:
           }
           Write-Host "Building ${{ matrix.mode }} installer with $iss"
           & $iscc "/DAppVersion=$version" $iss
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
 
       - name: Get installer size
         shell: pwsh

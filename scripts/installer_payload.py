@@ -32,6 +32,8 @@ REFERENCE_FILES = (
 SOURCE_SUFFIXES = {'.py', '.html', '.js', '.css', '.ico', '.svg', '.png', '.jpg',
                    '.jpeg', '.gif', '.webp', '.woff', '.woff2', '.ttf', '.json', '.txt'}
 DOC_SUFFIXES = {'.md', '.png', '.jpg', '.jpeg', '.svg'}
+# Fingerprint of the repository-bundled model, not an upstream signature.
+BUNDLED_MODEL_SHA256 = '9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef'
 
 
 def no_links(path: Path):
@@ -79,10 +81,15 @@ def payload_files(root: Path, mode: str):
     for name in ('README.md', 'CLAUDE.md', 'pyproject.toml', 'uv.lock'):
         files[name] = root/name
     files['requirements.txt'] = root/'installer/locks'/('cpu.txt' if mode=='cpu' else 'cu128.txt')
+    files['installer-format.txt'] = root/'installer/installer-format.txt'
+    model = root/'installer/models/yolo26n.pt'
+    files['data/models/yolo26n.pt'] = model
     for path in files.values():
         no_links(path)
         if not path.is_file():
             raise ValueError(f'Missing payload file: {path}')
+    if hashlib.sha256(model.read_bytes()).hexdigest() != BUNDLED_MODEL_SHA256:
+        raise ValueError('Bundled YOLO model differs from the reviewed fingerprint')
     return files
 
 

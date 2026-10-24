@@ -9,7 +9,7 @@ from scripts import installer_payload as payload
 
 
 @pytest.fixture
-def repo(tmp_path):
+def repo(tmp_path, monkeypatch):
     for directory in ('src', 'docs'):
         (tmp_path/directory).mkdir()
     (tmp_path/'src/main.py').write_text('app')
@@ -20,10 +20,14 @@ def repo(tmp_path):
     inputs += ['installer/scripts/'+p for p in payload.STARTUP_SCRIPTS]
     inputs += ['data/references/'+p for p in payload.REFERENCE_FILES]
     inputs += ['installer/locks/cpu.txt','installer/locks/cu128.txt']
+    inputs += ['installer/models/yolo26n.pt']
+    inputs += ['installer/installer-format.txt']
     for relative in inputs:
         path = tmp_path/relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(relative)
+    monkeypatch.setattr(payload, 'BUNDLED_MODEL_SHA256', hashlib.sha256(
+        (tmp_path/'installer/models/yolo26n.pt').read_bytes()).hexdigest())
     locked = ['uv.lock','pyproject.toml','installer/locks/cpu.txt','installer/locks/cu128.txt']
     manifest = {'schema':1,'sha256':{p:hashlib.sha256((tmp_path/p).read_bytes()).hexdigest() for p in locked}}
     (tmp_path/'installer/locks/manifest.json').write_text(json.dumps(manifest))
@@ -61,6 +65,16 @@ def test_preflight_missing_input_does_not_clean_existing_output(repo):
     with pytest.raises(ValueError,match='Missing payload'):
         payload.stage(repo,'cpu')
     assert marker.read_text() == 'cached'
+
+
+def test_changed_model_is_rejected_before_output_cleanup(repo):
+    marker = repo/'installer/build-cpu/config/settings.yaml'
+    marker.parent.mkdir(parents=True)
+    marker.write_text('preserve')
+    (repo/'installer/models/yolo26n.pt').write_bytes(b'changed')
+    with pytest.raises(ValueError, match='fingerprint'):
+        payload.stage(repo, 'cpu')
+    assert marker.read_text() == 'preserve'
 
 
 def test_junction_build_root_rejected_before_any_cleanup(repo, monkeypatch):

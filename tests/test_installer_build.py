@@ -36,6 +36,26 @@ def test_uninstaller_does_not_recursively_remove_user_data():
         assert 'filesandordirs' not in text
 
 
+def test_installer_model_whitelist_and_legacy_upgrade_gate():
+    for name, mode in [('installer.iss', 'cpu'), ('installer-gpu.iss', 'gpu')]:
+        text = (PROJECT_ROOT / 'installer' / name).read_text(encoding='utf-8-sig')
+        assert f'Source: "build-{mode}\\data\\models\\yolo26n.pt"' in text
+        assert f'Source: "build-{mode}\\data\\models\\*"' not in text
+        assert 'function PrepareToInstall' in text
+        assert "{app}\\unins*.dat" in text
+        assert 'wingscribe-safe-v1' in text
+        assert f'AppId=WingScribe-Isolated-{mode}-B7c3' in text
+        assert 'CreateUninstallRegKey=no' in text
+
+
+def test_ci_uses_verified_pinned_compiler():
+    text = (PROJECT_ROOT / '.github/workflows/build-installer.yml').read_text(encoding='utf-8')
+    assert 'releases/download/is-6_4_1/innosetup-6.4.1.exe' in text
+    assert 'Get-AuthenticodeSignature' in text and 'Get-FileHash' in text
+    assert '$iscc = $env:WINGSCRIBE_ISCC' in text
+    assert 'Installer compilation failed' in text
+
+
 def test_exiftool_preparation_failure_stops_build_before_install(tmp_path):
     import shutil
     import subprocess

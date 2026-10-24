@@ -98,46 +98,6 @@ function Copy-SourceCode {
 }
 
 #===============================================================================
-# Step 5.5: Download YOLO model
-#===============================================================================
-function Download-YoloModel {
-    Log-Step "Downloading YOLO model..."
-
-    $modelDir = Join-Path $BUILD_DIR "data\models"
-    Ensure-Directory $modelDir
-
-    # Get YOLO model name from config
-    $yoloModelFull = "data/models/yolo26n.pt"
-    $configFile = Join-Path $PROJECT_ROOT "config\settings.example.yaml"
-    if (Test-Path $configFile) {
-        $configContent = Get-Content $configFile -Raw
-        if ($configContent -match 'yolo_model:\s*(\S+\.pt)') {
-            $yoloModelFull = $Matches[1].Trim('"', "'")
-        }
-    }
-
-    # Extract just the filename from the full path
-    $yoloModel = [System.IO.Path]::GetFileName($yoloModelFull)
-    $modelPath = Join-Path $modelDir $yoloModel
-
-    if (Test-Path $modelPath) {
-        Log-Info "  YOLO model already exists: $yoloModel"
-    } else {
-        Log-Info "  Checking for YOLO model..."
-
-        # 1. Require bundled model in installer/models for offline-friendly installers.
-        $localModel = Join-Path $INSTALLER_DIR "models\$yoloModel"
-        if (Test-Path $localModel) {
-            Copy-Item $localModel -Destination $modelPath -Force
-            Log-Success "  Copied YOLO model from installer/models"
-            return
-        }
-
-        throw "Bundled YOLO model missing: $localModel. Add this file to repository before packaging."
-    }
-}
-
-#===============================================================================
 # Step 8: Self-test runtime before packaging
 #===============================================================================
 function Test-EmbeddedRuntime {
@@ -156,6 +116,10 @@ function Test-EmbeddedRuntime {
         throw "Self-test failed: python import check failed"
     }
 
+    $previousYoloConfig = $env:YOLO_CONFIG_DIR
+    $env:YOLO_CONFIG_DIR = Join-Path $BUILD_DIR "data\runtime-config"
+    Ensure-Directory $env:YOLO_CONFIG_DIR
+    try {
     $yoloModelPath = Join-Path $BUILD_DIR "data\models\yolo26n.pt"
     if (Test-Path $yoloModelPath) {
         & $pythonExe -c "from ultralytics import YOLO; YOLO(r'$yoloModelPath'); print('yolo-load-ok')"
@@ -163,7 +127,7 @@ function Test-EmbeddedRuntime {
             throw "Self-test failed: yolo model load failed ($yoloModelPath)"
         }
     } else {
-        Log-Warn "Self-test skip: model not found at $yoloModelPath"
+        throw "Self-test failed: model not found at $yoloModelPath"
     }
 
     $requiredStaticFiles = @(
@@ -193,6 +157,9 @@ function Test-EmbeddedRuntime {
     }
 
     Log-Success "Embedded runtime self-test passed"
+    } finally {
+        $env:YOLO_CONFIG_DIR = $previousYoloConfig
+    }
 }
 
 #===============================================================================
@@ -253,7 +220,6 @@ function Invoke-Build {
     }
     # Keep installed wheel contents intact; no post-install package trimming.
     Copy-SourceCode
-    Download-YoloModel
     Test-EmbeddedRuntime
 
     Write-Host ""

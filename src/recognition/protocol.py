@@ -6,7 +6,7 @@
 """
 from enum import Enum
 from typing import List, Optional, Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import datetime
 
 
@@ -61,15 +61,14 @@ class RecognizeRequest(BaseModel):
             raise ValueError("Provide exactly one non-empty image source")
         return self
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "image_path": "/path/to/bird.jpg",
-                "platform": "huggingface",
-                "top_k": 5,
-                "timeout": 60
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "image_path": "/path/to/bird.jpg",
+            "platform": "huggingface",
+            "top_k": 5,
+            "timeout": 60
         }
+    })
 
 
 class RecognizeResponse(BaseModel):
@@ -82,23 +81,22 @@ class RecognizeResponse(BaseModel):
     processing_time_ms: int = Field(..., description="处理耗时（毫秒）")
     error: Optional[str] = Field(None, description="错误信息")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "image_path": "/path/to/bird.jpg",
-                "results": [
-                    {
-                        "label": "Great Tit",
-                        "scientific_name": "Parus major",
-                        "chinese_name": "大山雀",
-                        "confidence": 0.95
-                    }
-                ],
-                "platform": "huggingface",
-                "processing_time_ms": 1250
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "success": True,
+            "image_path": "/path/to/bird.jpg",
+            "results": [
+                {
+                    "label": "Great Tit",
+                    "scientific_name": "Parus major",
+                    "chinese_name": "大山雀",
+                    "confidence": 0.95
+                }
+            ],
+            "platform": "huggingface",
+            "processing_time_ms": 1250
         }
+    })
 
 
 class BatchJobStatus(str, Enum):
@@ -124,16 +122,15 @@ class BatchRecognizeRequest(BaseModel):
     webhook_url: Optional[str] = Field(None, description="完成后回调地址")
     notify_email: Optional[str] = Field(None, description="完成后通知邮箱")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "images": [
-                    {"image_path": "/path/to/bird1.jpg", "platform": "huggingface"},
-                    {"image_path": "/path/to/bird2.jpg", "platform": "local"}
-                ],
-                "webhook_url": "https://example.com/callback"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "images": [
+                {"image_path": "/path/to/bird1.jpg", "platform": "huggingface"},
+                {"image_path": "/path/to/bird2.jpg", "platform": "local"}
+            ],
+            "webhook_url": "https://example.com/callback"
         }
+    })
 
 
 class BatchRecognizeResponse(BaseModel):
@@ -148,17 +145,16 @@ class BatchRecognizeResponse(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     completed_at: Optional[datetime] = None
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "batch_id": "batch_abc123",
-                "total": 10,
-                "completed": 5,
-                "failed": 0,
-                "status": "processing",
-                "progress_percent": 50.0
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "batch_id": "batch_abc123",
+            "total": 10,
+            "completed": 5,
+            "failed": 0,
+            "status": "processing",
+            "progress_percent": 50.0
         }
+    })
 
 
 class BatchResultItem(BaseModel):
@@ -179,22 +175,22 @@ class BatchResultResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "batch_id": "batch_abc123",
-                "status": "completed",
-                "total": 10,
-                "results": [
-                    {
-                        "index": 0,
-                        "image_path": "/path/to/bird1.jpg",
-                        "success": True,
-                        "result": {"success": True, "results": [...], "processing_time_ms": 1250}
-                    }
-                ]
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "batch_id": "batch_abc123",
+            "status": "completed",
+            "total": 1,
+            "created_at": "2026-10-25T00:00:00",
+            "results": [
+                {
+                    "index": 0,
+                    "image_path": "/path/to/bird1.jpg",
+                    "success": True,
+                    "result": {"success": True, "platform": "local", "results": [], "processing_time_ms": 1250}
+                }
+            ]
         }
+    })
 
 
 class PlatformInfo(BaseModel):

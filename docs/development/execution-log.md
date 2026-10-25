@@ -527,3 +527,11 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 按 [本地维护计划](b8-maintenance-plan.md) 将五个旧式 Pydantic Config 换为 ConfigDict，保持字段、约束和默认值。
 - 复现批量结果 schema 的样例包含 Ellipsis，JSON 序列化抛出 TypeError；改为合法结果并补齐平台、创建时间，使全部样例可通过模型校验。
 - 协议/识别路由/独立服务 18 项测试通过，包括真实 `/openapi.json` 返回可解析 JSON；仅剩 Starlette 测试客户端的既有弃用警告。本轮不更换 httpx 或其他锁定依赖，不进行云端线上验证。全量回归完成：822 passed、1 skipped、1 条既有 Starlette 测试客户端弃用警告，63.61 秒；日志 `b8a-regression.log`。
+
+
+## B7d 改用 VMware 并开始准备安装（2026-10-25）
+
+- 用户明确授权开始安装并优先 VMware；已更新方案，先前“不安装”不再代表当前意图。官方仍免费供个人、教育和商业使用。
+- 实测 Windows 11 家庭版 10.0.26300，HypervisorPresent=true；常见卸载注册项及 Downloads 未找到已有 VMware，winget 精确查询/搜索也无 Workstation 条目。
+- 官方下载入口实际重定向登录页；未找到可信同版本国内镜像，未使用第三方重封装。已向用户请求已有官方包路径或从门户下载；账号资料和条款由用户处理。尚未安装宿主驱动、创建虚拟机或重启。
+- 不凭 VirtualBox 体验推断用户配置错误，也不保证 VMware 更快。先保留宿主安全设置，后续记录 WHP 模式，用同一客体和负载核对性能。

@@ -1,6 +1,6 @@
 # B7d 本机干净 Windows 虚拟机验收方案
 
-2026-10-25。用户选择先另行规划本机虚拟机环境。本文件是实施方案，尚未授权安装宿主虚拟机软件、接受许可或重启。
+2026-10-25。用户已改为授权开始安装虚拟机，并指定优先 VMware Workstation；此前“先保留、不安装”已被本次指令替代。账户验证、许可界面和必要重启仍单独处理，不自动关闭宿主安全功能。
 
 ## 本机核对与选择
 
@@ -8,7 +8,7 @@
 - `HypervisorPresent=true`，但处理器 WMI 虚拟化与 SLAT 字段均为 false；已有 hypervisor 时不能仅凭这些字段断言 BIOS 未开启。安装前核对所选工具的兼容诊断，不据此修改 BIOS 或关闭安全功能。
 - 未发现 PATH 中的 Sandbox、VBoxManage、vmrun 或 Get-VM，也未发现常见 Oracle/VMware 安装目录。此检查不能证明所有自定义位置均不存在。
 - Windows 家庭版不支持客户端 Hyper-V 角色；Windows Sandbox 支持版本表亦未包含 Home。不建议为了这次验收先升级系统版本或使用非官方启用脚本。
-- 首选评估 VirtualBox 7.2 系列基础包，使用 Windows 11 x64 来宾。具体补丁版本在真正实施时依据官方发布和签名重新核定并锁定，不把搜索缓存的“最新版”直接写入下载脚本。不需要 Extension Pack。
+- 按用户选择使用 VMware Workstation Pro，使用 Windows 11 x64 来宾。官方目前仍免费供个人、教育和商业使用；安装前按官方发布记录、下载文件版本及 Authenticode 签名核定具体版本。VirtualBox 方案不再执行。
 
 依据：[Hyper-V 安装要求](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-hyper-v)、[Sandbox 支持版本](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/)、[VirtualBox 安装说明](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/installation.html)、[虚拟机 TPM/安全启动](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/working-with-vms.html)。
 
@@ -25,7 +25,7 @@
 | 文件交换 | 只读验收包目录，包含安装器全部分卷、摘要清单、授权测试副本；不共享照片源目录、整个用户目录或 NAS 凭据 |
 | 快照 | 干净系统基线、安装前、升级前；每次变体测试还原基线 |
 
-下载遵循用户预设：可信国内镜像有同版本时优先直连并验证官方哈希/签名，否则说明后使用官方来源；不关闭 TLS 校验、不改全局代理。VirtualBox 安装会增加宿主驱动，可能影响虚拟网络或需要重启，真正安装前须确认。
+下载遵循用户预设：可信国内镜像有同版本时优先直连并验证官方哈希/签名，否则说明后使用官方来源；不关闭 TLS 校验、不改全局代理。VMware 安装会增加宿主驱动和虚拟网络，用户已授权安装；若需要重启，先通知用户，不自动重启。
 
 ## 分步执行及验收
 
@@ -40,4 +40,14 @@
 
 ## 仍需确认
 
-安装工具和宿主驱动、虚拟机目录、Windows 来宾来源/许可由用户确认后实施。若不接受该环境方案，B7d 保持未验证，不阻止其他本地代码维护。
+宿主 VMware 安装已获授权。Windows 来宾来源/许可、账户及必要重启仍需用户参与。当前 winget 无对应包，Downloads 未发现已有安装包，等待官方包路径或门户下载。
+
+
+## VMware 性能判断与下载依据
+
+- 本机当前 `HypervisorPresent=true`。VMware 在 Hyper-V/VBS 活跃时使用 Windows Hypervisor Platform；换成 VMware 不保证消除这一后端的性能影响，不据 WMI 的单项 false 判定 BIOS 关闭。
+- 不把 VirtualBox 的体验差直接归因于用户配置。先固定 4 vCPU、12 GiB 内存、SSD 上的动态磁盘、同一客体和测试负载；安装 VMware Tools 后分别评估界面响应、磁盘和 CPU 工作。不给客体过多 vCPU，不用虚拟显卡宣称 CUDA 直通。
+- 不为了跑分关闭 VBS、内存完整性或其他宿主保护。若存在性能问题，记录实际 WHP 模式后再讨论取舍。
+- 官方下载需要 Broadcom 基础账户，可能需要完整资料审核与条款确认。用户处理账户步骤；不填写虚构资料，不用汉化重封装或破解安装包。
+
+来源：[免费政策](https://blogs.vmware.com/cloud-foundation/2024/11/11/vmware-fusion-and-workstation-are-now-free-for-all-users/)、[26H1 官方说明](https://blogs.vmware.com/cloud-foundation/2026/05/14/announcing-vmware-workstation-and-fusion-26h1/)、[WHP/VBS 运行模式](https://knowledge.broadcom.com/external/article?legacyId=76918)、[官方下载流程](https://knowledge.broadcom.com/external/article/397417/downloading-free-software-from-the-broad.html)。

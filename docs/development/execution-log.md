@@ -535,3 +535,17 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 实测 Windows 11 家庭版 10.0.26300，HypervisorPresent=true；常见卸载注册项及 Downloads 未找到已有 VMware，winget 精确查询/搜索也无 Workstation 条目。
 - 官方下载入口实际重定向登录页；未找到可信同版本国内镜像，未使用第三方重封装。已向用户请求已有官方包路径或从门户下载；账号资料和条款由用户处理。尚未安装宿主驱动、创建虚拟机或重启。
 - 不凭 VirtualBox 体验推断用户配置错误，也不保证 VMware 更快。先保留宿主安全设置，后续记录 WHP 模式，用同一客体和负载核对性能。
+
+
+## B7d VirtualBox 安装启动（2026-10-25）
+
+- 用户最终改用 VirtualBox 并授权配置；已从清华镜像直接下载固定 7.2.22-175245，官方 SHA-256 一致，Oracle America, Inc. Authenticode Valid。VC++ x64 14.51.36247 已安装。
+- 启动基础组件安装（ADDLOCAL=VBoxApplication），关闭自动启动/重启，未选桥接、USB、Python API 和 Extension Pack。当前检测到 Windows consent.exe，等待用户在安全桌面处理管理员授权；尚未确认安装完成。
+- Downloads 未发现 ISO，已询问采用微软官方评估镜像或用户已有 Windows 11 ISO。虚拟机目录尚未创建，未修改 VBS/宿主 hypervisor。
+
+
+## B7d 虚拟机硬件配置（2026-10-25）
+
+- 用户完成 VirtualBox 安装并提供 Windows 11 ISO；已检查镜像结构及计算本地摘要。实际安装在 D:\Program Files\Oracle\VirtualBox。
+- 创建独立 WingScribe-QA（D:\VMs），4 vCPU/12 GiB/100 GiB 动态 VDI、EFI/TPM2/Secure Boot、NAT，配置读取验证通过；宿主安全设置不变。
+- 首次启动读取 cdboot.efi，但错过光盘按键提示；UI 截图确认后自动操作无效果，已请用户手动重置并进入 Windows 安装页面。尚未接受客体许可、安装系统或开始 B7d 业务验收。完整参数与 ISO 摘要见 b7d-vm-plan.md。

@@ -1,6 +1,6 @@
 # B7d 本机干净 Windows 虚拟机验收方案
 
-2026-10-25。用户已改为授权开始安装虚拟机，并指定优先 VMware Workstation；此前“先保留、不安装”已被本次指令替代。账户验证、许可界面和必要重启仍单独处理，不自动关闭宿主安全功能。
+2026-10-25。用户最终决定改用 VirtualBox 并授权安装配置；此前“先保留、不安装”已被本次指令替代。账户验证、许可界面和必要重启仍单独处理，不自动关闭宿主安全功能。
 
 ## 本机核对与选择
 
@@ -8,7 +8,7 @@
 - `HypervisorPresent=true`，但处理器 WMI 虚拟化与 SLAT 字段均为 false；已有 hypervisor 时不能仅凭这些字段断言 BIOS 未开启。安装前核对所选工具的兼容诊断，不据此修改 BIOS 或关闭安全功能。
 - 未发现 PATH 中的 Sandbox、VBoxManage、vmrun 或 Get-VM，也未发现常见 Oracle/VMware 安装目录。此检查不能证明所有自定义位置均不存在。
 - Windows 家庭版不支持客户端 Hyper-V 角色；Windows Sandbox 支持版本表亦未包含 Home。不建议为了这次验收先升级系统版本或使用非官方启用脚本。
-- 按用户选择使用 VMware Workstation Pro，使用 Windows 11 x64 来宾。官方目前仍免费供个人、教育和商业使用；安装前按官方发布记录、下载文件版本及 Authenticode 签名核定具体版本。VirtualBox 方案不再执行。
+- 按用户最终选择使用 VirtualBox 7.2.22（175245），Windows 11 x64 来宾；清华镜像直连下载，官方 SHA-256 与 Oracle Authenticode 已验证。仅安装 VBoxApplication，使用 NAT，不安装 Extension Pack、桥接或 USB 组件。
 
 依据：[Hyper-V 安装要求](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-hyper-v)、[Sandbox 支持版本](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/)、[VirtualBox 安装说明](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/installation.html)、[虚拟机 TPM/安全启动](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/working-with-vms.html)。
 
@@ -25,7 +25,7 @@
 | 文件交换 | 只读验收包目录，包含安装器全部分卷、摘要清单、授权测试副本；不共享照片源目录、整个用户目录或 NAS 凭据 |
 | 快照 | 干净系统基线、安装前、升级前；每次变体测试还原基线 |
 
-下载遵循用户预设：可信国内镜像有同版本时优先直连并验证官方哈希/签名，否则说明后使用官方来源；不关闭 TLS 校验、不改全局代理。VMware 安装会增加宿主驱动和虚拟网络，用户已授权安装；若需要重启，先通知用户，不自动重启。
+下载遵循用户预设：可信国内镜像有同版本时优先直连并验证官方哈希/签名，否则说明后使用官方来源；不关闭 TLS 校验、不改全局代理。VirtualBox 安装会增加宿主驱动，用户已授权安装；若需要重启，先通知用户，不自动重启。
 
 ## 分步执行及验收
 
@@ -40,7 +40,7 @@
 
 ## 仍需确认
 
-宿主 VMware 安装已获授权。Windows 来宾来源/许可、账户及必要重启仍需用户参与。当前 winget 无对应包，Downloads 未发现已有安装包，等待官方包路径或门户下载。
+VirtualBox 宿主安装配置已获授权。Windows 来宾镜像来源、许可/账户及必要重启仍需用户参与。
 
 
 ## VMware 性能判断与下载依据
@@ -51,3 +51,19 @@
 - 官方下载需要 Broadcom 基础账户，可能需要完整资料审核与条款确认。用户处理账户步骤；不填写虚构资料，不用汉化重封装或破解安装包。
 
 来源：[免费政策](https://blogs.vmware.com/cloud-foundation/2024/11/11/vmware-fusion-and-workstation-are-now-free-for-all-users/)、[26H1 官方说明](https://blogs.vmware.com/cloud-foundation/2026/05/14/announcing-vmware-workstation-and-fusion-26h1/)、[WHP/VBS 运行模式](https://knowledge.broadcom.com/external/article?legacyId=76918)、[官方下载流程](https://knowledge.broadcom.com/external/article/397417/downloading-free-software-from-the-broad.html)。
+
+
+## VirtualBox 最终执行选择
+
+用户随后改回 VirtualBox，上述 VMware 性能讨论仅作选型记录。VirtualBox 不承诺与 VMware 相同性能。基础配置：4 vCPU、12 GiB 内存、100 GiB 动态 VDI、UEFI/TPM 2.0、安全启动、NAT；暂不开启 3D，安装客体增强功能后再测试显示性能。保留宿主 hypervisor/VBS，不修改系统代理。
+
+安装包：`VirtualBox-7.2.22-175245-Win.exe`；SHA-256 `afd0ff1656cbe04ed88ce619594ae021419d97cce89fa9bdc443e9a963f1713f`；Authenticode Valid，Oracle America, Inc.。来源为清华同版本镜像，摘要对照 [Oracle 官方清单](https://download.virtualbox.org/virtualbox/7.2.22/SHA256SUMS)。
+
+
+## 已配置的环境（2026-10-25）
+
+- 用户完成 VirtualBox 安装，实际目录 `D:\Program Files\Oracle\VirtualBox`，命令行版本 `7.2.22r175245`。
+- 已创建 `D:\VMs\WingScribe-QA\WingScribe-QA.vbox`，UUID `d15d556b-6bd2-4c38-8dd6-cca60d4e9546`。4 vCPU、12288 MiB、128 MiB 显存、VBoxSVGA（3D 关闭）、100 GiB 动态 VDI/SATA SSD、NAT；剪贴板/拖放关闭，无共享目录。
+- EFI、TPM 2.0、微软签名/Oracle 平台密钥已配置，SecureBoot=on。
+- 用户 ISO：`D:\Download\Windows11_Client_x64_zh-cn_26300_9457.iso`，9112440832 字节；本地 SHA-256 `B795B52D598BF8FDEA5975844731F4A50C5713876CEFC513884354272B023AF0`。结构含 EFI 光盘引导、boot.wim、install.wim；未取得官方摘要，不声称来源校验通过。
+- 虚拟机已实际启动至光盘引导；错过 CD/DVD 按键倒计时后出现 VMBootFail。UI 截图已确认提示，但自动点击/按键没有效果，交由用户重置并在倒计时按空格；尚未安装 Windows，不标记干净系统验收通过。

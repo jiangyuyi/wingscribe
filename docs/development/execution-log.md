@@ -549,3 +549,12 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 用户完成 VirtualBox 安装并提供 Windows 11 ISO；已检查镜像结构及计算本地摘要。实际安装在 D:\Program Files\Oracle\VirtualBox。
 - 创建独立 WingScribe-QA（D:\VMs），4 vCPU/12 GiB/100 GiB 动态 VDI、EFI/TPM2/Secure Boot、NAT，配置读取验证通过；宿主安全设置不变。
 - 首次启动读取 cdboot.efi，但错过光盘按键提示；UI 截图确认后自动操作无效果，已请用户手动重置并进入 Windows 安装页面。尚未接受客体许可、安装系统或开始 B7d 业务验收。完整参数与 ISO 摘要见 b7d-vm-plan.md。
+
+## B7d 客体基线核对与当前源码重建（2026-10-26）
+
+- 用户手动完成 Windows、增强功能和快照并授权继续。现场确认 Windows 11 10.0.26300.9457、增强功能 7.2.22 r175245 及活动设施；基线快照为“备份 1”（5e124d08-13b4-45af-8992-eb592d018d5b）。未覆盖或恢复用户快照。
+- CPU 当前源码重新暂存，固定运行时/ExifTool/锁文件校验、YOLO 加载和启动自检均通过，进程退出 0。沙箱中的 ExifTool 启动曾返回 WinError 623，在正常宿主执行通过，不据此修改应用代码。日志 `.codex-tmp/b7d-cpu-build.log`。
+- CPU 0.0.0.5 使用普通安装器配置重新压缩编译，输出 `.codex-tmp/b7d-share`，日志 `.codex-tmp/b7d-cpu-compile.log`；本条记录时仍在运行，不标记编译/安装通过。GPU 当前源码暂存和运行时自检也已启动，日志 `.codex-tmp/b7d-gpu-build.log`。
+- 为 WingScribe-QA 添加临时只读自动挂载共享 B7dQA，仅指向本次验收目录，已读取确认 readonly。没有共享整个仓库、NAS 或用户目录。
+- 准备客体 CPU 安装检查脚本，PowerShell 语法解析通过；包含客体基线、包大小/SHA-256、独立路径新装和自检，拒绝覆盖既有目标/报告。尚未在客体运行；等待账户是否无密码的确认，有密码则交由用户手动启动脚本，不在聊天收集凭据。
+- GPU 当前源码暂存和运行时自检随后完成，退出 0；尚未编译新的 GPU 安装包，也未在客体安装。

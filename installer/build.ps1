@@ -219,6 +219,7 @@ function Invoke-Build {
         Install-Dependencies
     }
     # Keep installed wheel contents intact; no post-install package trimming.
+    & (Join-Path $PROJECT_ROOT "scripts\prepare_vcredist.ps1") -Mode $modeLower
     Copy-SourceCode
     Test-EmbeddedRuntime
 

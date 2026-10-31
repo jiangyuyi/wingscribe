@@ -1,4 +1,4 @@
-﻿; WingScribe GPU Installer Script
+; WingScribe GPU Installer Script
 ; Version with CUDA support for NVIDIA GPUs
 
 #define AppName "WingScribe"
@@ -50,6 +50,7 @@ Name: "desktop"; Description: "Desktop shortcut"; Types: default
 Name: "desktop"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"; Components: desktop
 
 [Files]
+Source: "build-gpu\prerequisites\vc_redist.x64.exe"; Flags: dontcopy
 ; Embedded Python runtime with pre-installed packages (GPU version)
 Source: "build-gpu\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
 
@@ -111,6 +112,7 @@ Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Ser
 ; Legacy upgrade/uninstall logs require separate validation before release.
 
 [Code]
+#include "vcredist.iss"
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Entry: TFindRec;
@@ -123,4 +125,5 @@ begin
        (Trim(String(Marker)) <> 'wingscribe-safe-v1') then
       Result := 'Legacy installation detected. Back up configuration and data, then choose a new empty installation directory. Do not run the old uninstaller before backing up your data.';
   end;
+  if Result = '' then Result := PrepareVCRuntime(NeedsRestart);
 end;

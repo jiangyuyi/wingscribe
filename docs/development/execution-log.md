@@ -650,3 +650,12 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - `validate-lifecycle.ps1` 语法检查通过。`lifecycle-data.py` 的复制/封存/正常核验/篡改拒绝/恢复核验五项临时夹具检查通过；显式关闭 SQLite 连接后临时目录清理通过。脚本及清单位于只读验收共享，尚未在客体执行。
 - CPU 0.0.0.7 隔离无压缩测试包已启动编译，完成后记录退出码及 SHA-256 再交给用户。仍需人工处理客体启动命令；其余已有运行库下的新装/升级/卸载预计无需弹窗。
 - 后续结果：CPU 0.0.0.7 隔离测试包编译退出 0，EXE/分卷 SHA-256 清单已生成并实际复验通过。客体入口为只读共享中的 validate-lifecycle.ps1；尚未执行客体升级或卸载。
+
+
+## B7d CPU 客体跨版本升级与卸载保留通过（2026-10-31）
+
+- 实际回传 `lifecycle-report.json` 为 passed/complete，新装、升级、卸载均 passed；对应 Inno 日志明确安装/卸载成功，无需重启。范围为独立目录 `C:\WingScribe-Lifecycle-CPU006007\app`，原 CPU/GPU 安装及 business 验收数据未卸载。
+- 0.0.0.6 新装后，复制真实业务数据、自检并封存清单；升级至 0.0.0.7 后校验、应用自检和再次校验均通过；卸载后程序解释器已移除，原有独立 CPU 解释器再次完成文件与数据库检查。
+- 清单共 19 个文件：8 张输入 JPEG 副本、6 张归档副本、2 个真实业务 SQLite、1 份 SQLite 备份、设置及测试假密钥配置。升级/卸载后的 SHA-256 保持一致，两个数据库和备份的 integrity_check/foreign_key_check 均通过。不同安装器版本使用相同应用载荷，不视为旧数据库 schema 迁移验收。
+- 证据 `.codex-tmp/b7d-reports/lifecycle-{report.json,preserved-files.json,transcript.log,new-install.log,upgrade.log,uninstall.log}`。卸载日志删除非空用户数据目录返回 145，符合保留用户文件的预期；最终卸载成功，不能据该行单独判断失败。
+- B7d 仍未全部收口：GPU 客体跨版本升级/卸载、真实 SMB 故障、安装取消/拒绝提权/需重启分支、最终正式包重建及发布门槛继续保留。宿主 GPU 升级/卸载结果与本轮客体 CPU 证据分别记录。

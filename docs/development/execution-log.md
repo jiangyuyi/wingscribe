@@ -615,3 +615,12 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 本轮是 0.0.0.6 隔离测试包真实客体流程，不等同正式压缩包发布、安装取消/拒绝提权/重启分支验证，也未验收业务模型离线推理。
 - 下一步脚本 `validate-offline-gpu006.ps1` 已通过语法检查：新端口验证 CPU 离线启动、校验 GPU 全部分卷、已有运行库时静默安装 GPU 独立目录、验证 CUDA 不可用情况下 CPU 张量与 Web 启动；不声称 CUDA GPU 推理或识别模型自动回退已通过。
 - 仅断开 WingScribe-QA 的虚拟网线（cableconnected1=off），保留 Guest Additions 文件共享，宿主/NAS 网络不动。待该轮完成或失败后恢复虚拟网线。客体脚本等待用户启动，尚无下一批执行结果。
+
+
+## B7d CPU 离线与 GPU 无 CUDA 客体验收通过（2026-10-31）
+
+- 用户执行后实际回传 `gpu006-report.json`：status=passed、stage=complete；cpu_offline、gpu_install、gpu_no_cuda、gpu_web 全部 passed，GPU 安装退出码 0。
+- 测试期间虚拟网线关闭，CPU 新进程自检与独立端口 Web 启动通过；GPU 全部分卷校验后在已有合格 VC++ 的客体中静默新装，随后 torch CUDA 构建版本 12.8、CUDA 不可用与 CPU 张量检查通过，GPU 包独立 Web 进程启动通过。两个临时 Web 进程由脚本关闭，原 CPU 页面服务未主动终止。
+- 证据：`.codex-tmp/b7d-reports/gpu006-report.json`、`gpu006-transcript.log`、`gpu006-install.log` 以及 CPU/GPU 两组 Web 日志。启动期间初始 HTTP 探测未连接，随后均成功，不是最终错误。
+- 验证后已恢复 WingScribe-QA 虚拟网线，读取确认 cableconnected1=on。未操作宿主网络或 NAS。
+- 本轮只覆盖无模型配置的安装/基础离线启动及 CPU 张量，不等同识别模型离线推理、GPU 自动回退逻辑、真实 CUDA、业务数据库升级或卸载保留通过。后续仍按计划验证模型/8 张副本流程、客体升级卸载与真实 NAS 故障；取消/拒绝提权/需重启分支尚未实际触发。

@@ -154,6 +154,9 @@ def validate_config_path(path: str, path_type: str = "directory"):
 
 
 def open_folder_dialog(title: str, initial_dir: str = "") -> str:
+    if sys.platform == 'win32':
+        from src.web.native_picker import choose_path
+        return choose_path('folder', title, initial_dir)
     result = {"path": None, "error": None}
 
     def _run_dialog():
@@ -180,6 +183,9 @@ def open_folder_dialog(title: str, initial_dir: str = "") -> str:
 
 
 def open_file_dialog(title: str, initial_file: str = "", file_types: str = "") -> str:
+    if sys.platform == 'win32':
+        from src.web.native_picker import choose_path
+        return choose_path('file', title, initial_file, file_types)
     result = {"path": None, "error": None}
 
     def _run_dialog():

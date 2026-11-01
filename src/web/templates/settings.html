@@ -324,8 +324,8 @@
                 const browseBtn = document.createElement('button');
                 browseBtn.type = 'button';
                 browseBtn.className = 'btn btn-outline-secondary';
-                browseBtn.innerHTML = item.type === 'file' ? '<i class="bi bi-file-earmark"></i>' : '<i class="bi bi-folder"></i>';
-                browseBtn.onclick = () => browsePath(input);
+                browseBtn.textContent = item.type === 'file' ? '选择文件' : '选择文件夹';
+                browseBtn.onclick = () => browsePath(input, browseBtn);
                 inputGroup.appendChild(browseBtn);
 
                 div.appendChild(inputGroup);
@@ -486,61 +486,31 @@
             }
         }
 
-        async function browsePath(input) {
-            const pathType = input.dataset.type || 'directory';
-            const currentPath = input.value || "";
-
-            // Call backend API to open folder or file selection dialog
+        async function browsePath(input, button) {
+            const isFile = input.dataset.type === 'file';
+            const label = button.textContent;
+            button.disabled = true;
+            button.textContent = '等待选择…';
             try {
-                let response, data;
-
-                if (pathType === 'file') {
-                    // Open file selection dialog
-                    response = await fetch('/api/config/browse_file', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            title: '选择文件',
-                            initial_path: currentPath,
-                            file_types: 'xlsx|xls|db|sqlite'
-                        })
-                    });
-                } else {
-                    // Open folder selection dialog (default)
-                    response = await fetch('/api/config/browse_folder', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            title: '选择文件夹',
-                            initial_path: currentPath
-                        })
-                    });
-                }
-
-                data = await response.json();
-
+                const params = new URLSearchParams({
+                    title: isFile ? '选择文件' : '选择文件夹',
+                    initial_path: input.value || ''
+                });
+                if (isFile) params.set('file_types', 'csv|json|xlsx|xls|db|sqlite');
+                const endpoint = isFile ? 'browse_file' : 'browse_folder';
+                const response = await fetch(`/api/config/${endpoint}?${params}`, { method: 'POST' });
+                if (!response.ok) throw new Error('路径选择服务暂不可用');
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
                 if (data.path) {
                     input.value = data.path;
                     validatePath(input);
-                } else if (data.error) {
-                    console.error('Failed to open dialog:', data.error);
-                    // Fallback to prompt
-                    const promptMsg = pathType === 'file' ? '请输入文件路径:' : '请输入文件夹路径:';
-                    const path = prompt(promptMsg, input.value);
-                    if (path !== null) {
-                        input.value = path;
-                        validatePath(input);
-                    }
                 }
             } catch (error) {
-                console.error('Failed to open dialog:', error);
-                // Fallback to prompt
-                const promptMsg = pathType === 'file' ? '请输入文件路径:' : '请输入文件夹路径:';
-                const path = prompt(promptMsg, input.value);
-                if (path !== null) {
-                    input.value = path;
-                    validatePath(input);
-                }
+                alert(`无法选择路径：${error.message}。也可以在输入框中直接填写路径。`);
+            } finally {
+                button.disabled = false;
+                button.textContent = label;
             }
         }
 

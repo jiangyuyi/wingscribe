@@ -679,3 +679,10 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 日志另有长时间心跳间隔及恢复，不能单凭这些记录确定重置由宿主休眠或 Windows 更新引起；未获取客体 Windows 事件日志，不擅自修改电源/更新策略。
 - 当前读取 VMState=running、网络连接开启、B7dQA/B7dReports 路径正确、剪贴板 bidirectional、增强功能版本 7.2.22。仅核实状态，不声称重启后的应用服务仍在运行。
 - 本轮收口 CPU/GPU 隔离测试包的客体同代版本升级/卸载保留；正式压缩产物重建、取消/拒绝提权/需重启分支、真实 SMB 故障、ExifTool 上游来源链及最终发布门槛仍需分别处理。
+
+## B7d 客体配置与 HTTP 验收准备（2026-11-01）
+
+- 下一轮使用 `C:\WingScribe-WebConfig-QA`，通过现有 CPU 安装解释器和应用工厂运行真实本地 HTTP；不覆盖安装目录配置、不读取照片、不启动推理。脚本位于 B7dQA 共享的 `validate-web-config.ps1` 与 `.py`，结果回传 `web-config-report.json`。已存在证据目录时拒绝重复运行。
+- 宿主使用 `installer/build-cpu/python/python.exe` 对该安装载荷预演通过（退出 0）：首次设置页及五类页面/资源请求、无配置阻止流水线且不初始化数据库、无效首次保存不生成配置、有效保存及错误更新字节保护、已配置应用三次 HTTP 启停、畸形 YAML 保留且设置页可访问。PowerShell 包装脚本语法检查通过。
+- 三次启停为同一验收进程中的独立 Uvicorn 服务生命周期；未调用应用自重启接口，不声称独立进程重启或视觉验收通过。客体验收仍待用户启动脚本，宿主报告位于 `.codex-tmp/b7d-web-config-host-1/report.json`。
+- ExifTool 13.40 原始包补查：官方 SourceForge `downloads.sourceforge.net/project/exiftool/exiftool-13.40_64.zip` 返回 HTTP 404，未取得可对照原包，继续保留上游来源链门槛；没有更换锁定版本或降低校验。

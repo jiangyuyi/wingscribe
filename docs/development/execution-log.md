@@ -762,3 +762,10 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 仅操作 `C:\WingScribe-Final-CPU008\app`。使用既有成功业务目录的 JPEG/SQLite 副本建立 19 项清单，先封存哈希及完整性，再升级到 009，验证注册、三个路径选择修复文件哈希和 BAT 自检；再卸载并检查程序、快捷方式/注册移除，最后使用未卸载的原 CPU 006 解释器验证全部保留数据。
 - 辅助脚本沿用已通过生命周期检查，只调整目标根目录并增加写入前检查，拒绝已有设置、密钥、数据库或非空测试照片目录，防止覆盖手动保存的数据。不会卸载原 CPU/GPU 006 环境。
 - PowerShell 与 Python 语法检查通过；不在宿主实际运行客体安装/卸载。客体结果尚待用户手动执行，脚本自动回传 final-cpu-lifecycle-report.json、升级/卸载/运行日志及 preserved-files 清单。
+
+## B7d 正常 CPU 升级卸载通过、GPU 正常包验收准备（2026-11-01）
+
+- 回传 final-cpu-lifecycle-report.json 为 passed/complete，0.0.0.8→0.0.0.9 upgrade、uninstall 均 passed。19 项照片副本、数据库、备份与设置/假密钥文件在升级、自检及卸载后 SHA-256 不变，SQLite integrity/foreign-key 检查通过；路径选择三个修复文件与构建哈希一致。
+- 卸载日志明确成功且无需重启；程序运行时、修复模块、启动脚本、菜单/桌面快捷方式及注册移除。非空数据目录删除返回145符合保留测试数据的预期。原 CPU/GPU 006 环境未卸载。
+- 下一批 `validate-final-gpu.ps1`：独立 C:\WingScribe-Final-GPU009\app，新装正常 GPU 0.0.0.9 EXE+两分卷，核对实际 GPU 菜单名与注册、自检、CUDA12.8构建/无CUDA设备/CPU张量，以及独立HTTP配置流程；保留安装供视觉与后续卸载验证。
+- 三个产物已复制到 B7dQA 并通过独立摘要复验；脚本语法检查通过，HTTP使用此前客体通过的v2辅助脚本并导出单独console/server日志。尚未执行GPU正常包客体安装，不视为真实GPU推理通过。

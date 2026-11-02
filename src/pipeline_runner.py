@@ -215,6 +215,8 @@ class WingScribePipeline:
         
             # Recognizer init lock
             self.batch_lock = threading.Lock()
+            self._recognizer_inference_lock = threading.Lock()
+            self._recognizer_init_error = None
             self.inference_batch_size = self.config.get('recognition', {}).get('local', {}).get('inference_batch_size', 16)
 
             # Existing hashes for fast deduplication (loaded on demand)
@@ -423,13 +425,14 @@ class WingScribePipeline:
             top_k = self.config.get('recognition', {}).get('top_k', 5)
             self._log_memory(f"before_recognize_batch items={len(items)} labels={len(candidate_labels)}")
 
-            if hasattr(self.recognizer, 'predict_batch'):
-                batch_results = self.recognizer.predict_batch(image_paths, candidate_labels, top_k=top_k)
-            else:
-                batch_results = [
-                    self.recognizer.predict(p, candidate_labels, top_k=top_k)
-                    for p in image_paths
-                ]
+            with self._recognizer_inference_lock:
+                if hasattr(self.recognizer, 'predict_batch'):
+                    batch_results = self.recognizer.predict_batch(image_paths, candidate_labels, top_k=top_k)
+                else:
+                    batch_results = [
+                        self.recognizer.predict(p, candidate_labels, top_k=top_k)
+                        for p in image_paths
+                    ]
             self._log_memory(f"after_recognize_batch items={len(items)} labels={len(candidate_labels)}")
 
             alt_threshold = self.config.get('recognition', {}).get('alternatives_threshold', 70)
@@ -665,7 +668,14 @@ class WingScribePipeline:
         # Init recognizer if needed (double check locking if lazily init)
         if self.recognizer is None: 
             with self.batch_lock:
-                if self.recognizer is None: self._init_recognizer()
+                if self.recognizer is None:
+                    if self._recognizer_init_error is not None:
+                        raise RuntimeError('Recognizer initialization previously failed in this run') from self._recognizer_init_error
+                    try:
+                        self._init_recognizer()
+                    except Exception as exc:
+                        self._recognizer_init_error = exc
+                        raise
 
         # 3. Candidate labels for this image only.
         location_tag = meta.get('location_tag', 'Unknown')
@@ -804,6 +814,7 @@ class WingScribePipeline:
 
     def run(self, start_date: str = None, end_date: str = None, existing_hashes: set = None):
         with pipeline_job(self, {'mode': 'dates', 'start_date': start_date, 'end_date': end_date}):
+            self._recognizer_init_error = None
             return self._run_dates(start_date, end_date, existing_hashes)
 
     def _record_scan_failure(self, provider, path_str, exc, failures):
@@ -1013,6 +1024,7 @@ class WingScribePipeline:
 
     def run_by_folders(self, folder_paths: list, recursive: bool = True):
         with pipeline_job(self, {'mode': 'folders', 'paths': list(folder_paths), 'recursive': recursive}):
+            self._recognizer_init_error = None
             return self._run_folders(folder_paths, recursive)
 
     def _run_folders(self, folder_paths, recursive=True):

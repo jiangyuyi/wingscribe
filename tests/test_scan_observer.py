@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -13,6 +14,8 @@ from src.core.io.local import LocalProvider
 @pytest.fixture
 def setup(tmp_path):
     pipeline = WingScribePipeline.__new__(WingScribePipeline)
+    pipeline._recognizer_inference_lock = threading.Lock()
+    pipeline._recognizer_init_error = None
     pipeline.catalogue = AssetCatalogue(tmp_path / 'catalogue.db')
     pipeline.catalogue.initialize()
     pipeline.config = {'processing': {'target_size': 32, 'crop_padding': 0, 'quality_mode': 'disabled'}}

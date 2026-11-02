@@ -15,8 +15,9 @@ from src.core.quality import QualityResult
 # Mocking the pipeline to avoid loading heavy models during init
 class MockPipeline(WingScribePipeline):
     def __init__(self):
-        # Skip super init
-        pass
+        # Skip heavyweight runtime setup.
+        self._recognizer_inference_lock = threading.Lock()
+        self._recognizer_init_error = None
 
 
 def _make_entry(path: Path):
@@ -72,6 +73,7 @@ def test_recognize_batch_uses_supplied_candidate_labels(tmp_path):
 
     pipeline = MockPipeline()
     pipeline.recognizer = FakeRecognizer()
+    pipeline._recognizer_inference_lock = threading.Lock()
     pipeline.config = {"recognition": {"top_k": 3, "alternatives_threshold": 70, "low_confidence_threshold": 60}}
 
     archived = []

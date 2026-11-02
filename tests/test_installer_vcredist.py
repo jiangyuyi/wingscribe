@@ -1,5 +1,6 @@
 """VC prerequisite integrity and installer wiring regression checks."""
 from pathlib import Path
+import os
 import shutil
 import subprocess
 
@@ -41,3 +42,59 @@ def test_silent_missing_dependency_does_not_launch_installer():
     assert 'if Code <> 0 then begin' in source
     assert '(Code = 3010) or (Code = 1641)' in source
     assert "if HasVCRuntime then Result := ''" in source
+
+
+def test_inno_handles_runtime_exit_codes_before_copying_payload(tmp_path):
+    """Exercise Inno's real PrepareToInstall result handling with injected child results."""
+    compiler = os.environ.get('WINGSCRIBE_TEST_ISCC') or shutil.which('ISCC.exe')
+    if os.name != 'nt' or not compiler:
+        pytest.skip('Windows and Inno Setup compiler required for installer execution')
+
+    source = (ROOT / 'installer/vcredist.iss').read_text(encoding='utf8')
+    # Only replace the external prerequisite interaction. Compile the remaining
+    # production code verbatim, including its final runtime registration check.
+    _, boundary, tail = source.partition('ewWaitUntilTerminated, Code) then begin')
+    assert boundary
+    _, boundary, result_handling = tail.partition('\n  end;\n')
+    assert boundary
+    (tmp_path / 'payload.txt').write_text('QA marker')
+    fixture = tmp_path / 'probe.iss'
+    fixture.write_text('''[Setup]
+AppName=WingScribe prerequisite probe
+AppVersion=1
+DefaultDirName={tmp}\\WingScribeProbe
+PrivilegesRequired=lowest
+Uninstallable=no
+CreateUninstallRegKey=no
+UsePreviousAppDir=no
+OutputDir=.
+OutputBaseFilename=probe
+[Files]
+Source: "payload.txt"; DestDir: "{app}"
+[Code]
+function HasVCRuntime: Boolean;
+begin
+  Result := ExpandConstant('{param:registered|0}') = '1';
+end;
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var Code: Integer;
+begin
+  Code := StrToInt(ExpandConstant('{param:childcode|0}'));
+  Result := 'Runtime missing';
+''' + result_handling, encoding='utf-8-sig')
+    subprocess.run([compiler, str(fixture)], check=True, capture_output=True, timeout=60)
+    for code, registered, expected_exit, expected_message in [
+        (3010, 1, 8, 'Microsoft runtime requires a Windows restart'),
+        (1641, 0, 8, 'Microsoft runtime requires a Windows restart'),
+        (1603, 0, 7, 'Microsoft runtime installation failed (exit 1603)'),
+        (0, 0, 7, 'Runtime missing'),
+        (0, 1, 0, 'Installation process succeeded'),
+    ]:
+        target = tmp_path / f'app-{code}-{registered}'
+        log = target.with_suffix('.log')
+        result = subprocess.run([str(tmp_path / 'probe.exe'), '/VERYSILENT', '/SUPPRESSMSGBOXES',
+                                 '/SP-', '/NORESTART', f'/DIR={target}', f'/LOG={log}',
+                                 f'/childcode={code}', f'/registered={registered}'], timeout=60)
+        assert result.returncode == expected_exit, (code, registered, result.returncode)
+        assert expected_message in log.read_text(encoding='utf-8-sig', errors='replace')
+        assert (target / 'payload.txt').exists() == (expected_exit == 0)

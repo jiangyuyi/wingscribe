@@ -809,3 +809,12 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 逐文件读取仓库 ZIP 与 npm 归档的 `package/bin/`，检查相对路径唯一性及内容摘要。仓库 507 个文件全部有对应文件，496 个逐字节相同，包括启动器、Perl 可执行文件及 DLL。另 11 个为 Perl 配置、模块和说明文本，将 CRLF 统一为 LF 后内容全部相同。对照包另外含一份顶层 README.txt。明细见 `.codex-tmp/exiftool-1340-compare.json`。
 
 本次取得的是第三方同版本封装。发布者原始 Windows ZIP 仍待获得并对照历史记录中的官方 SHA-256。本次命令行访问旧校验清单返回 HTTP 404。仓库锁定归档仍为 `f5916bfc851b2b9176dbc4141161e9231d0b10cb1d16d25fec2ecd4a091e0c17`。验收报告已回传，两个虚拟机可正常关机并保留快照供后续复用。
+
+## 0.0.0.9 宿主侧收口（2026-11-02）
+
+- 验证来源：从发布者站点 2025-10-27 的[原始 Windows ZIP 存档](https://web.archive.org/web/20251027010601id_/https://exiftool.org/exiftool-13.40_64.zip)取回 ExifTool 13.40 x64，SHA-256 为 `ac0c44150a3e99c97bb054a03db92ae97be5fcffa802dcc3c21fc58c62fb8ac6`，与此前取得并记录的发布者摘要一致。原 ZIP 508 个文件，去除顶层目录并按 README 将启动器重命名为 `exiftool.exe` 后，仓库归档的 507 个文件逐字节全部匹配，唯一省略项为顶层 README.txt。此前 npm 对照中的 11 处换行差异只存在于第三方副本。详细结果 `.codex-tmp/exiftool-1340-original-compare.json`。该版本上游来源门槛已关闭。
+- 实际编译独立 Inno 夹具，在运行库子进程返回处分界，将生产代码的返回值处理原样编入夹具。注入 3010/1641 时安装器退出 8，提示需要重启且目标文件不存在。1603 以及返回 0 但注册仍缺失时退出 7。返回 0 且注册合格时成功并实际复制标记文件。5 项安装器测试通过。复现时设置 `WINGSCRIBE_TEST_ISCC` 为 Inno 编译器路径，运行 `tests/test_installer_vcredist.py`。真实微软安装程序返回需重启码的系统状态仍未实测。
+- 两种构建各 174 项白名单载荷逐项复核构建摘要。对照当前源码，仅两份后续更新的开发状态文档不同；设置与密钥文件未进入构建。宿主全套回归 833 通过、1 跳过、1 警告，覆盖率 82%。全套收集时尚未加入本轮 Inno 夹具测试，新增用例已在上述定向组执行。日志 `.codex-tmp/host-final-regression-1102.log` 与 `.codex-tmp/vc-host-tests.log`。
+- 最终 GPU 暂存解释器 PyTorch 2.10.0+cu128 在宿主 RTX 5060 Laptop GPU 实际检测到 1 个鸟体，检测结果位于 cuda:0。再以该解释器、暂存源码/工具的独立拷贝及单独提供的本地 BioCLIP2 权重验收 8 张 JPEG 副本，全程离线，耗时 78.16 秒。6 份归档及 AviList-v2025b 元数据通过，第二次扫描归档哈希不变，二次选片命中 8、计算 0，单张隔离恢复、输入哈希和数据库完整性通过。报告 `.codex-tmp/host-final-gpu-business-1102/business/report.json`。
+- 从上述结果再复制单张输入、归档和 SQLite，调用真实本地 HTTP `/api/update_label` 修改为测试标签。数据库人工标记和确认时间、归档重命名、磁盘文件存在性、归档及输入副本两处关键词和物种说明读回均通过。退出 0。ExifTool 读回时 Perl 报 locale 回退提示。报告 `.codex-tmp/host-final-gpu-business-1102/manual-edit/report.json`。该测试标签只用于验证操作。
+- 发布前仍需在选定版本、提交与发布授权后验证线上 CI 和实际附件。真实物理 NAS 超时、微软安装器实际要求重启的环境仍作为单独的实机边界。云端联调按原决定跳过。

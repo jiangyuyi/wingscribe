@@ -801,3 +801,11 @@ B0–B4 无需额外产品决策。2026-10-20 已确认自动分组（允许人�
 - 在应用运行库提示点 No，安装器记录缺少 VC++ x64 运行库，退出码 7。第二轮用户确认看到了 Windows 授权弹窗，安装器记录运行库启动失败或授权取消，退出码也是 7。两次均在 PrepareToInstall 阶段停止，目标目录检查通过，两份日志均记录无需重启。
 - 导出的 `state.json` 确认运行库注册键和应用卸载注册均不存在，安装进程已退出。测试日志目录保留。第二轮安装日志于客体时间 11:17:34 关闭，导出目录时间为 11:17:41。
 - 3010/1641 实际需要重启的返回路径仍仅有静态检查。ExifTool 13.40 来源链另列，仓库固定归档引入于 f1a3016，此次对常用下载目录和运行时缓存的顶层核查未发现原版 ZIP。保留固定版本与原包校验门槛。
+
+## B7d ExifTool 13.40 同版本对照（2026-11-02）
+
+在宿主机从国内 npm 镜像直连取得 `exiftool-vendored.exe@13.40.0`。比对镜像元数据、[npm 注册表记录](https://registry.npmjs.org/exiftool-vendored.exe/13.40.0) 和下载文件的 SHA-512，三者一致，SRI 为 `sha512-OUdoQ2RczAYS+6wdg2hUFjhKoBDXot3PNsmievN1ZspdQVllJF847WUHGpaXJv4QZcDvK9eGKop0vfa62dNwuA==`。
+
+逐文件读取仓库 ZIP 与 npm 归档的 `package/bin/`，检查相对路径唯一性及内容摘要。仓库 507 个文件全部有对应文件，496 个逐字节相同，包括启动器、Perl 可执行文件及 DLL。另 11 个为 Perl 配置、模块和说明文本，将 CRLF 统一为 LF 后内容全部相同。对照包另外含一份顶层 README.txt。明细见 `.codex-tmp/exiftool-1340-compare.json`。
+
+本次取得的是第三方同版本封装。发布者原始 Windows ZIP 仍待获得并对照历史记录中的官方 SHA-256。本次命令行访问旧校验清单返回 HTTP 404。仓库锁定归档仍为 `f5916bfc851b2b9176dbc4141161e9231d0b10cb1d16d25fec2ecd4a091e0c17`。验收报告已回传，两个虚拟机可正常关机并保留快照供后续复用。

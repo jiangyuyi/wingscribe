@@ -9,7 +9,7 @@ on:
       version:
         description: 'Version number (e.g., 1.0.0)'
         required: true
-        default: '1.0.0'
+        default: '3.0.0'
       publish_release:
         description: 'Publish a GitHub Release after building'
         required: true
@@ -216,50 +216,7 @@ jobs:
             artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.sha256.json
           draft: false
           prerelease: false
-          body: |
-            ## WingScribe ${{ steps.get_version.outputs.version }}
-
-            ### 下载安装包
-
-            根据您的硬件选择对应的安装包：
-
-            - **CPU 版本**: `WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe`
-              - 适用于没有 NVIDIA 显卡或不需要 GPU 加速的用户
-              - 使用 CPU 进行 AI 推理，速度较慢但兼容性好
-
-            - **GPU 版本**: `WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe`
-              - 同时下载该版本的全部 `.bin` 分卷，与 EXE 放在同一目录
-              - 需要 NVIDIA 显卡（支持 CUDA）
-              - 使用 GPU 进行 AI 推理，速度更快
-
-            ### 系统要求
-
-            **通用要求：**
-            - Windows 10 或更高版本
-            - 建议至少 8GB 内存；高分辨率照片和实验模型建议 16GB 以上
-            - CPU 版建议预留至少 4GB，GPU 版建议至少 10GB；照片、缓存和模型另计
-
-            **GPU 版本额外要求：**
-            - 支持 CUDA 的 NVIDIA 显卡
-            - GPU 包内置 CUDA 12.8 版 PyTorch，并支持 RTX 50 系列
-            - 请安装与显卡及 CUDA 12.8 运行时兼容的较新 NVIDIA 驱动
-
-            ### 安装说明
-
-            1. 双击安装包开始安装
-            2. 按照配置向导设置照片目录和输出目录
-            3. 安装完成后启动 Web 服务
-            4. 在浏览器中访问 http://localhost:8000
-
-            ### 首次使用
-
-            首次运行时会下载配置所选的 BioCLIP 模型。不同模型体积差异较大，请保持网络连接并额外预留数 GB 缓存空间。
-
-            ### 文档
-
-            - [README 与使用说明](https://github.com/jiangyuyi/wingscribe/blob/master/README.md)
-            - [配置指南](https://github.com/jiangyuyi/wingscribe/blob/master/docs/user/configuration.md)
-            - [公共评测与模型边界](https://github.com/jiangyuyi/wingscribe/blob/master/docs/research/evaluation.md)
+          body_path: docs/releases/${{ steps.get_version.outputs.version }}.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

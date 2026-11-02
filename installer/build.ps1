@@ -12,7 +12,7 @@ param(
     [switch]$RefreshWheels = $false,
     [ValidateSet("cpu", "gpu")]
     [string]$Mode = "cpu",
-    [string]$Version = "1.0.0",
+    [string]$Version = "3.0.0",
     [string]$BuildPython = "python",
     [string]$PyTorchWheelBase = "https://download.pytorch.org/whl"
 )

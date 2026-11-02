@@ -4,7 +4,7 @@
 
 这是一个从学习和研究出发、借助多个 AI 工具逐步搭建的个人项目。文档按当前仓库实现整理；实验结果和早期方案分别保存，不作为已发布功能承诺。
 
-[文档总览](docs/README.md) · [安装与使用](docs/user/getting-started.md) · [配置](docs/user/configuration.md) · [项目状态与已知问题](docs/development/status.md)
+[3.0.0 发布说明](docs/releases/3.0.0.md) · [从 2.3.1 升级](docs/user/upgrade-3.md) · [文档总览](docs/README.md) · [安装与使用](docs/user/getting-started.md) · [配置](docs/user/configuration.md) · [项目状态与已知问题](docs/development/status.md)
 
 ## 当前能力
 

@@ -2,6 +2,8 @@
 
 所有源码命令从仓库根目录执行。使用 Python 3.11/3.12；Windows 安装包内置 Python，无需另建虚拟环境。
 
+旧版用户请先阅读[3.0.0 升级指南](upgrade-3.md)。
+
 ## Windows 安装包
 
 从 [项目发布页](https://github.com/jiangyuyi/wingscribe/releases) 选择 `WingScribe-Setup-CPU-<版本>.exe` 或 `WingScribe-Setup-GPU-<版本>.exe`。GPU 包包含 CUDA 12.8 版 PyTorch，面向 NVIDIA CUDA 显卡；实际兼容性需结合驱动和 [发布验收](../development/release-checklist.md) 检查。

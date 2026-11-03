@@ -48,7 +48,7 @@ web:
   port: 8000
 ```
 
-Use absolute paths for sources and outputs. A separate destination keeps a scan from consuming its own archive. Keep SQLite on local storage. For a NAS, connect the share using the same account that starts WingScribe. Use a path such as `Z:/Birds`, `\\server\photos`, or a mounted directory on Linux. A mapped drive in your desktop session may be invisible to a background service. After a share outage, restore access and start another scan. History is retained, and unchanged work can be reused.
+Use absolute paths for sources and outputs. A separate destination keeps a scan from consuming its own archive. Keep SQLite on local storage. The database picker accepts an existing file or a new filename. Cancel leaves the field unchanged. A blank database path uses `data/db/wingscribe.db` under the application directory after saving and restarting. For a NAS, connect the share using the same account that starts WingScribe. Use a path such as `Z:/Birds`, `\\server\photos`, or a mounted directory on Linux. A mapped drive in your desktop session may be invisible to a background service. After a share outage, restore access and start another scan. History is retained, and unchanged work can be reused.
 
 `processing.device` selects `auto`, `cpu`, or `cuda`. `recognition.top_k` controls the number of species suggestions. Processing quality options affect the archiving pipeline; burst focus ranking is a separate tool. Keep API credentials in `config/secrets.yaml` following the [secrets example](../../config/secrets.example.yaml). Keep the Web UI and recognition endpoints on localhost or a trusted network.
 

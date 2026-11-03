@@ -43,7 +43,7 @@ def get_config_definition():
                 {
                     "key": "db_path",
                     "label": "数据库路径",
-                    "description": "SQLite 数据库文件位置",
+                    "description": "SQLite 数据库文件位置；留空使用安装目录下 data/db/wingscribe.db，可选择新建文件",
                     "type": "file",
                 },
                 {

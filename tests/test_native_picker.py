@@ -1,6 +1,7 @@
 import base64
 import json
 from types import SimpleNamespace
+import os
 
 import pytest
 
@@ -39,3 +40,24 @@ def test_browser_query_parameters_reach_picker(web_app, monkeypatch):
     assert folder.json() == {'path': r'C:\照片'}
     assert file.json() == {'path': None}
     assert calls == [('选择目录', r'\\nas\照片'), ('选择名录', 'D:/birds.csv', 'csv|json')]
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows native dialog initialization')
+@pytest.mark.parametrize('kind,initial', [('file', ''), ('save', ''), ('save', r'C:\new-database\birds.db')])
+def test_windows_file_picker_initializes_before_cancel(monkeypatch, kind, initial):
+    # Exercise the real PowerShell and WinForms setup without opening a window.
+    monkeypatch.setattr(native_picker, 'SCRIPT', native_picker.SCRIPT.replace(
+        '$dialog.ShowDialog()', '[System.Windows.Forms.DialogResult]::Cancel'))
+    assert native_picker.choose_path(kind, '选择数据库', initial, 'db|sqlite') is None
+
+
+def test_database_picker_supports_new_file(web_app, monkeypatch):
+    from fastapi.testclient import TestClient
+    from src.web import config_service
+    calls = []
+    monkeypatch.setattr(config_service, 'open_file_dialog', lambda *args: calls.append(args) or 'D:/new/birds.db')
+    with TestClient(web_app.app) as client:
+        result = client.post('/api/config/browse_file', params={
+            'title': '数据库', 'initial_path': '', 'file_types': 'db|sqlite', 'save': True})
+    assert result.json() == {'path': 'D:/new/birds.db'}
+    assert calls == [('数据库', '', 'db|sqlite', True)]

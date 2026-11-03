@@ -663,10 +663,13 @@ class WebRuntime:
             return {"error": str(e), "path": None}
 
 
-    async def browse_file_api(self, title: str = "选择文件", initial_path: str = "", file_types: str = "xlsx|xls"):
+    async def browse_file_api(self, title: str = "选择文件", initial_path: str = "", file_types: str = "xlsx|xls", save: bool = False):
         """API endpoint to open file selection dialog"""
         try:
-            file_path = await asyncio.to_thread(self.open_file_dialog, title, initial_path, file_types)
+            if save:
+                file_path = await asyncio.to_thread(config_service.open_file_dialog, title, initial_path, file_types, True)
+            else:
+                file_path = await asyncio.to_thread(self.open_file_dialog, title, initial_path, file_types)
             return {"path": file_path}
         except Exception as e:
             return {"error": str(e), "path": None}

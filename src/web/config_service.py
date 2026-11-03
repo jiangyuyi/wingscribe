@@ -182,10 +182,10 @@ def open_folder_dialog(title: str, initial_dir: str = "") -> str:
     return result["path"]
 
 
-def open_file_dialog(title: str, initial_file: str = "", file_types: str = "") -> str:
+def open_file_dialog(title: str, initial_file: str = "", file_types: str = "", save: bool = False) -> str:
     if sys.platform == 'win32':
         from src.web.native_picker import choose_path
-        return choose_path('file', title, initial_file, file_types)
+        return choose_path('save' if save else 'file', title, initial_file, file_types)
     result = {"path": None, "error": None}
 
     def _run_dialog():
@@ -203,7 +203,8 @@ def open_file_dialog(title: str, initial_file: str = "", file_types: str = "") -
                     if ft:
                         filetypes.append((ft, f"*.{ft}"))
 
-            file = filedialog.askopenfilename(
+            picker = filedialog.asksaveasfilename if save else filedialog.askopenfilename
+            file = picker(
                 title=title,
                 initialfile=initial_file or None,
                 filetypes=filetypes if filetypes else [("All Files", "*.*")],

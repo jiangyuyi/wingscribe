@@ -497,6 +497,11 @@
                     initial_path: input.value || ''
                 });
                 if (isFile) params.set('file_types', 'csv|json|xlsx|xls|db|sqlite');
+                if (input.dataset.key === 'db_path') {
+                    params.set('save', 'true');
+                    params.set('title', '选择或新建数据库文件');
+                    params.set('file_types', 'db|sqlite');
+                }
                 const endpoint = isFile ? 'browse_file' : 'browse_folder';
                 const response = await fetch(`/api/config/${endpoint}?${params}`, { method: 'POST' });
                 if (!response.ok) throw new Error('路径选择服务暂不可用');

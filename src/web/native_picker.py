@@ -17,10 +17,14 @@ if($options.kind -eq 'folder') {
  $dialog.Description=$options.title
  $dialog.SelectedPath=$options.initial
 } else {
- $dialog=New-Object System.Windows.Forms.OpenFileDialog
+ if($options.kind -eq 'save') {
+  $dialog=New-Object System.Windows.Forms.SaveFileDialog
+  $dialog.DefaultExt='db'
+  $dialog.OverwritePrompt=$false
+ } else {$dialog=New-Object System.Windows.Forms.OpenFileDialog}
  $dialog.Title=$options.title
- $dialog.CheckFileExists=$true
- if(Test-Path -LiteralPath $options.initial -PathType Container){
+ $dialog.CheckFileExists=($options.kind -ne 'save')
+ if($options.initial -and (Test-Path -LiteralPath $options.initial -PathType Container)){
   $dialog.InitialDirectory=$options.initial
  } elseif($options.initial) {
   $dialog.InitialDirectory=[IO.Path]::GetDirectoryName($options.initial)
@@ -45,7 +49,7 @@ try {
 
 def choose_path(kind: str, title: str, initial: str = '', types: str = '') -> str | None:
     """Return a selected local/UNC path, or None on explicit cancellation."""
-    if kind not in ('folder', 'file'):
+    if kind not in ('folder', 'file', 'save'):
         raise ValueError('Unsupported picker kind')
     if initial:
         initial = str(Path(initial).absolute())

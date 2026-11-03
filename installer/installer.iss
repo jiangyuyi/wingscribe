@@ -1,4 +1,4 @@
-; WingScribe CPU Installer Script
+﻿; WingScribe CPU Installer Script
 ; Version for systems without NVIDIA GPU
 
 #define AppName "WingScribe"
@@ -112,6 +112,7 @@ Filename: "{app}\scripts\start_web.bat"; Description: "Launch WingScribe Web Ser
 
 [Code]
 #include "vcredist.iss"
+#include "install-directory.iss"
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Entry: TFindRec;
@@ -124,5 +125,6 @@ begin
        (Trim(String(Marker)) <> 'wingscribe-safe-v1') then
       Result := 'Legacy installation detected. Back up configuration and data, then choose a new empty installation directory. Do not run the old uninstaller before backing up your data.';
   end;
+  if Result = '' then Result := CheckInstallDirectory;
   if Result = '' then Result := PrepareVCRuntime(NeedsRestart);
 end;

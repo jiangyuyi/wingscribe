@@ -143,3 +143,5 @@ python scripts/installer_artifacts.py --verify installer/Output/WingScribe-Setup
 清单包含 EXE 与同版本已生成分卷的大小和 SHA-256；先确认编译成功，再生成清单。它用于检查传输完整性，不是发行者签名。CI 保留清单并随正式发布附上。
 
 GPU 正式包采用 lzma2 压缩分卷：下载同版本 EXE、全部 `-N.bin` 和 SHA-256 清单，放在同一目录后启动 EXE。不要仅保留 EXE。CPU 正式包仍为单 EXE。
+
+安装路径需要当前 Windows 用户具有写入权限。程序会在该目录保存配置、模型缓存和默认数据库。`Program Files` 通常受管理员权限保护，建议使用默认用户目录，或由用户管理的可写目录。目录名带 `-GPU` 不影响 Windows 的权限判定。

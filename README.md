@@ -1,5 +1,7 @@
 # WingScribe（飞羽志）
 
+**简体中文** | [English](README.en.md)
+
 面向鸟类摄影的本地照片识别与整理工具：扫描照片目录，检测和裁切鸟体，识别物种，写入元数据，并通过 Web 图库进行人工校对。
 
 这是一个从学习和研究出发、借助多个 AI 工具逐步搭建的个人项目。文档按当前仓库实现整理；实验结果和早期方案分别保存，不作为已发布功能承诺。
@@ -8,6 +10,7 @@
 
 ## 当前能力
 
+- JPEG 连拍自动分组，支持辅助比较、每组最多三张推荐、手动标记及预览后隔离恢复。
 - 按日期或目录扫描、YOLO 检测、裁切和可配置质量检查。
 - 本地 BioCLIP 识别、Top-K 候选、AviList 分类及人工确认记录。配置样例选用 BioCLIP2；BioCLIP 2.5 保持实验选项。
 - 图库筛选、原图/裁切图对照、人工校对、按模板归档和 EXIF/IPTC/XMP 写入。
@@ -25,7 +28,7 @@ uv sync --locked --extra cpu
 .\.venv\Scripts\Activate.ps1
 ```
 
-首次启动前从配置样例准备 `config/settings.yaml` 并填写合法路径，已有配置不需覆盖。执行 `python src/web/app.py --host 127.0.0.1 --port 8000` 后，访问 `http://127.0.0.1:8000/settings` 调整配置。首次使用、名录导入和 Linux 操作见 [安装与使用](docs/user/getting-started.md)。
+运行 `python src/web/app.py --host 127.0.0.1 --port 8000`，打开 `http://127.0.0.1:8000/settings`。首次启动可在设置页选择照片来源和独立输出目录，保存并重启。首次使用、名录导入和 Linux 操作见 [安装与使用](docs/user/getting-started.md)。
 
 人工校对当前会尝试修改原图元数据；`write_back_to_source: false` 只约束自动流水线。首次验证建议使用照片副本。Web 和识别 API 尚无有效访问认证，使用范围见 [项目状态](docs/development/status.md)。
 

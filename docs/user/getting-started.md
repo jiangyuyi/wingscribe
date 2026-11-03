@@ -23,7 +23,7 @@ uv sync --locked --extra cpu
 
 先安装 uv。NVIDIA GPU 可选择 `uv sync --locked --extra cu128`；本机已准备的 CPU/GPU 环境及启动方式见 [环境说明](../development/environment.md)。Linux 激活环境使用 `source .venv/bin/activate`。当前锁文件只覆盖 Windows/Linux，macOS 尚未验证。
 
-当前源码在启动时就校验配置：没有 `config/settings.yaml` 时，先从 `config/settings.example.yaml` 复制，按 [配置指南](configuration.md) 填入照片源和独立输出目录的合法绝对路径。不要覆盖已有配置。然后执行 `python src/web/app.py --host 127.0.0.1 --port 8000`，打开 `http://127.0.0.1:8000/settings` 继续调整。未配置直接进入设置页的启动流程仍需修正。
+执行 `python src/web/app.py --host 127.0.0.1 --port 8000` 后，打开 `http://127.0.0.1:8000/settings`。首次使用时可直接填写照片来源和独立输出目录，保存并重启服务。也可按 [配置指南](configuration.md) 手动准备 YAML。
 
 新空库使用随项目附带的 AviList v2025b 名录；已有 IOC 库按 [分类数据指南](taxonomy.md) 先预览、备份，再显式迁移。模型预下载入口为 `python scripts/download_model.py`；所下载模型与生产选择应分别核对。
 
@@ -44,10 +44,10 @@ CPU/GPU 安装器均需要 Microsoft Visual C++ x64 v14 运行库。本次干净
 
 自动流水线可通过 `paths.output.write_back_to_source` 控制原图元数据写回；人工校对当前另有写回逻辑，会尝试修改存在的原图。该差异记录在 [已知问题](../development/status.md)。
 
-命令行批处理：
+在命令行扫描已配置的来源。要限定日期范围，请在管理页设置起止日期。
 
 ```powershell
-python src/pipeline_runner.py --start 20240101 --end 20240131
+python src/pipeline_runner.py
 ```
 
 ## 部署脚本
@@ -83,4 +83,4 @@ Linux/macOS 对应 `bash deploy.sh help`、`bash deploy.sh config`、`bash deplo
 
 管理页显示初始化、处理、停止中、已停止、已完成或失败。停止后会等待已开始的照片处理结束，期间不能启动第二个任务。失败时保留首个错误；下一次启动会建立新任务并清除上一轮状态。
 
-照片工作线程抛出异常时，扫描历史记录为 `Failed`。任务状态目前只在服务进程内保留，重启不会恢复运行中的任务；原片的完整逐项登记和中断恢复将在持久任务阶段加入。
+照片工作线程抛出异常时，扫描历史记录为 `Failed`。扫描任务与逐项处理状态写入本地数据库。中断后可重新发起扫描，恢复归档并处理当前输入。

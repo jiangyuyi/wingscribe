@@ -1,6 +1,24 @@
 function DirectoryProbeTick: Cardinal;
   external 'GetTickCount@kernel32.dll stdcall';
 
+var
+  InstallDirectoryHint: TNewStaticText;
+
+procedure InitializeWizard;
+begin
+  InstallDirectoryHint := TNewStaticText.Create(WizardForm);
+  InstallDirectoryHint.Parent := WizardForm.SelectDirPage;
+  InstallDirectoryHint.Left := WizardForm.DirEdit.Left;
+  InstallDirectoryHint.Top := WizardForm.DirEdit.Top + WizardForm.DirEdit.Height + ScaleY(8);
+  InstallDirectoryHint.Width := WizardForm.SelectDirPage.ClientWidth;
+  InstallDirectoryHint.Height := WizardForm.SelectDirPage.ClientHeight - InstallDirectoryHint.Top - ScaleY(4);
+  InstallDirectoryHint.AutoSize := False;
+  InstallDirectoryHint.WordWrap := True;
+  InstallDirectoryHint.Caption :=
+    'Recommended: the default folder under your Documents, or another folder writable by your Windows account. ' +
+    'Avoid protected folders such as Program Files and Windows. WingScribe saves settings, model caches and its default database here.';
+end;
+
 // Check using the same user token that will run the installed application.
 function CheckInstallDirectory: String;
 var
@@ -50,7 +68,13 @@ begin
   if (CurPageID = wpSelectDir) and not WizardSilent then begin
     Error := CheckInstallDirectory;
     if Error <> '' then begin
-      MsgBox(Error, mbError, MB_OK);
+      InstallDirectoryHint.Font.Color := clMaroon;
+      InstallDirectoryHint.Caption :=
+        'This location is unavailable, contains an existing file, or cannot be written to. ' +
+        'Edit the path above or click Browse to select another folder, then click Next again. ' +
+        'The default folder under your Documents is recommended.';
+      Log('Installation directory rejected: ' + Error);
+      WizardForm.ActiveControl := WizardForm.DirEdit;
       Result := False;
     end;
   end;

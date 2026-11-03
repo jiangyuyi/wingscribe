@@ -16,6 +16,15 @@ def test_directory_gate_in_both_variants():
         assert script.index('Result := CheckInstallDirectory') < script.index('Result := PrepareVCRuntime')
 
 
+def test_rejected_directory_keeps_editing_on_the_directory_page():
+    source = (Path(__file__).resolve().parents[1] / 'installer/install-directory.iss').read_text()
+    handler = source.split('function NextButtonClick', 1)[1]
+    assert 'MsgBox(' not in handler
+    assert 'InstallDirectoryHint.Caption :=' in handler
+    assert 'WizardForm.ActiveControl := WizardForm.DirEdit' in handler
+    assert 'Result := False' in handler
+
+
 def test_actual_inno_directory_gate(tmp_path):
     compiler = os.environ.get('WINGSCRIBE_TEST_ISCC') or shutil.which('ISCC.exe')
     if os.name != 'nt' or not compiler:

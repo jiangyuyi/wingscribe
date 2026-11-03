@@ -1,232 +1,48 @@
-name: Build Windows Installer
-
+name: Verify WingScribe 3.0.1 downloads
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version number (e.g., 1.0.0)'
+      source:
+        description: Downloads to verify
         required: true
-        default: '3.0.1'
-      publish_release:
-        description: 'Publish a GitHub Release after building'
-        required: true
-        type: boolean
-        default: false
-
+        type: choice
+        options: [release]
+permissions:
+  contents: read
+  actions: read
 jobs:
-  build:
-    permissions:
-      contents: write
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - mode: cpu
-          - mode: gpu
-
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: jiangyuyi/wingscribe
+      CANDIDATE: 83151bb74fe6fa6a7fb88df26fd2b68d17e9be3a
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Get version
-        id: get_version
-        shell: pwsh
+          ref: 83151bb74fe6fa6a7fb88df26fd2b68d17e9be3a
+          persist-credentials: false
+      - name: Download published assets
+        if: inputs.source == 'release'
+        shell: bash
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ github.event.inputs.version }}"
-          } else {
-            $version = "${{ github.ref_name }}" -replace "^v", ""
-          }
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Resolved version is empty"
-          }
-          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
-          Write-Output "mode=${{ matrix.mode }}" >> $env:GITHUB_OUTPUT
-          Write-Host "Building version: $version (${{ matrix.mode }} mode)"
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Cache Python downloads
-        uses: actions/cache@v4
-        with:
-          path: |
-            installer/wheels-${{ matrix.mode }}
-            installer/build-${{ matrix.mode }}/python-*.zip
-          key: ${{ runner.os }}-${{ matrix.mode }}-python-${{ steps.get_version.outputs.version }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.mode }}-python-
-
-      - name: Download Inno Setup
-        shell: pwsh
+          test "$(gh api repos/$REPO/commits/v3.0.1 --jq .sha)" = "$CANDIDATE"
+          gh release view v3.0.1 --repo "$REPO" --json isDraft,isPrerelease | jq -e '(.isDraft or .isPrerelease)|not'
+          gh release download v3.0.1 --repo "$REPO" -D verify/release
+      - name: Check every file against its manifest
+        shell: bash
         run: |
-          $isUrl = "https://github.com/jrsoftware/issrc/releases/download/is-6_4_1/innosetup-6.4.1.exe"
-          $isPath = Join-Path $env:RUNNER_TEMP "innosetup-6.4.1.exe"
-          $toolDir = Join-Path $env:RUNNER_TEMP "wingscribe-inno-6.4.1"
-          Invoke-WebRequest -Uri $isUrl -OutFile $isPath -UseBasicParsing
-          $expectedHash = "F41760E1F1AE15D2089BB6AB162E21720B92AE7506ED70667B39200063D68E34"
-          if ((Get-FileHash $isPath -Algorithm SHA256).Hash -ne $expectedHash) { throw "Inno Setup hash mismatch" }
-          $signature = Get-AuthenticodeSignature $isPath
-          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Martijn Laan*') { throw "Inno Setup signature mismatch" }
-          $setup = Start-Process $isPath -WindowStyle Hidden -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER','/NOICONS','/TASKS=""',('/DIR="'+$toolDir+'"')) -Wait -PassThru
-          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed" }
-          "WINGSCRIBE_ISCC=$toolDir\ISCC.exe" >> $env:GITHUB_ENV
-
-      - name: Run build script
-        shell: pwsh
-        run: |
-          Write-Host "Running build script for ${{ matrix.mode }} mode..."
-          & .\installer\build.ps1 -Mode ${{ matrix.mode }} -Version "${{ steps.get_version.outputs.version }}"
-
-      - name: Create UI assets (placeholder)
-        shell: pwsh
-        run: |
-          # Create placeholder icons and images
-          $assetsDir = "installer\assets"
-          if (-not (Test-Path $assetsDir)) {
-            New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
-          }
-
-      - name: Build installer with Inno Setup
-        shell: pwsh
-        run: |
-          $iscc = $env:WINGSCRIBE_ISCC
-          if (-not (Test-Path -LiteralPath $iscc)) { throw "Pinned Inno Setup compiler missing" }
-          $version = "${{ steps.get_version.outputs.version }}"
-          $iss = ".\installer\installer.iss"
-          if ("${{ matrix.mode }}" -eq "gpu") {
-            $iss = ".\installer\installer-gpu.iss"
-          }
-          Write-Host "Building ${{ matrix.mode }} installer with $iss"
-          & $iscc "/DAppVersion=$version" $iss
-          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
-
-      - name: Record installer hashes
-        shell: pwsh
-        run: |
-          python scripts/installer_artifacts.py --directory installer/Output --mode "${{ matrix.mode }}" --version "${{ steps.get_version.outputs.version }}"
-          if ($LASTEXITCODE -ne 0) { throw "Installer hash manifest failed" }
-
-      - name: Get installer size
-        shell: pwsh
-        run: |
-          $modeUpper = "${{ matrix.mode }}".ToUpper()
-          $version = "${{ steps.get_version.outputs.version }}"
-          $installer = Get-ChildItem "installer/Output/WingScribe-Setup-$modeUpper-$version*" | Where-Object { $_.Extension -in @(".exe", ".bin") }
-          $sizeInMB = [math]::Round(($installer | Measure-Object Length -Sum).Sum / 1MB, 2)
-          Write-Host "Installer size: $sizeInMB MB"
-
-      - name: Upload CPU installer artifact
-        if: matrix.mode == 'cpu'
-        uses: actions/upload-artifact@v4
-        with:
-          name: WingScribe-Installer-${{ steps.get_version.outputs.version }}-${{ matrix.mode }}
-          path: |
-            installer/Output/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
-            installer/Output/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.sha256.json
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload GPU installer artifact
-        if: matrix.mode == 'gpu'
-        uses: actions/upload-artifact@v4
-        with:
-          name: WingScribe-Installer-${{ steps.get_version.outputs.version }}-${{ matrix.mode }}
-          path: |
-            installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
-            installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}-*.bin
-            installer/Output/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.sha256.json
-          if-no-files-found: error
-          retention-days: 30
-
-  release:
-    needs: build
-    if: github.event_name == 'push' || inputs.publish_release
-    permissions:
-      contents: write
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get version
-        id: get_version
-        shell: pwsh
-        run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ github.event.inputs.version }}"
-          } else {
-            $version = "${{ github.ref_name }}" -replace "^v", ""
-          }
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Resolved version is empty"
-          }
-          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
-          Write-Host "Creating release for version: $version"
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: List downloaded artifacts
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path artifacts -Recurse -Filter "*.exe" | ForEach-Object {
-            Write-Host "Found: $($_.FullName)"
-          }
-
-      - name: Setup verification Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Verify downloaded installer artifacts
-        shell: pwsh
-        run: |
-          $version = "${{ steps.get_version.outputs.version }}"
-          foreach ($mode in @('CPU', 'GPU')) {
-            $name = "WingScribe-Setup-$mode-$version.sha256.json"
-            $manifests = @(Get-ChildItem artifacts -Recurse -File -Filter $name)
-            if ($manifests.Count -ne 1) { throw "Expected exactly one manifest for $mode" }
-            python scripts/installer_artifacts.py --verify $manifests[0].FullName
-            if ($LASTEXITCODE -ne 0) { throw "Downloaded $mode installer verification failed" }
-          }
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          files: |
-            artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe
-            artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.sha256.json
-            artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe
-            artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}-*.bin
-            artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.sha256.json
-          draft: false
-          prerelease: false
-          body_path: docs/releases/${{ steps.get_version.outputs.version }}.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build summary
-        if: always()
-        shell: pwsh
-        run: |
-          Write-Host "## Build Summary" >> $env:GITHUB_STEP_SUMMARY
-          Write-Host "" >> $env:GITHUB_STEP_SUMMARY
-          Write-Host "- **Version**: ${{ steps.get_version.outputs.version }}" >> $env:GITHUB_STEP_SUMMARY
-          Write-Host "- **CPU Installer**: artifacts/**/WingScribe-Setup-CPU-${{ steps.get_version.outputs.version }}.exe" >> $env:GITHUB_STEP_SUMMARY
-          Write-Host "- **GPU Installer**: artifacts/**/WingScribe-Setup-GPU-${{ steps.get_version.outputs.version }}.exe" >> $env:GITHUB_STEP_SUMMARY
-          Write-Host "- **Status**: ${{ job.status }}" >> $env:GITHUB_STEP_SUMMARY
+          python - <<'PY'
+          from pathlib import Path
+          import json,subprocess,sys,os
+          root=Path('verify'); checked=set(); summary=[]
+          for mode in ('cpu','gpu'):
+              name=f'WingScribe-Setup-{mode.upper()}-3.0.1'; manifest,=root.rglob(name+'.sha256.json')
+              data=json.loads(manifest.read_text()); assert (data['mode'],data['version'])==(mode,'3.0.1')
+              subprocess.run([sys.executable,'scripts/installer_artifacts.py','--verify',str(manifest)],check=True)
+              checked.add(manifest); files=data['files']; assert mode!='cpu' or len(files)==1
+              for f in files:
+                  checked.add(manifest.parent/f['name']); summary.append(f"{f['name']}  {f['size']}  {f['sha256']}")
+          assert checked=={p for p in root.rglob('*') if p.is_file()}
+          print('\n'.join(summary));open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Verified bytes and SHA-256\n\n```\n'+'\n'.join(summary)+'\n```\n')
+          PY

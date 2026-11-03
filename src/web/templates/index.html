@@ -389,6 +389,13 @@
                         <div id="search-results" class="list-group mt-2"></div>
                     </div>
                 </div>
+                <div id="correction-progress" hidden role="status" aria-live="polite" tabindex="-1"
+                     style="position:absolute;inset:0;z-index:10;background:rgba(255,255,255,.96);border-radius:inherit;align-items:center;justify-content:center;text-align:center;padding:2rem">
+                    <div><div class="spinner-border text-primary mb-3" aria-hidden="true"></div>
+                        <p class="mb-1">正在保存物种校对，请稍候……</p>
+                        <small class="text-muted">正在更新照片信息和文件名，请保持页面打开。</small>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1081,21 +1088,50 @@
             }, 300);
         });
 
-        window.selectSpecies = (sci, cn) => {
-            if (!confirm(`更新为 ${cn}?`)) return;
+        let correctionBusy = false;
+        const correctionDialog = document.getElementById('editModal');
+        correctionDialog.addEventListener('hide.bs.modal', event => {
+            if (correctionBusy) event.preventDefault();
+        });
 
-            fetch('/api/update_label', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    photo_id: currentPhotoId,
-                    scientific_name: sci,
-                    chinese_name: cn
-                })
-            }).then(r => {
-                if (r.ok) location.reload();
-                else alert('更新失败');
-            });
+        function setCorrectionBusy(busy) {
+            correctionBusy = busy;
+            correctionDialog.setAttribute('aria-busy', String(busy));
+            correctionDialog.querySelector('.modal-body').inert = busy;
+            correctionDialog.querySelector('.btn-close').disabled = busy;
+            const progress = document.getElementById('correction-progress');
+            progress.hidden = !busy;
+            progress.style.display = busy ? 'flex' : 'none';
+            if (busy) progress.focus();
+        }
+
+        window.selectSpecies = async (sci, cn) => {
+            if (correctionBusy) return;
+            if (!confirm(`更新为 ${cn}?`)) return;
+            const previousFocus = document.activeElement;
+            setCorrectionBusy(true);
+            try {
+                const response = await fetch('/api/update_label', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        photo_id: currentPhotoId,
+                        scientific_name: sci,
+                        chinese_name: cn
+                    })
+                });
+                if (!response.ok) throw new Error('保存未完成');
+                const result = await response.json();
+                if (result.status !== 'success') throw new Error('保存未完成');
+                setCorrectionBusy(false);
+                editModal.hide();
+                location.reload();
+            } catch (error) {
+                alert('未能确认保存结果，请检查服务日志。若连接中断，请先刷新核对结果再决定是否重试。');
+            } finally {
+                setCorrectionBusy(false);
+                if (previousFocus && correctionDialog.contains(previousFocus)) previousFocus.focus();
+            }
         };
 
         // Initial load

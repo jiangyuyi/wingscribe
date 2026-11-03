@@ -157,6 +157,10 @@ class LocalBirdRecognizer(BirdRecognizer):
         if not self.model_id.startswith("hf-hub:"):
             return None
 
+        if self.model_id == 'hf-hub:imageomics/bioclip-2':
+            from .model_download import download_bioclip2
+            return download_bioclip2(local_dir, getattr(self, 'hf_mirror', None))
+
         from huggingface_hub import hf_hub_download
 
         repo_id = self.model_id[len("hf-hub:"):]
@@ -242,6 +246,10 @@ class LocalBirdRecognizer(BirdRecognizer):
                         f"(Precision: {precision})"
                     )
             except Exception as e:
+                if self.model_id == 'hf-hub:imageomics/bioclip-2':
+                    for logger, level in _verbose_loggers:
+                        (logging.getLogger() if logger is None else logger).setLevel(level)
+                    raise OSError('Unable to prepare pinned BioCLIP2 weights. Check the mirror connection and model directory.') from e
                 logging.warning(
                     "Could not resolve a local Hub checkpoint; falling back to open_clip HF loading: %s",
                     e,

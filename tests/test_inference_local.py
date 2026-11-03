@@ -46,7 +46,7 @@ def test_init_sets_hf_mirror_and_falls_back_to_cpu(monkeypatch):
 
 def test_resolve_hf_checkpoint_materializes_local_file(monkeypatch, tmp_path: Path):
     recognizer = LocalBirdRecognizer.__new__(LocalBirdRecognizer)
-    recognizer.model_id = "hf-hub:imageomics/bioclip-2"
+    recognizer.model_id = "hf-hub:imageomics/bioclip"
     recognizer.hf_mirror = "https://mirror.example"
     calls = {}
 
@@ -63,7 +63,7 @@ def test_resolve_hf_checkpoint_materializes_local_file(monkeypatch, tmp_path: Pa
 
     assert checkpoint == tmp_path / "model" / "open_clip_model.safetensors"
     assert calls == {
-        "repo_id": "imageomics/bioclip-2",
+        "repo_id": "imageomics/bioclip",
         "filename": "open_clip_model.safetensors",
         "local_dir": str(tmp_path / "model"),
         "endpoint": "https://mirror.example",

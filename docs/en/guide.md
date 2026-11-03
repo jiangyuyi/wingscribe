@@ -6,7 +6,7 @@ Follow [Install on Windows](#install-on-windows) for a new installation, or [Upg
 
 ## Install on Windows
 
-Download the files from the [3.0.0 release](https://github.com/jiangyuyi/wingscribe/releases/tag/v3.0.0). The CPU edition is one EXE. The GPU edition contains the EXE and all `WingScribe-Setup-GPU-3.0.0-N.bin` parts. Keep the original names and put the parts in one directory. The accompanying `.sha256.json` for your edition lists each file's size and SHA-256. You can compare a downloaded file using `Get-FileHash -Algorithm SHA256 <filename>` in PowerShell.
+Download the files from the [3.0.1 release](https://github.com/jiangyuyi/wingscribe/releases/tag/v3.0.1). The CPU edition is one EXE. The GPU edition contains the EXE and all `WingScribe-Setup-GPU-3.0.1-N.bin` parts. Keep the original names and put the parts in one directory. The accompanying `.sha256.json` for your edition lists each file's size and SHA-256. You can compare a downloaded file using `Get-FileHash -Algorithm SHA256 <filename>` in PowerShell.
 
 Run the EXE. The installer includes Python and ExifTool. It checks for the Microsoft Visual C++ x64 v14 runtime, with 14.51.36247 as the tested minimum. If prompted, complete the Microsoft installer and close its completion window to let WingScribe setup continue. If Windows requests a restart, restart when convenient and run setup again. Unattended installation requires the runtime to be present first.
 
@@ -16,9 +16,9 @@ Start the desktop or Start menu shortcut. Leave the server window open and visit
 
 1. Stop active processing and wait for workers to finish. Close WingScribe and any other process using its database. Record the actual source, output, and database paths.
 2. Copy the configuration directory, including private `settings.yaml` and `secrets.yaml`, the closed database directory, and backups to a location outside the installation. Back up your photo sources and archives separately. Older uninstallers can remove data kept inside the old installation directory.
-3. Install 3.0.0 into a **new, empty directory**. If setup detects a legacy uninstall log, return to directory selection. Keep the old installation available until you have checked the new one.
+3. Install 3.0.1 into a **new, empty directory**. If setup detects a legacy uninstall log, return to directory selection. Keep the old installation available until you have checked the new one.
 4. For a fresh start, choose a new local database and output directory. Run a small batch of copies and review the results. To keep historical labels, preview the [catalogue migration](#species-catalogue-and-migration) on a copy of the database before applying it.
-5. To roll back, stop 3.0.0 and use the older application with the configuration and database you backed up. Give each installation its own database and output directory while comparing them.
+5. To roll back, stop 3.0.1 and use the older application with the configuration and database you backed up. Give each installation its own database and output directory while comparing them.
 
 ## Configure paths and recognition
 

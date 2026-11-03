@@ -4,7 +4,7 @@
 
 WingScribe helps bird photographers work through a shoot on their own computer. It detects birds, crops images, suggests species, and organizes the results in a searchable gallery. You can also compare bursts at full resolution, mark keepers, and move rejected JPEGs into a recoverable quarantine.
 
-[Download WingScribe 3.0.0](https://github.com/jiangyuyi/wingscribe/releases/tag/v3.0.0) · [English user guide](docs/en/guide.md) · [Upgrading from 2.3.1](docs/en/guide.md#upgrade-from-231)
+[Download WingScribe 3.0.1](https://github.com/jiangyuyi/wingscribe/releases/tag/v3.0.1) · [English user guide](docs/en/guide.md) · [Upgrading from 2.3.1](docs/en/guide.md#upgrade-from-231)
 
 ## First run on Windows
 

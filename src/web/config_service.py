@@ -9,13 +9,13 @@ from pathlib import Path
 
 import yaml
 
-from src.utils.settings import first_run_defaults, shape_errors, with_defaults
+from src.utils.settings import first_run_defaults, new_user_defaults, shape_errors, with_defaults
 from src.utils.config_loader import validate_paths_config
 
 
 def get_config(base_dir: Path, definition_provider):
     config_path = base_dir / "config" / "settings.yaml"
-    result = {"config": first_run_defaults(), "definition": definition_provider(),
+    result = {"config": new_user_defaults(), "definition": definition_provider(),
               "is_first_run": not config_path.exists()}
     if not config_path.exists():
         return result
@@ -24,7 +24,10 @@ def get_config(base_dir: Path, definition_provider):
         current = {} if current is None else current
         if shape_errors(current):
             raise ValueError("Invalid configuration shape")
-        result["config"] = current
+        displayed = current
+        if not current.get('paths', {}).get('db_path'):
+            displayed.setdefault('paths', {})['db_path'] = str((base_dir / 'data/db/wingscribe.db').absolute())
+        result["config"] = displayed
     except (OSError, ValueError, yaml.YAMLError):
         result["error"] = "配置文件格式错误或无法读取，请修复 settings.yaml 后重试；原文件未修改。"
     return result
@@ -34,7 +37,7 @@ def save_config(req, base_dir: Path, set_nested_value):
     config_path = base_dir / "config" / "settings.yaml"
     try:
         current = (yaml.safe_load(config_path.read_text(encoding="utf-8"))
-                   if config_path.exists() else first_run_defaults())
+                   if config_path.exists() else new_user_defaults())
         current = {} if current is None else current
         if shape_errors(current):
             raise ValueError("Invalid configuration shape")
@@ -54,6 +57,9 @@ def save_config(req, base_dir: Path, set_nested_value):
                     raise ValueError("Invalid boolean")
                 value = value.lower() in ("true", "yes", "1", "on")
             set_nested_value(current, f"{item.section}.{item.key}", value)
+        if not current.get('paths', {}).get('db_path'):
+            current.setdefault('paths', {})['db_path'] = (str((base_dir / 'data/db/wingscribe.db').absolute())
+                if config_path.exists() else new_user_defaults()['paths']['db_path'])
         current = with_defaults(current)
         valid, errors = validate_paths_config(current)
         if not valid:

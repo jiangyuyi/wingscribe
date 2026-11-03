@@ -788,7 +788,8 @@ def test_get_config_reads_yaml_when_settings_exists(web_app, tmp_path, monkeypat
     result = asyncio.run(web_app.get_config())
 
     assert result == {
-        "config": {"paths": {"sources": [{"path": "D:/birds"}]}, "web": {"port": 8000}},
+        "config": {"paths": {"sources": [{"path": "D:/birds"}],
+                             "db_path": str(tmp_path / "data/db/wingscribe.db")}, "web": {"port": 8000}},
         "definition": {"basic": {"web": []}},
         "is_first_run": False,
     }

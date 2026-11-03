@@ -20,6 +20,13 @@ def get_config_definition():
                     "type": "path",
                     "required": True,
                 },
+                {
+                    "key": "db_path",
+                    "label": "数据库路径",
+                    "description": "本机 SQLite 数据库；新安装默认保存在用户数据目录，卸载后保留。可选择已有文件或新建文件",
+                    "type": "file",
+                    "required": True,
+                },
             ],
             "web": [
                 {
@@ -40,12 +47,6 @@ def get_config_definition():
         },
         "advanced": {
             "paths": [
-                {
-                    "key": "db_path",
-                    "label": "数据库路径",
-                    "description": "SQLite 数据库文件位置；留空使用安装目录下 data/db/wingscribe.db，可选择新建文件",
-                    "type": "file",
-                },
                 {
                     "key": "references_path",
                     "label": "参考数据目录",

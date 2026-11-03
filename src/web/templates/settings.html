@@ -461,6 +461,9 @@
                     if (data.exists && data.is_file) {
                         statusDiv.textContent = data.can_read ? '✓ 文件可读取' : '⚠ 文件不可读';
                         statusDiv.className = 'path-status ' + (data.can_read ? 'valid' : 'invalid');
+                    } else if (!data.exists && input.dataset.key === 'db_path') {
+                        statusDiv.textContent = '将在使用数据库时创建文件，请确保所在本机目录可写';
+                        statusDiv.className = 'path-status';
                     } else if (data.exists && data.is_directory) {
                         statusDiv.textContent = '⚠ 路径是目录，不是文件';
                         statusDiv.className = 'path-status invalid';

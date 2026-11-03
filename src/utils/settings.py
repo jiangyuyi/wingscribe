@@ -1,5 +1,7 @@
 """Typed configuration boundaries and safe first-run defaults."""
 from copy import deepcopy
+import os
+import sys
 from pathlib import Path
 
 import yaml
@@ -54,6 +56,19 @@ def first_run_defaults() -> dict:
     defaults["paths"]["sources"] = [{"path": "", "enabled": True, "recursive": True}]
     defaults["paths"]["output"]["root_dir"] = ""
     defaults["web"]["host"] = "127.0.0.1"
+    return defaults
+
+
+def new_user_defaults() -> dict:
+    """First-install storage is per user; existing configurations keep legacy defaults."""
+    defaults = first_run_defaults()
+    if sys.platform == 'win32':
+        base = Path(os.environ.get('LOCALAPPDATA') or Path.home() / 'AppData/Local')
+        database = base / 'WingScribe/data/wingscribe.db'
+    else:
+        base = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
+        database = base / 'wingscribe/data/wingscribe.db'
+    defaults['paths']['db_path'] = str(database.absolute())
     return defaults
 
 

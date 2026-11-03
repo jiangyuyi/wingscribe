@@ -5,6 +5,39 @@ import yaml
 from src.web import app as web_module
 
 
+def test_new_database_is_visible_in_basic_settings_and_saved(web_app, tmp_path, monkeypatch):
+    from src.web import config_service
+    from src.utils import settings
+    monkeypatch.setattr(settings.sys, 'platform', 'win32')
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'user-data'))
+    base = tmp_path / 'installation'
+    expected = str(tmp_path / 'user-data/WingScribe/data/wingscribe.db')
+    result = config_service.get_config(base, web_app.get_config_definition)
+    assert result['config']['paths']['db_path'] == expected
+    assert any(item['key'] == 'db_path' for item in result['definition']['basic']['paths'])
+    assert not any(item['key'] == 'db_path' for item in result['definition']['advanced']['paths'])
+    assert not (tmp_path / 'user-data').exists()
+    req = web_module.SaveConfigRequest(configs=[
+        web_module.ConfigItem(section='paths', key='sources[0].path', value=str(tmp_path / 'source')),
+        web_module.ConfigItem(section='paths', key='output.root_dir', value=str(tmp_path / 'output')),
+    ])
+    assert config_service.save_config(req, base, web_app.set_nested_value)['status'] == 'saved'
+    saved = yaml.safe_load((base / 'config/settings.yaml').read_text(encoding='utf8'))
+    assert saved['paths']['db_path'] == expected
+
+
+def test_existing_database_location_is_preserved_in_settings(web_app, tmp_path):
+    from src.web import config_service
+    target = tmp_path / 'config/settings.yaml'
+    target.parent.mkdir()
+    for path, expected in [('data/db/old.db', 'data/db/old.db'), ('', str(tmp_path / 'data/db/wingscribe.db'))]:
+        target.write_text(yaml.safe_dump({'paths': {'db_path': path}}), encoding='utf8')
+        before = target.read_bytes()
+        result = config_service.get_config(tmp_path, web_app.get_config_definition)
+        assert result['config']['paths']['db_path'] == expected
+        assert target.read_bytes() == before
+
+
 def test_set_nested_value_supports_array_indexes(web_app):
     target = {"paths": {}}
 

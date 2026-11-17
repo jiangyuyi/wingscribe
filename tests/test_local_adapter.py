@@ -24,7 +24,7 @@ def test_local_adapter_uses_avilist_and_converts_results(image_path, monkeypatch
         def __init__(self, **kwargs):
             calls.append(kwargs)
         def predict(self, path, labels, top_k):
-            assert len(labels) == 11131
+            assert len(labels) == 11172
             assert "Parus major" in labels
             assert top_k == 2
             assert Path(path).is_file()

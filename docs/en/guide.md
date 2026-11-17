@@ -6,7 +6,7 @@ Follow [Install on Windows](#install-on-windows) for a new installation, or [Upg
 
 ## Install on Windows
 
-Download the files from the [3.0.1 release](https://github.com/jiangyuyi/wingscribe/releases/tag/v3.0.1). The CPU edition is one EXE. The GPU edition contains the EXE and all `WingScribe-Setup-GPU-3.0.1-N.bin` parts. Keep the original names and put the parts in one directory. The accompanying `.sha256.json` for your edition lists each file's size and SHA-256. You can compare a downloaded file using `Get-FileHash -Algorithm SHA256 <filename>` in PowerShell.
+Download the files from the [3.0.2 release](https://github.com/jiangyuyi/wingscribe/releases/tag/v3.0.2). The CPU edition is one EXE. The GPU edition contains the EXE and all `WingScribe-Setup-GPU-3.0.2-N.bin` parts. Keep the original names and put the parts in one directory. The accompanying `.sha256.json` for your edition lists each file's size and SHA-256. You can compare a downloaded file using `Get-FileHash -Algorithm SHA256 <filename>` in PowerShell.
 
 Run the EXE. The installer includes Python and ExifTool. It checks for the Microsoft Visual C++ x64 v14 runtime, with 14.51.36247 as the tested minimum. If prompted, complete the Microsoft installer and close its completion window to let WingScribe setup continue. If Windows requests a restart, restart when convenient and run setup again. Unattended installation requires the runtime to be present first.
 
@@ -16,9 +16,9 @@ Start the desktop or Start menu shortcut. Leave the server window open and visit
 
 1. Stop active processing and wait for workers to finish. Close WingScribe and any other process using its database. Record the actual source, output, and database paths.
 2. Copy the configuration directory, including private `settings.yaml` and `secrets.yaml`, the closed database directory, and backups to a location outside the installation. Back up your photo sources and archives separately. Older uninstallers can remove data kept inside the old installation directory.
-3. Install 3.0.1 into a **new, empty directory**. If setup detects a legacy uninstall log, return to directory selection. Keep the old installation available until you have checked the new one.
+3. Install 3.0.2 into a **new, empty directory**. If setup detects a legacy uninstall log, return to directory selection. Keep the old installation available until you have checked the new one.
 4. For a fresh start, choose a new local database and output directory. Run a small batch of copies and review the results. To keep historical labels, preview the [catalogue migration](#species-catalogue-and-migration) on a copy of the database before applying it.
-5. To roll back, stop 3.0.1 and use the older application with the configuration and database you backed up. Give each installation its own database and output directory while comparing them.
+5. To roll back, stop 3.0.2 and use the older application with the configuration and database you backed up. Give each installation its own database and output directory while comparing them.
 
 ## Configure paths and recognition
 
@@ -51,6 +51,14 @@ web:
 Use absolute paths for sources and outputs. A separate destination keeps a scan from consuming its own archive. Keep SQLite on local storage. The database picker accepts an existing file or a new filename. Cancel leaves the field unchanged. On a new installation, Basic settings prefills the full database path under `%LOCALAPPDATA%\WingScribe\data\wingscribe.db`. It remains in the user data directory after application uninstall. Existing configurations keep their original database location. An omitted or blank legacy path continues to refer to `data/db/wingscribe.db` under the application directory. For a NAS, connect the share using the same account that starts WingScribe. Use a path such as `Z:/Birds`, `\\server\photos`, or a mounted directory on Linux. A mapped drive in your desktop session may be invisible to a background service. After a share outage, restore access and start another scan. History is retained, and unchanged work can be reused.
 
 `processing.device` selects `auto`, `cpu`, or `cuda`. `recognition.top_k` controls the number of species suggestions. Processing quality options affect the archiving pipeline; burst focus ranking is a separate tool. Keep API credentials in `config/secrets.yaml` following the [secrets example](../../config/secrets.example.yaml). Keep the Web UI and recognition endpoints on localhost or a trusted network.
+
+### Folder selection
+
+In **By Folders**, enabling **Include subfolders** selects a whole subtree. Children inherit the selection when expanded; unchecking a child excludes its subtree and shows a mixed `−` state on ancestors. Excluding a child of an explicitly selected parent keeps that parent's direct photos included. Selecting only children does not include the parent's direct photos. A deeper folder can be explicitly included again. Selecting a parent again clears its exceptions; unchecking it clears the whole subtree.
+
+The tree remains lazy: checking a parent does not enumerate the NAS. Collapsing retains rules, and reopening uses cached children. Unloaded and newly discovered descendants inherit their nearest explicit rule. Selecting all currently visible children does not imply that unknown descendants or direct parent photos are selected. With recursion disabled, folders are independent and only direct photos are processed. Each mode remembers its own selection; review the include/exclude list after switching. Refreshing the page resets temporary selections.
+
+Exclusions appear in the start confirmation and are passed to the scanner, which prunes excluded subtrees before listing them. Explicitly re-included descendants are separate scan roots. The running task stores a snapshot of its rules; later UI changes do not alter that task. Date-range mode is unaffected.
 
 ### Archive naming and model files
 
@@ -94,7 +102,7 @@ Check each item's result. A file lock or disconnected share can leave a partiall
 
 ## Species catalogue and migration
 
-New libraries use AviList v2025b with 11,131 species. The catalogue includes scientific and English names. Chinese display names come from IOC 15.1 where scientific names match; unmatched entries fall back to the scientific name. Use the [catalogue manifest](../../data/references/avilist-v2025b.json) for attribution, source hashes and the CC BY 4.0 license. Matching a name alone does not resolve the historical scope of a split or merged species.
+WingScribe 3.0.2 defaults to AviList v2026 with 11,172 species. Existing v2025b databases require an explicit migration. Chinese display names use 10,941 IOC 15.1 exact-name aliases and 41 v2025b aliases with matching Avibase IDs; 190 entries display the scientific name. These are sourced display aliases, not official AviList Chinese translations. Use the [catalogue manifest](../../data/references/avilist-v2026.json) for attribution, source hashes and the CC BY 4.0 license. Matching a name alone does not resolve the historical scope of a split or merged species.
 
 For an existing IOC library, stop all writers and run the preview on a database copy. From the repository root with the source environment active:
 
@@ -103,7 +111,23 @@ python scripts/migrate_avilist.py --database data/db/wingscribe.db --report data
 python scripts/migrate_avilist.py --database data/db/wingscribe.db --apply --backup-dir data/backups --report data/backups/avilist-migration.json
 ```
 
-Review the first report before running the second command. Migration keeps historical photo labels and records legacy names for review. For rollback, stop the application, keep a copy of the current database, and restore the report's `pre_schema_backup` to the original database path. A region list with no matching taxonomy version falls back to the full candidate set.
+Review the first report before running the second command. Migration keeps historical photo labels and records legacy names for review. For rollback, stop the application, keep a copy of the current database, and restore the report's `pre_schema_backup` to the original database path.
+
+For an existing v2025b library, close the application and use the explicit version upgrade (on an installed copy, run from the installation directory and replace `python` with `.\python\python.exe`; replace the example database path with your configured path):
+
+```powershell
+python scripts/migrate_avilist.py --database data/db/wingscribe.db --upgrade-from AviList-v2025b --apply --backup-dir data/backups --report data/backups/avilist-2026-upgrade.json
+```
+
+The migration checks the shared processing lock and refuses running or unrecovered jobs. It verifies the pinned old catalogue, backs up the database, archives the previous catalogue and provenance, and replaces only the active classification. Photo labels, manual corrections and analysis history remain unchanged. `scripts/compare_avilist.py` generates a read-only concept and name change report. The workbook checksum in the manifest is locally pinned from an official-link download, not an independently published upstream checksum.
+
+WingScribe 3.0.2 restores China filtering with **1,539 species** from the union of Avibase's AviList 2026 CN, Taiwan, Hong Kong and Macau checklists, including listed rare/accidental records. Exact concept IDs link membership to the pinned global catalogue; [the regional manifest](../../data/references/china-avilist-v2026.json) records attribution, versions and hashes. Regional membership is attributed separately and does not inherit the AviList taxonomy license.
+
+`recognition.region_filter: auto` uses global candidates when the original photo's location text contains an entry from the existing foreign-country dictionary; other locations, including empty/Unknown, use China candidates. `china` always restricts to China; `global` and legacy null use all 11,172 species. Choose global for captive foreign birds or exceptional locations. Restrictions apply before inference, not by removing global Top-K results. Missing or incompatible regional data fails explicitly; it never silently switches to global. Fewer candidates change normalized scores, so existing confidence thresholds remain unchanged.
+
+The local recognition API adds optional `location_tag` and returns actual scope, candidate count and provenance in `region_selection`. Omitting API `region_filter` preserves its existing global behavior. External unified cloud APIs reject china/auto until candidate restriction is validated. New candidate signatures invalidate old global classification reuse, while historical photos and manual corrections remain unchanged. `python -m scripts.preview_regional_recheck --database data/db/wingscribe.db --output data/backups/regional-preview.json` only previews historical analyses: it does not enqueue reprocessing or change labels. Old scientific names outside the current list are review leads, not proven misidentifications.
+
+With the installed embedded runtime, run `python/python.exe scripts/preview_regional_recheck.py --database data/db/wingscribe.db --output data/backups/regional-preview.json` from the installation directory instead of `-m scripts`. Substitute your actual database path. After a 2026 database migration, an explicit `taxonomy_catalogue_path` must also point to the 2026 CSV; keeping an old 2025b path causes China filtering to fail explicitly.
 
 ## Source installation and recognition API
 

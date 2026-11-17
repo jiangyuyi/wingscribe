@@ -71,7 +71,7 @@ def test_recognize_maps_value_error_to_400(monkeypatch):
 
     class FailingFactory:
         @staticmethod
-        def create(_platform):
+        def create_from_request(_request):
             raise ValueError("bad request")
 
     monkeypatch.setattr(recognition_service, "RecognizerFactory", FailingFactory)
@@ -90,7 +90,7 @@ def test_recognize_maps_runtime_error_to_503(monkeypatch):
 
     class FailingFactory:
         @staticmethod
-        def create(_platform):
+        def create_from_request(_request):
             raise RuntimeError("service unavailable")
 
     monkeypatch.setattr(recognition_service, "RecognizerFactory", FailingFactory)
@@ -122,7 +122,7 @@ def test_recognize_returns_recognizer_result(monkeypatch):
 
     class StubFactory:
         @staticmethod
-        def create(_platform):
+        def create_from_request(_request):
             return StubRecognizer()
 
     monkeypatch.setattr(recognition_service, "RecognizerFactory", StubFactory)

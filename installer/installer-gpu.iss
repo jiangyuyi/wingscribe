@@ -3,7 +3,7 @@
 
 #define AppName "WingScribe"
 #ifndef AppVersion
-  #define AppVersion "3.0.1"
+  #define AppVersion "3.0.2"
 #endif
 #define AppPublisher "WingScribe Project"
 #define AppExeName "start_web.bat"

@@ -48,7 +48,7 @@ async def list_platforms() -> ListPlatformsResponse:
 async def recognize(request: RecognizeRequest, http_request: Request = None) -> RecognizeResponse:
     try:
         factory = http_request.app.state.recognizer_factory if http_request else RecognizerFactory
-        recognizer = factory.create(request.platform.value)
+        recognizer = factory.create_from_request(request)
         return await recognizer.recognize(request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

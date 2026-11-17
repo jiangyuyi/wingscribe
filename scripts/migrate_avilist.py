@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.metadata.avilist import DEFAULT_CATALOGUE, build_catalogue, load_catalogue
 from src.metadata.ioc_manager import IOCManager
-from src.metadata.taxonomy_catalogue import replace_catalogue
+from src.metadata.taxonomy_catalogue import replace_catalogue, migration_guard, current_release
+from src.metadata.avilist import LEGACY_VERSION
 
 
 def main():
@@ -18,6 +19,8 @@ def main():
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--catalogue", type=Path, default=DEFAULT_CATALOGUE)
     parser.add_argument("--apply", action="store_true", help="Without this flag, only inspect the database read-only")
+    parser.add_argument("--upgrade-from", choices=[LEGACY_VERSION],
+                        help="Explicitly authorize the supported AviList-v2025b to v2026 upgrade")
     parser.add_argument("--backup-dir", type=Path)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--build-from", type=Path, help="Optional pinned official XLSX to rebuild the catalogue")
@@ -29,30 +32,36 @@ def main():
         build_catalogue(args.build_from, args.ioc_names, args.ioc_names.parent, args.catalogue)
     rows, manifest = load_catalogue(args.catalogue)
     if args.apply:
-        before = None
-        # Back up before IOCManager's legacy schema initialization as well.
-        if args.database.exists() and args.backup_dir is None:
-            parser.error("--apply to an existing database requires --backup-dir")
-        if args.database.exists():
-            args.backup_dir.mkdir(parents=True, exist_ok=True)
-            from uuid import uuid4
-            before = args.backup_dir / f"before-schema-{uuid4().hex}.db"
-            with closing(sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)) as source:
-                with closing(sqlite3.connect(before)) as target:
-                    source.backup(target)
-        manager = IOCManager(str(args.database))
-        try:
-            report = replace_catalogue(manager, rows, manifest, args.backup_dir)
-            if before is not None:
-                report["pre_schema_backup"] = str(before)
-            manager.rebuild_species_stats()
-        finally:
-            manager.close()
+        with migration_guard(args.database):
+            before = None
+            # Back up before IOCManager's legacy schema initialization as well.
+            if args.database.exists() and args.backup_dir is None:
+                parser.error("--apply to an existing database requires --backup-dir")
+            if args.database.exists():
+                args.backup_dir.mkdir(parents=True, exist_ok=True)
+                from uuid import uuid4
+                before = args.backup_dir / f"before-schema-{uuid4().hex}.db"
+                with closing(sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)) as source:
+                    with closing(sqlite3.connect(before)) as target:
+                        source.backup(target)
+                        if target.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                            raise RuntimeError('Pre-schema backup integrity check failed')
+            manager = IOCManager(str(args.database))
+            try:
+                report = replace_catalogue(manager, rows, manifest, args.backup_dir,
+                                           upgrade_from=args.upgrade_from, _migration_guard_held=True)
+                if before is not None:
+                    report["pre_schema_backup"] = str(before)
+                manager.rebuild_species_stats()
+            finally:
+                manager.close()
     else:
         with closing(sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+            previous = current_release(conn)
             old_names = {row[0] for row in conn.execute("SELECT scientific_name FROM taxonomy")}
             active = {row["scientific_name"] for row in rows}
             report = {"status": "preview", "version": manifest["version"], "species_count": len(rows),
+                      "previous_version": previous["version"] if previous else None,
                       "legacy_species_count": len(old_names), "same_name_unverified": len(old_names & active),
                       "unmatched_names": sorted(old_names - active),
                       "preserved_photos": conn.execute("SELECT count(*) FROM photos").fetchone()[0],

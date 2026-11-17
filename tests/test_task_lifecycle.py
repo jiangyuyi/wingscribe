@@ -119,6 +119,22 @@ def test_service_reports_rejected_start():
     assert start_pipeline(manager, SimpleNamespace(start_date=None, end_date=None))["status"] == "error"
 
 
+def test_scan_phase_is_exposed_and_changes_before_processing(monkeypatch):
+    manager = TaskManager()
+    def run(runner):
+        runner._phase_callback('scanning')
+        assert manager.snapshot()['phase'] == 'scanning'
+        assert manager.snapshot()['total'] == 0
+        runner._phase_callback('processing')
+        runner.progress(0, 5)
+        assert manager.snapshot()['phase'] == 'processing'
+        assert manager.snapshot()['total'] == 5
+    install_runner(monkeypatch, run)
+    assert manager.start_pipeline()
+    manager.wait()
+    assert manager.snapshot()['state'] == 'completed'
+
+
 @pytest.mark.parametrize("by_folders", [False, True])
 def test_worker_exception_marks_scan_failed(tmp_path, by_folders):
     from src.pipeline_runner import WingScribePipeline
@@ -167,7 +183,8 @@ def test_pipeline_paths_and_secrets_do_not_depend_on_cwd(tmp_path, monkeypatch):
         captured["path"] = path
         return SimpleNamespace(close=lambda: None)
     monkeypatch.setattr(pipeline, "IOCManager", database)
-    monkeypatch.setattr(pipeline.WingScribePipeline, "_get_taxonomy_labels", lambda self: [])
+    monkeypatch.setattr(pipeline.WingScribePipeline, "_get_taxonomy_labels",
+                        lambda self: setattr(self, 'taxonomy_version', 'test') or [])
     monkeypatch.chdir(other)
     runner = pipeline.WingScribePipeline()
     assert captured["path"] == str(project / "data/db/test.db")

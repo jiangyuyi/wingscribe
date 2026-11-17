@@ -30,9 +30,9 @@ def legacy(tmp_path):
 
 def test_pinned_catalogue_is_complete_and_names_are_sourced():
     rows, release = load_catalogue()
-    assert len(rows) == 11131
-    assert release["version"] == "AviList-v2025b"
-    assert len({row["taxon_id"] for row in rows}) == 11131
+    assert len(rows) == 11172
+    assert release["version"] == "AviList-v2026"
+    assert len({row["taxon_id"] for row in rows}) == 11172
     bulbul = next(row for row in rows if row["scientific_name"] == "Pycnonotus sinensis")
     assert bulbul["chinese_name"] == "白头鹎"
     assert "concept unverified" in bulbul["chinese_name_source"]
@@ -118,9 +118,11 @@ def test_unversioned_region_list_cannot_exclude_new_avilist_species():
     pipeline.taxonomy_version = "AviList-v2025b"
     pipeline.all_labels = ["Testus alpha", "Testus beta"]
     pipeline.china_allowlist = {"Testus alpha"}
-    assert pipeline._select_candidate_labels("Beijing") == pipeline.all_labels
+    with pytest.raises(ValueError, match='不匹配'):
+        pipeline._select_candidate_labels("Beijing")
     pipeline.config["paths"] = {"china_list_taxonomy_version": "AviList-v2025b"}
-    assert pipeline._select_candidate_labels("Beijing") == ["Testus alpha"]
+    with pytest.raises(ValueError, match='不匹配'):
+        pipeline._select_candidate_labels("Beijing")
 
 
 def test_empty_database_bootstraps_avilist_and_legacy_database_is_not_auto_migrated(legacy, tmp_path):
@@ -129,8 +131,8 @@ def test_empty_database_bootstraps_avilist_and_legacy_database_is_not_auto_migra
     manager = IOCManager(str(tmp_path / "new.db"))
     try:
         ensure_taxonomy(manager, {})
-        assert manager.conn.execute("SELECT count(*) FROM taxonomy").fetchone()[0] == 11131
-        assert current_release(manager.conn)["version"] == "AviList-v2025b"
+        assert manager.conn.execute("SELECT count(*) FROM taxonomy").fetchone()[0] == 11172
+        assert current_release(manager.conn)["version"] == "AviList-v2026"
         with pytest.raises(ValueError, match="versioned"):
             manager.import_from_excel("unused.xlsx")
     finally:

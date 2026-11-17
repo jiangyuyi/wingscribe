@@ -51,7 +51,7 @@ async def recognize(
     http_request: Request = None,
 ) -> RecognizeResponse:
     try:
-        recognizer = get_recognizer_factory(http_request).create(request.platform.value)
+        recognizer = get_recognizer_factory(http_request).create_from_request(request)
         return await recognizer.recognize(request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -181,6 +181,21 @@ class BatchRecognitionService:
                 indices: List[int]
             ) -> List[RecognizeResponse]:
                 """处理单个平台的所有图片"""
+                # Reject unsupported scope before provider creation or upload;
+                # a restricted item must not block valid global siblings.
+                from .region_filter import validate_region_support, RegionFilterError
+                errors = {}
+                for index in indices:
+                    try:
+                        validate_region_support(platform, job.images[index].region_filter)
+                    except RegionFilterError as exc:
+                        errors[index] = RecognizeResponse(success=False,
+                            image_path=job.images[index].image_path, platform=platform,
+                            processing_time_ms=0, error=str(exc))
+                if errors:
+                    allowed = [index for index in indices if index not in errors]
+                    valid = iter(await process_platform(platform, allowed) if allowed else [])
+                    return [errors[index] if index in errors else next(valid) for index in indices]
                 # 创建该平台的识别器
                 try:
                     recognizer = self.recognizer_factory.create(platform)

@@ -18,6 +18,7 @@ from copy import deepcopy
 from pathlib import Path
 from ..local_adapter import LocalRecognitionAdapter
 from ...metadata.avilist import DEFAULT_CATALOGUE
+from ..region_filter import validate_region_support
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,10 @@ class RecognizerFactory:
                 options = dict(model_name=rec.get("local", {}).get("model_type", "bioclip-2"),
                                device=config.get("processing", {}).get("device", "auto"),
                                hf_mirror=rec.get("hf_mirror"), catalogue_path=catalogue)
+                for key, option in (('china_catalogue_path', 'china_path'), ('foreign_list', 'foreign_path')):
+                    if config.get('paths', {}).get(key):
+                        path = Path(config['paths'][key])
+                        options[option] = path if path.is_absolute() else root / path
                 options.update(kwargs)
                 key = tuple(sorted((name, str(value)) for name, value in options.items()))
                 with cls._local_lock:
@@ -125,6 +130,7 @@ class RecognizerFactory:
     def create_from_request(cls, request) -> AbstractBirdRecognizer:
         """从请求对象创建识别器"""
         platform = request.platform.value if hasattr(request.platform, 'value') else request.platform
+        validate_region_support(platform, request.region_filter)
         return cls.create(platform)
 
     @classmethod

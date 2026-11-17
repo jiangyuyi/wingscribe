@@ -1,6 +1,19 @@
 import re
 
 
+def regional_catalogue_description():
+    from ..metadata.avilist import DEFAULT_CATALOGUE, load_catalogue
+    from ..recognition.region_filter import RegionSelector
+    try:
+        rows, manifest = load_catalogue(DEFAULT_CATALOGUE)
+        selected = RegionSelector([r['scientific_name'] for r in rows], manifest['version']).select('china')
+        return (f"auto：命中国外名称词典用全球，其余（含未知地点）用中国；china：固定中国；global/null：全球。"
+                f"内置中国 {len(selected.labels)} 种，全球 {len(rows)} 种；{selected.metadata['regional_list_version']}。"
+                "实际范围及候选数见任务日志；圈养海外鸟种请选 global。")
+    except (OSError, ValueError, KeyError):
+        return "auto：国外关键词用全球，其余用中国；内置中国名单校验失败，使用前请修复或明确选择 global。"
+
+
 def get_config_definition():
     """Return the configuration schema for UI."""
     return {
@@ -57,6 +70,12 @@ def get_config_definition():
                     "key": "taxonomy_catalogue_path",
                     "label": "AviList 物种名录",
                     "description": "固定版本 CSV 及同名 JSON 校验文件；留空使用内置名录",
+                    "type": "file",
+                },
+                {
+                    "key": "china_catalogue_path",
+                    "label": "中国候选名录",
+                    "description": "留空使用内置 Avibase 中国范围并集；自定义 CSV 必须附同名 JSON，且适配当前固定 AviList",
                     "type": "file",
                 },
                 {
@@ -147,9 +166,9 @@ def get_config_definition():
                 {
                     "key": "region_filter",
                     "label": "区域过滤",
-                    "description": "china/auto/null",
+                    "description": regional_catalogue_description(),
                     "type": "select",
-                    "options": ["china", "auto", "null"],
+                    "options": ["china", "auto", "global", "null"],
                     "default": "auto",
                 },
                 {

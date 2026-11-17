@@ -110,7 +110,8 @@ def test_start_pipeline_by_folders_endpoint_forwards_request(web_app, monkeypatc
     )
 
     assert response == {"status": "success", "message": "Pipeline started for 2 folder(s)"}
-    assert calls == [(["D:/photos/a", "D:/photos/b"], False)]
+    from pathlib import Path
+    assert calls == [([str(Path("D:/photos/a")), str(Path("D:/photos/b"))], False)]
 
 
 def test_start_pipeline_by_folders_endpoint_rejects_when_running(web_app, monkeypatch):

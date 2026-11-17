@@ -1,0 +1,2275 @@
+{
+  "old_version": "AviList-v2025b",
+  "new_version": "AviList-v2026",
+  "old_count": 11131,
+  "new_count": 11172,
+  "shared_concept_ids": 11082,
+  "renamed_same_id": [
+    {
+      "taxon_id": "avibase-0C571D99",
+      "old_name": "Emberiza tahapisi",
+      "new_name": "Fringillaria tahapisi"
+    },
+    {
+      "taxon_id": "avibase-17E7F90B",
+      "old_name": "Emberiza goslingi",
+      "new_name": "Fringillaria goslingi"
+    },
+    {
+      "taxon_id": "avibase-1866F80E",
+      "old_name": "Emberiza pusilla",
+      "new_name": "Schoeniclus pusillus"
+    },
+    {
+      "taxon_id": "avibase-18B4CE02",
+      "old_name": "Tachyspiza haplochrous",
+      "new_name": "Tachyspiza haplochroa"
+    },
+    {
+      "taxon_id": "avibase-2A4F0DB3",
+      "old_name": "Emberiza lathami",
+      "new_name": "Melophus lathami"
+    },
+    {
+      "taxon_id": "avibase-3AACCDB1",
+      "old_name": "Parvipsitta pusilla",
+      "new_name": "Psitteuteles pusillus"
+    },
+    {
+      "taxon_id": "avibase-3C33A7C5",
+      "old_name": "Emberiza socotrana",
+      "new_name": "Fringillaria socotrana"
+    },
+    {
+      "taxon_id": "avibase-45059BE8",
+      "old_name": "Emberiza cabanisi",
+      "new_name": "Fringillaria cabanisi"
+    },
+    {
+      "taxon_id": "avibase-4A50E265",
+      "old_name": "Emberiza chrysophrys",
+      "new_name": "Schoeniclus chrysophrys"
+    },
+    {
+      "taxon_id": "avibase-6D102D72",
+      "old_name": "Emberiza impetuani",
+      "new_name": "Fringillaria impetuani"
+    },
+    {
+      "taxon_id": "avibase-72386016",
+      "old_name": "Emberiza poliopleura",
+      "new_name": "Fringillaria poliopleura"
+    },
+    {
+      "taxon_id": "avibase-7574C0E5",
+      "old_name": "Emberiza aureola",
+      "new_name": "Schoeniclus aureolus"
+    },
+    {
+      "taxon_id": "avibase-82D1EE00",
+      "old_name": "Emberiza elegans",
+      "new_name": "Schoeniclus elegans"
+    },
+    {
+      "taxon_id": "avibase-83354540",
+      "old_name": "Neopelma chrysolophum",
+      "new_name": "Protopelma chrysolophum"
+    },
+    {
+      "taxon_id": "avibase-86C258A6",
+      "old_name": "Pycnopygius cinereus",
+      "new_name": "Pinarostola cinerea"
+    },
+    {
+      "taxon_id": "avibase-8B89A812",
+      "old_name": "Pycnopygius ixoides",
+      "new_name": "Pinarostola ixoides"
+    },
+    {
+      "taxon_id": "avibase-91E82CA2",
+      "old_name": "Ptilinopus holosericea",
+      "new_name": "Ptilinopus holosericeus"
+    },
+    {
+      "taxon_id": "avibase-9689E669",
+      "old_name": "Parvipsitta porphyrocephala",
+      "new_name": "Psitteuteles porphyrocephalus"
+    },
+    {
+      "taxon_id": "avibase-9787BE57",
+      "old_name": "Emberiza spodocephala",
+      "new_name": "Schoeniclus spodocephalus"
+    },
+    {
+      "taxon_id": "avibase-A3B57560",
+      "old_name": "Thryorchilus browni",
+      "new_name": "Troglodytes browni"
+    },
+    {
+      "taxon_id": "avibase-A81C4DA6",
+      "old_name": "Emberiza tristrami",
+      "new_name": "Schoeniclus tristrami"
+    },
+    {
+      "taxon_id": "avibase-AB73D3C9",
+      "old_name": "Emberiza sulphurata",
+      "new_name": "Schoeniclus sulphuratus"
+    },
+    {
+      "taxon_id": "avibase-ACDCF3CC",
+      "old_name": "Emberiza rutila",
+      "new_name": "Schoeniclus rutilus"
+    },
+    {
+      "taxon_id": "avibase-AF700208",
+      "old_name": "Troglodytes troglodytes",
+      "new_name": "Nannus troglodytes"
+    },
+    {
+      "taxon_id": "avibase-BB11EE7F",
+      "old_name": "Emberiza affinis",
+      "new_name": "Fringillaria affinis"
+    },
+    {
+      "taxon_id": "avibase-BB80BD82",
+      "old_name": "Emberiza personata",
+      "new_name": "Schoeniclus personatus"
+    },
+    {
+      "taxon_id": "avibase-C0B97874",
+      "old_name": "Emberiza schoeniclus",
+      "new_name": "Schoeniclus schoeniclus"
+    },
+    {
+      "taxon_id": "avibase-C35381D0",
+      "old_name": "Basileuterus lachrymosus",
+      "new_name": "Euthlypis lachrymosa"
+    },
+    {
+      "taxon_id": "avibase-C6D6D547",
+      "old_name": "Emberiza pallasi",
+      "new_name": "Schoeniclus pallasi"
+    },
+    {
+      "taxon_id": "avibase-C757BD95",
+      "old_name": "Troglodytes hiemalis",
+      "new_name": "Nannus hiemalis"
+    },
+    {
+      "taxon_id": "avibase-C7C1A6EB",
+      "old_name": "Emberiza sahari",
+      "new_name": "Fringillaria sahari"
+    },
+    {
+      "taxon_id": "avibase-CDF4A106",
+      "old_name": "Emberiza striolata",
+      "new_name": "Fringillaria striolata"
+    },
+    {
+      "taxon_id": "avibase-CF5B7A9D",
+      "old_name": "Troglodytes pacificus",
+      "new_name": "Nannus pacificus"
+    },
+    {
+      "taxon_id": "avibase-D1C1A026",
+      "old_name": "Emberiza flaviventris",
+      "new_name": "Fringillaria flaviventris"
+    },
+    {
+      "taxon_id": "avibase-D6E30413",
+      "old_name": "Humblotia flavirostris",
+      "new_name": "Muscicapa flavirostris"
+    },
+    {
+      "taxon_id": "avibase-D76AC221",
+      "old_name": "Brachycope anomala",
+      "new_name": "Euplectes anomalus"
+    },
+    {
+      "taxon_id": "avibase-D8A797E4",
+      "old_name": "Emberiza yessoensis",
+      "new_name": "Schoeniclus yessoensis"
+    },
+    {
+      "taxon_id": "avibase-DA9746CE",
+      "old_name": "Emberiza rustica",
+      "new_name": "Schoeniclus rusticus"
+    },
+    {
+      "taxon_id": "avibase-DB4D5342",
+      "old_name": "Emberiza variabilis",
+      "new_name": "Schoeniclus variabilis"
+    },
+    {
+      "taxon_id": "avibase-DBF8D184",
+      "old_name": "Emberiza bruniceps",
+      "new_name": "Melophus bruniceps"
+    },
+    {
+      "taxon_id": "avibase-DE27F1FA",
+      "old_name": "Emberiza capensis",
+      "new_name": "Fringillaria capensis"
+    },
+    {
+      "taxon_id": "avibase-E2D2CB88",
+      "old_name": "Emberiza melanocephala",
+      "new_name": "Melophus melanocephalus"
+    },
+    {
+      "taxon_id": "avibase-F87D05C8",
+      "old_name": "Emberiza siemsseni",
+      "new_name": "Schoeniclus siemsseni"
+    }
+  ],
+  "same_name_changed_id": [
+    {
+      "scientific_name": "Apus affinis",
+      "old_id": "avibase-D209A90C",
+      "new_id": "avibase-4D28A0CD"
+    },
+    {
+      "scientific_name": "Basileuterus melanogenys",
+      "old_id": "avibase-D2459CC0",
+      "new_id": "avibase-3120CFB4"
+    },
+    {
+      "scientific_name": "Bubo virginianus",
+      "old_id": "avibase-FC366114",
+      "new_id": "avibase-AC8B8FC6"
+    },
+    {
+      "scientific_name": "Camptostoma obsoletum",
+      "old_id": "avibase-FE36D76B",
+      "new_id": "avibase-EA6F891E"
+    },
+    {
+      "scientific_name": "Cistothorus palustris",
+      "old_id": "avibase-787E0536",
+      "new_id": "avibase-5D56DAAA"
+    },
+    {
+      "scientific_name": "Cnemoscopus rubrirostris",
+      "old_id": "avibase-F6B4F02B",
+      "new_id": "avibase-89047763"
+    },
+    {
+      "scientific_name": "Cyanoramphus malherbi",
+      "old_id": "avibase-3BF86C9F",
+      "new_id": "avibase-8AF04EDB"
+    },
+    {
+      "scientific_name": "Cymbirhynchus macrorhynchos",
+      "old_id": "avibase-2F81A394",
+      "new_id": "avibase-8C789387"
+    },
+    {
+      "scientific_name": "Dacnis lineata",
+      "old_id": "avibase-B2FA0B23",
+      "new_id": "avibase-8DF4C731"
+    },
+    {
+      "scientific_name": "Diglossa cyanea",
+      "old_id": "avibase-480CCA00",
+      "new_id": "avibase-6FF516E4"
+    },
+    {
+      "scientific_name": "Edolisoma incertum",
+      "old_id": "avibase-00DF0484",
+      "new_id": "avibase-835FDB70"
+    },
+    {
+      "scientific_name": "Edolisoma tenuirostre",
+      "old_id": "avibase-8EC4024D",
+      "new_id": "avibase-12B52CE0"
+    },
+    {
+      "scientific_name": "Enicurus leschenaulti",
+      "old_id": "avibase-FC7AF7E6",
+      "new_id": "avibase-34213917"
+    },
+    {
+      "scientific_name": "Erithacus rubecula",
+      "old_id": "avibase-C809B2B9",
+      "new_id": "avibase-E68C3C70"
+    },
+    {
+      "scientific_name": "Formicarius nigricapillus",
+      "old_id": "avibase-7E82BA92",
+      "new_id": "avibase-A346786E"
+    },
+    {
+      "scientific_name": "Hierococcyx bocki",
+      "old_id": "avibase-985D5E9E",
+      "new_id": "avibase-EA046D58"
+    },
+    {
+      "scientific_name": "Hylophilus amaurocephalus",
+      "old_id": "avibase-7CA69E1B",
+      "new_id": "avibase-868C5058"
+    },
+    {
+      "scientific_name": "Hypsipetes affinis",
+      "old_id": "avibase-712764DC",
+      "new_id": "avibase-5696CDA8"
+    },
+    {
+      "scientific_name": "Ketupa blakistoni",
+      "old_id": "avibase-2B0C5E60",
+      "new_id": "avibase-B7C7D398"
+    },
+    {
+      "scientific_name": "Macropygia doreya",
+      "old_id": "avibase-A8BFA3EA",
+      "new_id": "avibase-4E36A3C2"
+    },
+    {
+      "scientific_name": "Mitrephanes phaeocercus",
+      "old_id": "avibase-806301B3",
+      "new_id": "avibase-857ECA98"
+    },
+    {
+      "scientific_name": "Mixornis bornensis",
+      "old_id": "avibase-A9C71560",
+      "new_id": "avibase-3F290A34"
+    },
+    {
+      "scientific_name": "Mixornis gularis",
+      "old_id": "avibase-4E2700ED",
+      "new_id": "avibase-A63BA7A3"
+    },
+    {
+      "scientific_name": "Momotus mexicanus",
+      "old_id": "avibase-16892443",
+      "new_id": "avibase-AD702A72"
+    },
+    {
+      "scientific_name": "Muscicapa striata",
+      "old_id": "avibase-EE8206E7",
+      "new_id": "avibase-B142856F"
+    },
+    {
+      "scientific_name": "Myiarchus nuttingi",
+      "old_id": "avibase-59A53D8B",
+      "new_id": "avibase-C7BFBA64"
+    },
+    {
+      "scientific_name": "Myophonus caeruleus",
+      "old_id": "avibase-DE6C227D",
+      "new_id": "avibase-75B45D32"
+    },
+    {
+      "scientific_name": "Myzomela boiei",
+      "old_id": "avibase-C0A2527C",
+      "new_id": "avibase-736A8BF6"
+    },
+    {
+      "scientific_name": "Ocreatus underwoodii",
+      "old_id": "avibase-D58511D6",
+      "new_id": "avibase-D3ECED63"
+    },
+    {
+      "scientific_name": "Oenanthe lugens",
+      "old_id": "avibase-9EE7BF1C",
+      "new_id": "avibase-9C5BE48C"
+    },
+    {
+      "scientific_name": "Patagona gigas",
+      "old_id": "avibase-59067C71",
+      "new_id": "avibase-B062F1CA"
+    },
+    {
+      "scientific_name": "Psalidoprocne nitens",
+      "old_id": "avibase-C780C198",
+      "new_id": "avibase-23691B30"
+    },
+    {
+      "scientific_name": "Ptilorrhoa caerulescens",
+      "old_id": "avibase-4A699D18",
+      "new_id": "avibase-58639B15"
+    },
+    {
+      "scientific_name": "Pycnonotus plumosus",
+      "old_id": "avibase-09CBDAE2",
+      "new_id": "avibase-03982763"
+    },
+    {
+      "scientific_name": "Rhipidura fuscorufa",
+      "old_id": "avibase-C38375A3",
+      "new_id": "avibase-12E03FBB"
+    },
+    {
+      "scientific_name": "Scytalopus caracae",
+      "old_id": "avibase-1B7E55DC",
+      "new_id": "avibase-83857CD8"
+    },
+    {
+      "scientific_name": "Silvicultrix frontalis",
+      "old_id": "avibase-E6401100",
+      "new_id": "avibase-5F7F8EA6"
+    },
+    {
+      "scientific_name": "Syma torotoro",
+      "old_id": "avibase-E274D1BF",
+      "new_id": "avibase-80104820"
+    },
+    {
+      "scientific_name": "Tanysiptera galatea",
+      "old_id": "avibase-76D3DC48",
+      "new_id": "avibase-220C80CC"
+    },
+    {
+      "scientific_name": "Tringa semipalmata",
+      "old_id": "avibase-E7A14E91",
+      "new_id": "avibase-6D372C9F"
+    },
+    {
+      "scientific_name": "Turdus albicollis",
+      "old_id": "avibase-E90B937B",
+      "new_id": "avibase-3FE759B8"
+    },
+    {
+      "scientific_name": "Tyto javanica",
+      "old_id": "avibase-9E668317",
+      "new_id": "avibase-E5E05FEF"
+    },
+    {
+      "scientific_name": "Vireo gilvus",
+      "old_id": "avibase-66AA469C",
+      "new_id": "avibase-25ACCDC0"
+    }
+  ],
+  "removed_concepts": [
+    {
+      "scientific_name": "Edolisoma incertum",
+      "chinese_name": "黑肩鹃鵙",
+      "family_cn": "山椒鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "山鹃属",
+      "genus_sci": "Edolisoma",
+      "family_sci": "Campephagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-shouldered Cicadabird",
+      "taxon_id": "avibase-00DF0484",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Pycnonotus plumosus",
+      "chinese_name": "橄榄褐鹎",
+      "family_cn": "鹎科",
+      "order_cn": "雀形目",
+      "genus_cn": "鹎属",
+      "genus_sci": "Pycnonotus",
+      "family_sci": "Pycnonotidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Olive-winged Bulbul",
+      "taxon_id": "avibase-09CBDAE2",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tyto rosenbergii",
+      "chinese_name": "苏拉威西苍鸮",
+      "family_cn": "草鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "草鸮属",
+      "genus_sci": "Tyto",
+      "family_sci": "Tytonidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Sulawesi Masked Owl",
+      "taxon_id": "avibase-0E9B3C97",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Momotus mexicanus",
+      "chinese_name": "锈顶翠鴗",
+      "family_cn": "翠鴗科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "锈顶属",
+      "genus_sci": "Momotus",
+      "family_sci": "Momotidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Russet-crowned Motmot",
+      "taxon_id": "avibase-16892443",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Scytalopus caracae",
+      "chinese_name": "加拉加斯窜鸟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "湿地窜鸟",
+      "genus_sci": "Scytalopus",
+      "family_sci": "Rhinocryptidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Caracas Tapaculo",
+      "taxon_id": "avibase-1B7E55DC",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Apus nipalensis",
+      "chinese_name": "小白腰雨燕",
+      "family_cn": "雨燕科",
+      "order_cn": "雨燕目",
+      "genus_cn": "雨燕属",
+      "genus_sci": "Apus",
+      "family_sci": "Apodidae",
+      "order_sci": "Apodiformes",
+      "english_name": "House Swift",
+      "taxon_id": "avibase-2A241F0C",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Ketupa blakistoni",
+      "chinese_name": "毛腿雕鸮",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "渔鸮属",
+      "genus_sci": "Ketupa",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Blakiston's Fish Owl",
+      "taxon_id": "avibase-2B0C5E60",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cymbirhynchus macrorhynchos",
+      "chinese_name": "黑红阔嘴鸟",
+      "family_cn": "阔嘴鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "黑红阔嘴鸟",
+      "genus_sci": "Cymbirhynchus",
+      "family_sci": "Eurylaimidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-and-red Broadbill",
+      "taxon_id": "avibase-2F81A394",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cyanoramphus malherbi",
+      "chinese_name": "橙额鹦鹉",
+      "family_cn": "Psittaculidae",
+      "order_cn": "鹦鹉目",
+      "genus_cn": "新喀属",
+      "genus_sci": "Cyanoramphus",
+      "family_sci": "Psittaculidae",
+      "order_sci": "Psittaciformes",
+      "english_name": "Malherbe's Parakeet",
+      "taxon_id": "avibase-3BF86C9F",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Diglossa cyanea",
+      "chinese_name": "花脸刺花鸟",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "蓝刺花鸟",
+      "genus_sci": "Diglossa",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Masked Flowerpiercer",
+      "taxon_id": "avibase-480CCA00",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Ptilorrhoa caerulescens",
+      "chinese_name": "蓝丽鸫",
+      "family_cn": "Cinclosomatidae",
+      "order_cn": "雀形目",
+      "genus_cn": "斑丽鸫",
+      "genus_sci": "Ptilorrhoa",
+      "family_sci": "Cinclosomatidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Blue Jewel-babbler",
+      "taxon_id": "avibase-4A699D18",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mixornis gularis",
+      "chinese_name": "纹胸鹛",
+      "family_cn": "林鹛科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰脸纹胸鹛",
+      "genus_sci": "Mixornis",
+      "family_sci": "Timaliidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Pin-striped Tit-Babbler",
+      "taxon_id": "avibase-4E2700ED",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Patagona gigas",
+      "chinese_name": "巨蜂鸟",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "巨蜂鸟",
+      "genus_sci": "Patagona",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Giant Hummingbird",
+      "taxon_id": "avibase-59067C71",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Myiarchus nuttingi",
+      "chinese_name": "淡喉蝇霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "棕蝇霸鹟",
+      "genus_sci": "Myiarchus",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Nutting's Flycatcher",
+      "taxon_id": "avibase-59A53D8B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Vireo gilvus",
+      "chinese_name": "歌莺雀",
+      "family_cn": "莺雀科",
+      "order_cn": "雀形目",
+      "genus_cn": "金莺雀",
+      "genus_sci": "Vireo",
+      "family_sci": "Vireonidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Warbling Vireo",
+      "taxon_id": "avibase-66AA469C",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Hypsipetes affinis",
+      "chinese_name": "金冠鹎",
+      "family_cn": "鹎科",
+      "order_cn": "雀形目",
+      "genus_cn": "短脚鹎属",
+      "genus_sci": "Hypsipetes",
+      "family_sci": "Pycnonotidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Seram Golden Bulbul",
+      "taxon_id": "avibase-712764DC",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tanysiptera galatea",
+      "chinese_name": "普通仙翡翠",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Common Paradise Kingfisher",
+      "taxon_id": "avibase-76D3DC48",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cistothorus palustris",
+      "chinese_name": "长嘴沼泽鹪鹩",
+      "family_cn": "鹪鹩科",
+      "order_cn": "雀形目",
+      "genus_cn": "北美沼泽鹪",
+      "genus_sci": "Cistothorus",
+      "family_sci": "Troglodytidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Marsh Wren",
+      "taxon_id": "avibase-787E0536",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Hylophilus amaurocephalus",
+      "chinese_name": "灰眼绿莺雀",
+      "family_cn": "莺雀科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰眼绿莺雀",
+      "genus_sci": "Hylophilus",
+      "family_sci": "Vireonidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Grey-eyed Greenlet",
+      "taxon_id": "avibase-7CA69E1B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Formicarius nigricapillus",
+      "chinese_name": "黑头蚁鸫",
+      "family_cn": "Formicariidae",
+      "order_cn": "雀形目",
+      "genus_cn": "棕顶蚁鸫",
+      "genus_sci": "Formicarius",
+      "family_sci": "Formicariidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-headed Antthrush",
+      "taxon_id": "avibase-7E82BA92",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mitrephanes phaeocercus",
+      "chinese_name": "领霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "领霸鹟",
+      "genus_sci": "Mitrephanes",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Northern Tufted Flycatcher",
+      "taxon_id": "avibase-806301B3",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Ocreatus addae",
+      "chinese_name": "棕靴盘尾蜂鸟",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "盘尾蜂鸟",
+      "genus_sci": "Ocreatus",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Rufous-booted Racket-tail",
+      "taxon_id": "avibase-8DF99F2B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Edolisoma tenuirostre",
+      "chinese_name": "长嘴鹃鵙",
+      "family_cn": "山椒鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "山鹃属",
+      "genus_sci": "Edolisoma",
+      "family_sci": "Campephagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Sahul Cicadabird",
+      "taxon_id": "avibase-8EC4024D",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Hierococcyx bocki",
+      "chinese_name": "暗色鹰鹃",
+      "family_cn": "杜鹃科",
+      "order_cn": "鹃形目",
+      "genus_cn": "小鹰",
+      "genus_sci": "Hierococcyx",
+      "family_sci": "Cuculidae",
+      "order_sci": "Cuculiformes",
+      "english_name": "Dark Hawk-Cuckoo",
+      "taxon_id": "avibase-985D5E9E",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tyto javanica",
+      "chinese_name": "仓鸮",
+      "family_cn": "草鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "草鸮属",
+      "genus_sci": "Tyto",
+      "family_sci": "Tytonidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Eastern Barn Owl",
+      "taxon_id": "avibase-9E668317",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Oenanthe lugens",
+      "chinese_name": "悲䳭",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "䳭属",
+      "genus_sci": "Oenanthe",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Mourning Wheatear",
+      "taxon_id": "avibase-9EE7BF1C",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Ocreatus peruanus",
+      "chinese_name": "秘鲁盘尾蜂鸟",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "盘尾蜂鸟",
+      "genus_sci": "Ocreatus",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Peruvian Racket-tail",
+      "taxon_id": "avibase-A0A70C2E",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Macropygia doreya",
+      "chinese_name": "苏坦氏鹃鸠",
+      "family_cn": "鸠鸽科",
+      "order_cn": "鸽形目",
+      "genus_cn": "鹃鸠属",
+      "genus_sci": "Macropygia",
+      "family_sci": "Columbidae",
+      "order_sci": "Columbiformes",
+      "english_name": "Sultan's Cuckoo-Dove",
+      "taxon_id": "avibase-A8BFA3EA",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mixornis bornensis",
+      "chinese_name": "宽纹胸鹛",
+      "family_cn": "林鹛科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰脸纹胸鹛",
+      "genus_sci": "Mixornis",
+      "family_sci": "Timaliidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Bold-striped Tit-Babbler",
+      "taxon_id": "avibase-A9C71560",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Silvicultrix spodionota",
+      "chinese_name": "秘鲁唧霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "冠唧霸鹟",
+      "genus_sci": "Silvicultrix",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Kalinowski's Chat-Tyrant",
+      "taxon_id": "avibase-AAD5AA5F",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Dacnis lineata",
+      "chinese_name": "黑脸锥嘴雀",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "红胸锥嘴雀",
+      "genus_sci": "Dacnis",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-faced Dacnis",
+      "taxon_id": "avibase-B2FA0B23",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Myzomela boiei",
+      "chinese_name": "斑达摄蜜鸟",
+      "family_cn": "Meliphagidae",
+      "order_cn": "雀形目",
+      "genus_cn": "布氏摄蜜鸟",
+      "genus_sci": "Myzomela",
+      "family_sci": "Meliphagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Banda Myzomela",
+      "taxon_id": "avibase-C0A2527C",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Rhipidura fuscorufa",
+      "chinese_name": "栗尾扇尾鹟",
+      "family_cn": "扇尾鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "扇尾鹟属",
+      "genus_sci": "Rhipidura",
+      "family_sci": "Rhipiduridae",
+      "order_sci": "Passeriformes",
+      "english_name": "Cinnamon-tailed Fantail",
+      "taxon_id": "avibase-C38375A3",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Psalidoprocne nitens",
+      "chinese_name": "方尾锯翅燕",
+      "family_cn": "燕科",
+      "order_cn": "雀形目",
+      "genus_cn": "方尾锯翅燕",
+      "genus_sci": "Psalidoprocne",
+      "family_sci": "Hirundinidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Square-tailed Saw-wing",
+      "taxon_id": "avibase-C780C198",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Erithacus rubecula",
+      "chinese_name": "欧亚鸲",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "欧亚鸲属",
+      "genus_sci": "Erithacus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "European Robin",
+      "taxon_id": "avibase-C809B2B9",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Apus affinis",
+      "chinese_name": "小雨燕",
+      "family_cn": "雨燕科",
+      "order_cn": "雨燕目",
+      "genus_cn": "雨燕属",
+      "genus_sci": "Apus",
+      "family_sci": "Apodidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Little Swift",
+      "taxon_id": "avibase-D209A90C",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Basileuterus melanogenys",
+      "chinese_name": "黑颊王森莺",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "扇尾森莺",
+      "genus_sci": "Basileuterus",
+      "family_sci": "Parulidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-cheeked Warbler",
+      "taxon_id": "avibase-D2459CC0",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Ocreatus underwoodii",
+      "chinese_name": "盘尾蜂鸟",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "盘尾蜂鸟",
+      "genus_sci": "Ocreatus",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "White-booted Racket-tail",
+      "taxon_id": "avibase-D58511D6",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Myophonus caeruleus",
+      "chinese_name": "紫啸鸫",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "台湾紫啸鸫",
+      "genus_sci": "Myophonus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Blue Whistling Thrush",
+      "taxon_id": "avibase-DE6C227D",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Syma torotoro",
+      "chinese_name": "黄嘴翡翠",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "黄嘴属",
+      "genus_sci": "Syma",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Yellow-billed Kingfisher",
+      "taxon_id": "avibase-E274D1BF",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tyto nigrobrunnea",
+      "chinese_name": "塔里仓鸮",
+      "family_cn": "草鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "草鸮属",
+      "genus_sci": "Tyto",
+      "family_sci": "Tytonidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Taliabu Masked Owl",
+      "taxon_id": "avibase-E61687E7",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Silvicultrix frontalis",
+      "chinese_name": "冠唧霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "冠唧霸鹟",
+      "genus_sci": "Silvicultrix",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Crowned Chat-Tyrant",
+      "taxon_id": "avibase-E6401100",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tringa semipalmata",
+      "chinese_name": "斑翅鹬",
+      "family_cn": "鹬科",
+      "order_cn": "鸻形目",
+      "genus_cn": "鹬属",
+      "genus_sci": "Tringa",
+      "family_sci": "Scolopacidae",
+      "order_sci": "Charadriiformes",
+      "english_name": "Willet",
+      "taxon_id": "avibase-E7A14E91",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Turdus albicollis",
+      "chinese_name": "南美白颈鸫",
+      "family_cn": "鸫科",
+      "order_cn": "雀形目",
+      "genus_cn": "鸫属",
+      "genus_sci": "Turdus",
+      "family_sci": "Turdidae",
+      "order_sci": "Passeriformes",
+      "english_name": "White-necked Thrush",
+      "taxon_id": "avibase-E90B937B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Muscicapa striata",
+      "chinese_name": "斑鹟",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "鹟属",
+      "genus_sci": "Muscicapa",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Spotted Flycatcher",
+      "taxon_id": "avibase-EE8206E7",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cnemoscopus rubrirostris",
+      "chinese_name": "灰头薮唐纳雀",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "灰头薮唐纳雀",
+      "genus_sci": "Cnemoscopus",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Grey-hooded Bush Tanager",
+      "taxon_id": "avibase-F6B4F02B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Bubo virginianus",
+      "chinese_name": "美洲雕鸮",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "鵰鸮属",
+      "genus_sci": "Bubo",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Great Horned Owl",
+      "taxon_id": "avibase-FC366114",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Enicurus leschenaulti",
+      "chinese_name": "白冠燕尾",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "燕尾属",
+      "genus_sci": "Enicurus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "White-crowned Forktail",
+      "taxon_id": "avibase-FC7AF7E6",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Camptostoma obsoletum",
+      "chinese_name": "南无须小霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Southern Beardless Tyrannulet",
+      "taxon_id": "avibase-FE36D76B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    }
+  ],
+  "added_concepts": [
+    {
+      "scientific_name": "Ptilorrhoa urrissia",
+      "chinese_name": "Ptilorrhoa urrissia",
+      "family_cn": "Cinclosomatidae",
+      "order_cn": "雀形目",
+      "genus_cn": "斑丽鸫",
+      "genus_sci": "Ptilorrhoa",
+      "family_sci": "Cinclosomatidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Hooded Jewel-babbler",
+      "taxon_id": "avibase-028B045E",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Pycnonotus plumosus",
+      "chinese_name": "橄榄褐鹎",
+      "family_cn": "鹎科",
+      "order_cn": "雀形目",
+      "genus_cn": "鹎属",
+      "genus_sci": "Pycnonotus",
+      "family_sci": "Pycnonotidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Olive-winged Bulbul",
+      "taxon_id": "avibase-03982763",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Pycnonotus porphyreus",
+      "chinese_name": "Pycnonotus porphyreus",
+      "family_cn": "鹎科",
+      "order_cn": "雀形目",
+      "genus_cn": "鹎属",
+      "genus_sci": "Pycnonotus",
+      "family_sci": "Pycnonotidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Barusan Bulbul",
+      "taxon_id": "avibase-084D69A1",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Tanysiptera margarethae",
+      "chinese_name": "Tanysiptera margarethae",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Halmahera Paradise Kingfisher",
+      "taxon_id": "avibase-088D24B7",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Myophonus flavirostris",
+      "chinese_name": "Myophonus flavirostris",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "台湾紫啸鸫",
+      "genus_sci": "Myophonus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Yellow-billed Whistling Thrush",
+      "taxon_id": "avibase-0BC38C7E",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Edolisoma tenuirostre",
+      "chinese_name": "长嘴鹃鵙",
+      "family_cn": "山椒鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "山鹃属",
+      "genus_sci": "Edolisoma",
+      "family_sci": "Campephagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Sahul Cicadabird",
+      "taxon_id": "avibase-12B52CE0",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Rhipidura fuscorufa",
+      "chinese_name": "栗尾扇尾鹟",
+      "family_cn": "扇尾鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "扇尾鹟属",
+      "genus_sci": "Rhipidura",
+      "family_sci": "Rhipiduridae",
+      "order_sci": "Passeriformes",
+      "english_name": "Tremolo Fantail",
+      "taxon_id": "avibase-12E03FBB",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tanysiptera galatea",
+      "chinese_name": "普通仙翡翠",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Papuan Paradise Kingfisher",
+      "taxon_id": "avibase-220C80CC",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Psalidoprocne nitens",
+      "chinese_name": "方尾锯翅燕",
+      "family_cn": "燕科",
+      "order_cn": "雀形目",
+      "genus_cn": "方尾锯翅燕",
+      "genus_sci": "Psalidoprocne",
+      "family_sci": "Hirundinidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Square-tailed Saw-wing",
+      "taxon_id": "avibase-23691B30",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Crypturellus resonans",
+      "chinese_name": "Crypturellus resonans",
+      "family_cn": "䳍科",
+      "order_cn": "䳍目",
+      "genus_cn": "穴䳍属",
+      "genus_sci": "Crypturellus",
+      "family_sci": "Tinamidae",
+      "order_sci": "Tinamiformes",
+      "english_name": "Slaty-masked Tinamou",
+      "taxon_id": "avibase-23D44844",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Myzomela annabellae",
+      "chinese_name": "Myzomela annabellae",
+      "family_cn": "Meliphagidae",
+      "order_cn": "雀形目",
+      "genus_cn": "布氏摄蜜鸟",
+      "genus_sci": "Myzomela",
+      "family_sci": "Meliphagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Tanimbar Myzomela",
+      "taxon_id": "avibase-249E6304",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Vireo gilvus",
+      "chinese_name": "歌莺雀",
+      "family_cn": "莺雀科",
+      "order_cn": "雀形目",
+      "genus_cn": "金莺雀",
+      "genus_sci": "Vireo",
+      "family_sci": "Vireonidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Eastern Warbling Vireo",
+      "taxon_id": "avibase-25ACCDC0",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Enicurus frontalis",
+      "chinese_name": "Enicurus frontalis",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "燕尾属",
+      "genus_sci": "Enicurus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Malayan Forktail",
+      "taxon_id": "avibase-25BD7BC4",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Tanysiptera nais",
+      "chinese_name": "Tanysiptera nais",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Amboyna Paradise Kingfisher",
+      "taxon_id": "avibase-25D0F7FC",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Cistothorus paludicola",
+      "chinese_name": "Cistothorus paludicola",
+      "family_cn": "鹪鹩科",
+      "order_cn": "雀形目",
+      "genus_cn": "北美沼泽鹪",
+      "genus_sci": "Cistothorus",
+      "family_sci": "Troglodytidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Western Marsh Wren",
+      "taxon_id": "avibase-2B20EB43",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Basileuterus melanogenys",
+      "chinese_name": "黑颊王森莺",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "扇尾森莺",
+      "genus_sci": "Basileuterus",
+      "family_sci": "Parulidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-cheeked Warbler",
+      "taxon_id": "avibase-3120CFB4",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Myiarchus flavidior",
+      "chinese_name": "Myiarchus flavidior",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "棕蝇霸鹟",
+      "genus_sci": "Myiarchus",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Salvadoran Flycatcher",
+      "taxon_id": "avibase-31E830C3",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Enicurus leschenaulti",
+      "chinese_name": "白冠燕尾",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "燕尾属",
+      "genus_sci": "Enicurus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Javan Forktail",
+      "taxon_id": "avibase-34213917",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tanysiptera obiensis",
+      "chinese_name": "Tanysiptera obiensis",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Obi Paradise Kingfisher",
+      "taxon_id": "avibase-389A5E98",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Ketupa doerriesi",
+      "chinese_name": "Ketupa doerriesi",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "渔鸮属",
+      "genus_sci": "Ketupa",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Northern Fish Owl",
+      "taxon_id": "avibase-3BB302BC",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Formicarius destructus",
+      "chinese_name": "Formicarius destructus",
+      "family_cn": "Formicariidae",
+      "order_cn": "雀形目",
+      "genus_cn": "棕顶蚁鸫",
+      "genus_sci": "Formicarius",
+      "family_sci": "Formicariidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-hooded Antthrush",
+      "taxon_id": "avibase-3BB6EA56",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Mixornis bornensis",
+      "chinese_name": "宽纹胸鹛",
+      "family_cn": "林鹛科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰脸纹胸鹛",
+      "genus_sci": "Mixornis",
+      "family_sci": "Timaliidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Bold-striped Tit-Babbler",
+      "taxon_id": "avibase-3F290A34",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Turdus albicollis",
+      "chinese_name": "南美白颈鸫",
+      "family_cn": "鸫科",
+      "order_cn": "雀形目",
+      "genus_cn": "鸫属",
+      "genus_sci": "Turdus",
+      "family_sci": "Turdidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Rufous-flanked Thrush",
+      "taxon_id": "avibase-3FE759B8",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Myzomela babarensis",
+      "chinese_name": "Myzomela babarensis",
+      "family_cn": "Meliphagidae",
+      "order_cn": "雀形目",
+      "genus_cn": "布氏摄蜜鸟",
+      "genus_sci": "Myzomela",
+      "family_sci": "Meliphagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Babar Myzomela",
+      "taxon_id": "avibase-44F179A2",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Camptostoma caucae",
+      "chinese_name": "Camptostoma caucae",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Cauca Beardless Tyrannulet",
+      "taxon_id": "avibase-46D82A7E",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Apus affinis",
+      "chinese_name": "小雨燕",
+      "family_cn": "雨燕科",
+      "order_cn": "雨燕目",
+      "genus_cn": "雨燕属",
+      "genus_sci": "Apus",
+      "family_sci": "Apodidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Little Swift",
+      "taxon_id": "avibase-4D28A0CD",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Macropygia doreya",
+      "chinese_name": "苏坦氏鹃鸠",
+      "family_cn": "鸠鸽科",
+      "order_cn": "鸽形目",
+      "genus_cn": "鹃鸠属",
+      "genus_sci": "Macropygia",
+      "family_sci": "Columbidae",
+      "order_sci": "Columbiformes",
+      "english_name": "Sultan's Cuckoo-Dove",
+      "taxon_id": "avibase-4E36A3C2",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tanysiptera doris",
+      "chinese_name": "Tanysiptera doris",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Morotai Paradise Kingfisher",
+      "taxon_id": "avibase-54BD3B93",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Hypsipetes affinis",
+      "chinese_name": "金冠鹎",
+      "family_cn": "鹎科",
+      "order_cn": "雀形目",
+      "genus_cn": "短脚鹎属",
+      "genus_sci": "Hypsipetes",
+      "family_sci": "Pycnonotidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Seram Golden Bulbul",
+      "taxon_id": "avibase-5696CDA8",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Ptilorrhoa caerulescens",
+      "chinese_name": "蓝丽鸫",
+      "family_cn": "Cinclosomatidae",
+      "order_cn": "雀形目",
+      "genus_cn": "斑丽鸫",
+      "genus_sci": "Ptilorrhoa",
+      "family_sci": "Cinclosomatidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Northern Blue Jewel-babbler",
+      "taxon_id": "avibase-58639B15",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cistothorus palustris",
+      "chinese_name": "长嘴沼泽鹪鹩",
+      "family_cn": "鹪鹩科",
+      "order_cn": "雀形目",
+      "genus_cn": "北美沼泽鹪",
+      "genus_sci": "Cistothorus",
+      "family_sci": "Troglodytidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Eastern Marsh Wren",
+      "taxon_id": "avibase-5D56DAAA",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Enicurus sinensis",
+      "chinese_name": "Enicurus sinensis",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "燕尾属",
+      "genus_sci": "Enicurus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Northern Forktail",
+      "taxon_id": "avibase-5F5FB120",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Silvicultrix frontalis",
+      "chinese_name": "冠唧霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "冠唧霸鹟",
+      "genus_sci": "Silvicultrix",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Crowned Chat-Tyrant",
+      "taxon_id": "avibase-5F7F8EA6",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Oenanthe halophila",
+      "chinese_name": "马格里布䳭",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "䳭属",
+      "genus_sci": "Oenanthe",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Maghreb Wheatear",
+      "taxon_id": "avibase-6132EF55",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Camptostoma flaviventre",
+      "chinese_name": "Camptostoma flaviventre",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Panama Beardless Tyrannulet",
+      "taxon_id": "avibase-664FBC82",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Tringa semipalmata",
+      "chinese_name": "斑翅鹬",
+      "family_cn": "鹬科",
+      "order_cn": "鸻形目",
+      "genus_cn": "鹬属",
+      "genus_sci": "Tringa",
+      "family_sci": "Scolopacidae",
+      "order_sci": "Charadriiformes",
+      "english_name": "Saltmarsh Willet",
+      "taxon_id": "avibase-6D372C9F",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Rhipidura laguceria",
+      "chinese_name": "Rhipidura laguceria",
+      "family_cn": "扇尾鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "扇尾鹟属",
+      "genus_sci": "Rhipidura",
+      "family_sci": "Rhipiduridae",
+      "order_sci": "Passeriformes",
+      "english_name": "Cheerful Fantail",
+      "taxon_id": "avibase-6D434971",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Cnemoscopus chrysogaster",
+      "chinese_name": "Cnemoscopus chrysogaster",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "灰头薮唐纳雀",
+      "genus_sci": "Cnemoscopus",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-billed Cnemoscopus",
+      "taxon_id": "avibase-6EF7F8B3",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Diglossa cyanea",
+      "chinese_name": "花脸刺花鸟",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "蓝刺花鸟",
+      "genus_sci": "Diglossa",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Warbling Masked Flowerpiercer",
+      "taxon_id": "avibase-6FF516E4",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Myzomela boiei",
+      "chinese_name": "斑达摄蜜鸟",
+      "family_cn": "Meliphagidae",
+      "order_cn": "雀形目",
+      "genus_cn": "布氏摄蜜鸟",
+      "genus_sci": "Myzomela",
+      "family_sci": "Meliphagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Banda Islands Myzomela",
+      "taxon_id": "avibase-736A8BF6",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tringa inornata",
+      "chinese_name": "Tringa inornata",
+      "family_cn": "鹬科",
+      "order_cn": "鸻形目",
+      "genus_cn": "鹬属",
+      "genus_sci": "Tringa",
+      "family_sci": "Scolopacidae",
+      "order_sci": "Charadriiformes",
+      "english_name": "Prairie Willet",
+      "taxon_id": "avibase-750C014A",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Ptilorrhoa nigricrissus",
+      "chinese_name": "Ptilorrhoa nigricrissus",
+      "family_cn": "Cinclosomatidae",
+      "order_cn": "雀形目",
+      "genus_cn": "斑丽鸫",
+      "genus_sci": "Ptilorrhoa",
+      "family_sci": "Cinclosomatidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Southern Blue Jewel-babbler",
+      "taxon_id": "avibase-751C952A",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Myophonus caeruleus",
+      "chinese_name": "紫啸鸫",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "台湾紫啸鸫",
+      "genus_sci": "Myophonus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Chinese Whistling Thrush",
+      "taxon_id": "avibase-75B45D32",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Hierococcyx tiganada",
+      "chinese_name": "Hierococcyx tiganada",
+      "family_cn": "杜鹃科",
+      "order_cn": "鹃形目",
+      "genus_cn": "小鹰",
+      "genus_sci": "Hierococcyx",
+      "family_sci": "Cuculidae",
+      "order_sci": "Cuculiformes",
+      "english_name": "Penan Hawk-Cuckoo",
+      "taxon_id": "avibase-78A432E0",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Syma torotoro",
+      "chinese_name": "黄嘴翡翠",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "黄嘴属",
+      "genus_sci": "Syma",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Yellow-billed Kingfisher",
+      "taxon_id": "avibase-80104820",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Edolisoma incertum",
+      "chinese_name": "黑肩鹃鵙",
+      "family_cn": "山椒鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "山鹃属",
+      "genus_sci": "Edolisoma",
+      "family_sci": "Campephagidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-shouldered Cicadabird",
+      "taxon_id": "avibase-835FDB70",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Scytalopus caracae",
+      "chinese_name": "加拉加斯窜鸟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "湿地窜鸟",
+      "genus_sci": "Scytalopus",
+      "family_sci": "Rhinocryptidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Caracas Tapaculo",
+      "taxon_id": "avibase-83857CD8",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mitrephanes phaeocercus",
+      "chinese_name": "领霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "领霸鹟",
+      "genus_sci": "Mitrephanes",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Tawny Tufted Flycatcher",
+      "taxon_id": "avibase-857ECA98",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Hylophilus amaurocephalus",
+      "chinese_name": "灰眼绿莺雀",
+      "family_cn": "莺雀科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰眼绿莺雀",
+      "genus_sci": "Hylophilus",
+      "family_sci": "Vireonidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Grey-eyed Greenlet",
+      "taxon_id": "avibase-868C5058",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cnemoscopus rubrirostris",
+      "chinese_name": "灰头薮唐纳雀",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "灰头薮唐纳雀",
+      "genus_sci": "Cnemoscopus",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Pink-billed Cnemoscopus",
+      "taxon_id": "avibase-89047763",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Patagona peruviana",
+      "chinese_name": "Patagona peruviana",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "巨蜂鸟",
+      "genus_sci": "Patagona",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Northern Giant Hummingbird",
+      "taxon_id": "avibase-8AEB9777",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Cyanoramphus malherbi",
+      "chinese_name": "橙额鹦鹉",
+      "family_cn": "Psittaculidae",
+      "order_cn": "鹦鹉目",
+      "genus_cn": "新喀属",
+      "genus_sci": "Cyanoramphus",
+      "family_sci": "Psittaculidae",
+      "order_sci": "Psittaciformes",
+      "english_name": "Orange-fronted Kakariki",
+      "taxon_id": "avibase-8AF04EDB",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cymbirhynchus macrorhynchos",
+      "chinese_name": "黑红阔嘴鸟",
+      "family_cn": "阔嘴鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "黑红阔嘴鸟",
+      "genus_sci": "Cymbirhynchus",
+      "family_sci": "Eurylaimidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-and-red Broadbill",
+      "taxon_id": "avibase-8C789387",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Dacnis lineata",
+      "chinese_name": "黑脸锥嘴雀",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "红胸锥嘴雀",
+      "genus_sci": "Dacnis",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-faced Dacnis",
+      "taxon_id": "avibase-8DF4C731",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Bubo nacurutu",
+      "chinese_name": "Bubo nacurutu",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "鵰鸮属",
+      "genus_sci": "Bubo",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Tropical Horned Owl",
+      "taxon_id": "avibase-8E62406F",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Vireo swainsoni",
+      "chinese_name": "Vireo swainsoni",
+      "family_cn": "莺雀科",
+      "order_cn": "雀形目",
+      "genus_cn": "金莺雀",
+      "genus_sci": "Vireo",
+      "family_sci": "Vireonidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Western Warbling Vireo",
+      "taxon_id": "avibase-8E6E7C64",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Turdus phaeopygus",
+      "chinese_name": "Turdus phaeopygus",
+      "family_cn": "鸫科",
+      "order_cn": "雀形目",
+      "genus_cn": "鸫属",
+      "genus_sci": "Turdus",
+      "family_sci": "Turdidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Grey-flanked Thrush",
+      "taxon_id": "avibase-96BCFA30",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Hylophilus moxensis",
+      "chinese_name": "Hylophilus moxensis",
+      "family_cn": "莺雀科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰眼绿莺雀",
+      "genus_sci": "Hylophilus",
+      "family_sci": "Vireonidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Beni Greenlet",
+      "taxon_id": "avibase-994A0ACC",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Erithacus superbus",
+      "chinese_name": "Erithacus superbus",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "欧亚鸲属",
+      "genus_sci": "Erithacus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Canary Islands Robin",
+      "taxon_id": "avibase-9A438434",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Oenanthe lugens",
+      "chinese_name": "悲䳭",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "䳭属",
+      "genus_sci": "Oenanthe",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Mourning Wheatear",
+      "taxon_id": "avibase-9C5BE48C",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Formicarius nigricapillus",
+      "chinese_name": "黑头蚁鸫",
+      "family_cn": "Formicariidae",
+      "order_cn": "雀形目",
+      "genus_cn": "棕顶蚁鸫",
+      "genus_sci": "Formicarius",
+      "family_sci": "Formicariidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Black-capped Antthrush",
+      "taxon_id": "avibase-A346786E",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mixornis gularis",
+      "chinese_name": "纹胸鹛",
+      "family_cn": "林鹛科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰脸纹胸鹛",
+      "genus_sci": "Mixornis",
+      "family_sci": "Timaliidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Pin-striped Tit-Babbler",
+      "taxon_id": "avibase-A63BA7A3",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cymbirhynchus affinis",
+      "chinese_name": "Cymbirhynchus affinis",
+      "family_cn": "阔嘴鸟科",
+      "order_cn": "雀形目",
+      "genus_cn": "黑红阔嘴鸟",
+      "genus_sci": "Cymbirhynchus",
+      "family_sci": "Eurylaimidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Ayeyarwady Broadbill",
+      "taxon_id": "avibase-A7772291",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Bubo virginianus",
+      "chinese_name": "美洲雕鸮",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "鵰鸮属",
+      "genus_sci": "Bubo",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Great Horned Owl",
+      "taxon_id": "avibase-AC8B8FC6",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mitrephanes aurantiiventris",
+      "chinese_name": "Mitrephanes aurantiiventris",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "领霸鹟",
+      "genus_sci": "Mitrephanes",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Lemon-bellied Tufted Flycatcher",
+      "taxon_id": "avibase-ACAE7551",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Momotus mexicanus",
+      "chinese_name": "锈顶翠鴗",
+      "family_cn": "翠鴗科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "锈顶属",
+      "genus_sci": "Momotus",
+      "family_sci": "Momotidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Mexican Motmot",
+      "taxon_id": "avibase-AD702A72",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Patagona gigas",
+      "chinese_name": "巨蜂鸟",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "巨蜂鸟",
+      "genus_sci": "Patagona",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Southern Giant Hummingbird",
+      "taxon_id": "avibase-B062F1CA",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Diglossa melanopis",
+      "chinese_name": "Diglossa melanopis",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "蓝刺花鸟",
+      "genus_sci": "Diglossa",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Whistling Masked Flowerpiercer",
+      "taxon_id": "avibase-B0AEF8CA",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Muscicapa striata",
+      "chinese_name": "斑鹟",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "鹟属",
+      "genus_sci": "Muscicapa",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Spotted Flycatcher",
+      "taxon_id": "avibase-B142856F",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Bubo nigrescens",
+      "chinese_name": "Bubo nigrescens",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "鵰鸮属",
+      "genus_sci": "Bubo",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Paramo Horned Owl",
+      "taxon_id": "avibase-B2F5D6C7",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Camptostoma napaeum",
+      "chinese_name": "Camptostoma napaeum",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Amazonian Beardless Tyrannulet",
+      "taxon_id": "avibase-B73AE5D5",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Ketupa blakistoni",
+      "chinese_name": "毛腿雕鸮",
+      "family_cn": "鸱鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "渔鸮属",
+      "genus_sci": "Ketupa",
+      "family_sci": "Strigidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Blakiston's Fish Owl",
+      "taxon_id": "avibase-B7C7D398",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Camptostoma pusillum",
+      "chinese_name": "Camptostoma pusillum",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Venezuelan Beardless Tyrannulet",
+      "taxon_id": "avibase-BBA2A39A",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Camptostoma sclateri",
+      "chinese_name": "Camptostoma sclateri",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Pacific Beardless Tyrannulet",
+      "taxon_id": "avibase-BE600B9D",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Myiarchus nuttingi",
+      "chinese_name": "淡喉蝇霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "棕蝇霸鹟",
+      "genus_sci": "Myiarchus",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Nutting's Flycatcher",
+      "taxon_id": "avibase-C7BFBA64",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Tanysiptera rosseliana",
+      "chinese_name": "Tanysiptera rosseliana",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "普通属",
+      "genus_sci": "Tanysiptera",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Rossel Paradise Kingfisher",
+      "taxon_id": "avibase-CA53E1E6",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Dacnis egregia",
+      "chinese_name": "黄肩锥嘴雀",
+      "family_cn": "Thraupidae",
+      "order_cn": "雀形目",
+      "genus_cn": "红胸锥嘴雀",
+      "genus_sci": "Dacnis",
+      "family_sci": "Thraupidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Yellow-tufted Dacnis",
+      "taxon_id": "avibase-CBDE242B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Muscicapa tyrrhenica",
+      "chinese_name": "地中海斑鹟",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "鹟属",
+      "genus_sci": "Muscicapa",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Mediterranean Flycatcher",
+      "taxon_id": "avibase-CBFA2D2B",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Macropygia albicapilla",
+      "chinese_name": "Macropygia albicapilla",
+      "family_cn": "鸠鸽科",
+      "order_cn": "鸽形目",
+      "genus_cn": "鹃鸠属",
+      "genus_sci": "Macropygia",
+      "family_sci": "Columbidae",
+      "order_sci": "Columbiformes",
+      "english_name": "Sulawesi Cuckoo-Dove",
+      "taxon_id": "avibase-D1923633",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Ocreatus underwoodii",
+      "chinese_name": "盘尾蜂鸟",
+      "family_cn": "蜂鸟科",
+      "order_cn": "雨燕目",
+      "genus_cn": "盘尾蜂鸟",
+      "genus_sci": "Ocreatus",
+      "family_sci": "Trochilidae",
+      "order_sci": "Apodiformes",
+      "english_name": "Booted Racket-tail",
+      "taxon_id": "avibase-D3ECED63",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Psalidoprocne centralis",
+      "chinese_name": "Psalidoprocne centralis",
+      "family_cn": "燕科",
+      "order_cn": "雀形目",
+      "genus_cn": "方尾锯翅燕",
+      "genus_sci": "Psalidoprocne",
+      "family_sci": "Hirundinidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Congo Saw-wing",
+      "taxon_id": "avibase-D6D715E5",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Syma ochracea",
+      "chinese_name": "Syma ochracea",
+      "family_cn": "翠鸟科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "黄嘴属",
+      "genus_sci": "Syma",
+      "family_sci": "Alcedinidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Ochre-bellied Kingfisher",
+      "taxon_id": "avibase-E0FFD6C7",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Momotus castaneiceps",
+      "chinese_name": "Momotus castaneiceps",
+      "family_cn": "翠鴗科",
+      "order_cn": "佛法僧目",
+      "genus_cn": "锈顶属",
+      "genus_sci": "Momotus",
+      "family_sci": "Momotidae",
+      "order_sci": "Coraciiformes",
+      "english_name": "Guatemalan Motmot",
+      "taxon_id": "avibase-E5BDBE96",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Tyto javanica",
+      "chinese_name": "仓鸮",
+      "family_cn": "草鸮科",
+      "order_cn": "鸮形目",
+      "genus_cn": "草鸮属",
+      "genus_sci": "Tyto",
+      "family_sci": "Tytonidae",
+      "order_sci": "Strigiformes",
+      "english_name": "Eastern Barn Owl",
+      "taxon_id": "avibase-E5E05FEF",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Erithacus rubecula",
+      "chinese_name": "欧亚鸲",
+      "family_cn": "鹟科",
+      "order_cn": "雀形目",
+      "genus_cn": "欧亚鸲属",
+      "genus_sci": "Erithacus",
+      "family_sci": "Muscicapidae",
+      "order_sci": "Passeriformes",
+      "english_name": "European Robin",
+      "taxon_id": "avibase-E68C3C70",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Hierococcyx bocki",
+      "chinese_name": "暗色鹰鹃",
+      "family_cn": "杜鹃科",
+      "order_cn": "鹃形目",
+      "genus_cn": "小鹰",
+      "genus_sci": "Hierococcyx",
+      "family_sci": "Cuculidae",
+      "order_sci": "Cuculiformes",
+      "english_name": "Bock's Hawk-Cuckoo",
+      "taxon_id": "avibase-EA046D58",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Camptostoma obsoletum",
+      "chinese_name": "南无须小霸鹟",
+      "family_cn": "乔",
+      "order_cn": "雀形目",
+      "genus_cn": "北无须小霸鹟",
+      "genus_sci": "Camptostoma",
+      "family_sci": "Tyrannidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Southeastern Beardless Tyrannulet",
+      "taxon_id": "avibase-EA6F891E",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Cyanoramphus hochstetteri",
+      "chinese_name": "安岛红额鹦鹉",
+      "family_cn": "Psittaculidae",
+      "order_cn": "鹦鹉目",
+      "genus_cn": "新喀属",
+      "genus_sci": "Cyanoramphus",
+      "family_sci": "Psittaculidae",
+      "order_sci": "Psittaciformes",
+      "english_name": "Reischek's Kakariki",
+      "taxon_id": "avibase-F613770E",
+      "chinese_name_source": "IOC-15.1 Chinese; exact-name alias; concept unverified"
+    },
+    {
+      "scientific_name": "Mixornis woodi",
+      "chinese_name": "Mixornis woodi",
+      "family_cn": "林鹛科",
+      "order_cn": "雀形目",
+      "genus_cn": "灰脸纹胸鹛",
+      "genus_sci": "Mixornis",
+      "family_sci": "Timaliidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Palawan Tit-Babbler",
+      "taxon_id": "avibase-FA52674F",
+      "chinese_name_source": "scientific-name fallback"
+    },
+    {
+      "scientific_name": "Hypsipetes flavicaudus",
+      "chinese_name": "Hypsipetes flavicaudus",
+      "family_cn": "鹎科",
+      "order_cn": "雀形目",
+      "genus_cn": "短脚鹎属",
+      "genus_sci": "Hypsipetes",
+      "family_sci": "Pycnonotidae",
+      "order_sci": "Passeriformes",
+      "english_name": "Ambon Golden Bulbul",
+      "taxon_id": "avibase-FDB1A2B1",
+      "chinese_name_source": "scientific-name fallback"
+    }
+  ],
+  "chinese_display_changes": [
+    {
+      "taxon_id": "avibase-18B4CE02",
+      "old_name": "Tachyspiza haplochrous",
+      "new_name": "Tachyspiza haplochroa",
+      "old_chinese": "Tachyspiza haplochrous",
+      "new_chinese": "白腹鹰"
+    },
+    {
+      "taxon_id": "avibase-91E82CA2",
+      "old_name": "Ptilinopus holosericea",
+      "new_name": "Ptilinopus holosericeus",
+      "old_chinese": "Ptilinopus holosericea",
+      "new_chinese": "Ptilinopus holosericeus"
+    }
+  ],
+  "new_name_status_counts": {
+    "IOC-15.1 Chinese; exact-name alias; concept unverified": 10941,
+    "scientific-name fallback": 190,
+    "AviList-v2025b display alias; matching AvibaseID; not official Chinese name": 41
+  },
+  "photo_labels_rewritten": 0,
+  "note": "ID and name comparisons are review evidence; no split/merge photo assignment is inferred"
+}

@@ -194,6 +194,10 @@
                                         <span class="form-check-label small">Include subfolders</span>
                                     </label>
                                 </div>
+                                <div class="small text-info mt-2" id="folder-selection-hint">
+                                    递归模式：勾选包含整棵子树，取消子目录可排除；半选表示部分包含。勾选父目录后，排除子目录不会排除父目录直属照片。
+                                    两种模式分别保留选择，切换后请核对上方清单。
+                                </div>
                             </div>
                         </div>
 
@@ -253,6 +257,7 @@
     </div>
 
     <script src="/lib/js/bootstrap.bundle.min.js"></script>
+    <script src="/lib/folder_selection.js"></script>
     <script>
         // 1. WebSocket for Logs
         const consoleBox = document.getElementById('console');
@@ -323,9 +328,7 @@
                 // 处理进度更新
                 const progressMatch = event.data.match(/\[PROGRESS\] (\d+)\/(\d+)/);
                 if (progressMatch) {
-                    const processed = parseInt(progressMatch[1]);
-                    const total = parseInt(progressMatch[2]);
-                    updateProgress(processed, total);
+                    // Status polling is authoritative; replayed logs may be stale.
                     return; // 不显示进度信息在日志中
                 }
 
@@ -360,7 +363,19 @@
                     (labels[task.state] || task.state) + (task.error ? '：' + task.error : '');
                 startBtn.disabled = task.is_running;
                 startBtn.textContent = task.is_running ? '⏳ Running...' : '▶ Start Pipeline';
-                if (task.is_running && task.total > 0) updateProgress(task.processed, task.total);
+                if (task.is_running) {
+                    if (task.phase === 'scanning' || task.phase === 'initializing') {
+                        showProgress();
+                        document.getElementById('progress-text').textContent =
+                            task.phase === 'scanning' ? '正在扫描所有所选目录，文件总数尚未确定' : '正在初始化';
+                        document.getElementById('progress-percent').textContent = '—';
+                        if (task.state !== 'stopping' && task.phase === 'scanning') {
+                            document.getElementById('task-state').textContent = '正在扫描，完成统计后开始处理';
+                        }
+                    } else {
+                        updateProgress(task.processed, task.total);
+                    }
+                }
                 const key = task.task_id + ':' + task.state;
                 if (key !== lastTaskState && ['completed', 'stopped', 'failed', 'interrupted'].includes(task.state)) {
                     loadHistory();
@@ -392,6 +407,27 @@
         // Load Folder Tree
         let folderTreeData = [];
         let selectedFolders = new Set();
+        const recursiveSelection = new WingScribeFolderSelection();
+
+        function recursiveFolderMode() {
+            return document.getElementById('recursive-folders').checked;
+        }
+
+        function folderSelectionPayload() {
+            return recursiveFolderMode() ? recursiveSelection.payload() :
+                {paths: Array.from(selectedFolders).sort(), excluded_paths: []};
+        }
+
+        function refreshFolderChecks() {
+            for (const checkbox of document.querySelectorAll('#folder-tree .folder-checkbox')) {
+                const state = recursiveFolderMode() ? recursiveSelection.state(checkbox.value) :
+                    {checked: selectedFolders.has(checkbox.value), indeterminate: false};
+                checkbox.checked = state.checked;
+                checkbox.indeterminate = state.indeterminate;
+                checkbox.setAttribute('aria-checked', state.indeterminate ? 'mixed' : String(state.checked));
+                checkbox.parentElement.classList.toggle('selected', state.checked || state.indeterminate);
+            }
+        }
 
         function loadFolderTree() {
             fetch('/api/pipeline/folders')
@@ -426,19 +462,11 @@
                 const row = document.createElement('div');
                 row.className = 'folder-row';
 
-                // Check if has children in cache
-                const hasCachedChildren = childrenCache[node.path] && childrenCache[node.path].length > 0;
-
                 // Expand/collapse arrow
                 const arrowSpan = document.createElement('span');
                 arrowSpan.className = 'folder-arrow';
-                if (hasCachedChildren) {
-                    arrowSpan.textContent = '▼';
-                    arrowSpan.dataset.loaded = 'true';
-                } else {
-                    arrowSpan.textContent = '▶';
-                    arrowSpan.dataset.loaded = 'false';
-                }
+                arrowSpan.textContent = '▶';
+                arrowSpan.dataset.loaded = 'false';
 
                 // Click arrow to load/collapse children
                 arrowSpan.addEventListener('click', async (e) => {
@@ -456,15 +484,25 @@
                     } else if (arrowSpan.dataset.loaded === 'false') {
                         // Expand - load children from server
                         arrowSpan.textContent = '⏳';
+                        arrowSpan.dataset.loaded = 'loading';
                         try {
-                            const resp = await fetch(`/api/pipeline/folders/${encodeURIComponent(path)}`);
-                            const data = await resp.json();
+                            let data;
+                            if (Object.prototype.hasOwnProperty.call(childrenCache, path)) {
+                                data = {children: childrenCache[path]};
+                            } else {
+                                const resp = await fetch(`/api/pipeline/folders/${encodeURIComponent(path)}`);
+                                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                                data = await resp.json();
+                                if (data.error) throw new Error(data.error);
+                                childrenCache[path] = data.children || [];
+                            }
                             if (data.children && data.children.length > 0) {
                                 childrenCache[path] = data.children;
                                 const childUl = document.createElement('ul');
                                 childUl.className = 'folder-children';
                                 renderFolderTree(data.children, childUl);
                                 li.appendChild(childUl);
+                                refreshFolderChecks();
                                 arrowSpan.textContent = '▼';
                                 arrowSpan.dataset.loaded = 'true';
                             } else {
@@ -474,6 +512,8 @@
                         } catch (err) {
                             console.error('Failed to load children:', err);
                             arrowSpan.textContent = '▶';
+                            arrowSpan.dataset.loaded = 'false';
+                            row.title = '目录加载失败，点击箭头重试：' + err.message;
                         }
                     }
                 });
@@ -485,13 +525,12 @@
                 checkbox.value = node.path;
                 checkbox.dataset.name = node.name;
 
-                if (selectedFolders.has(node.path)) {
-                    checkbox.checked = true;
-                    row.classList.add('selected');
-                }
+                checkbox.setAttribute('aria-label', node.name);
 
                 checkbox.addEventListener('change', (e) => {
-                    if (e.target.checked) {
+                    if (recursiveFolderMode()) {
+                        recursiveSelection.set(node.path, e.target.checked);
+                    } else if (e.target.checked) {
                         selectedFolders.add(node.path);
                         row.classList.add('selected');
                     } else {
@@ -521,16 +560,21 @@
 
             container.innerHTML = '';
             container.appendChild(ul);
+            refreshFolderChecks();
         }
 
         function updateSelectedPaths() {
             const textarea = document.getElementById('selected-paths');
             const countDiv = document.getElementById('selected-count');
 
-            const paths = Array.from(selectedFolders).sort();
-            textarea.value = paths.join('\n');
-            countDiv.textContent = paths.length + ' folder(s) selected';
+            const selection = folderSelectionPayload();
+            textarea.value = selection.paths.map(path => '包含：' + path)
+                .concat(selection.excluded_paths.map(path => '排除：' + path)).join('\n');
+            countDiv.textContent = `${selection.paths.length} 个包含入口，${selection.excluded_paths.length} 个排除目录`;
+            refreshFolderChecks();
         }
+
+        document.getElementById('recursive-folders').addEventListener('change', updateSelectedPaths);
 
         // Load folder tree when tab is clicked
         document.getElementById('folder-tab').addEventListener('shown.bs.tab', loadFolderTree);
@@ -627,14 +671,16 @@
                 });
             } else {
                 // Folder mode
-                const paths = Array.from(selectedFolders);
+                const selection = folderSelectionPayload();
+                const paths = selection.paths;
                 if (paths.length === 0) {
                     alert('Please select at least one folder');
                     return;
                 }
 
                 const recursive = document.getElementById('recursive-folders').checked;
-                const msg = `Start processing ${paths.length} folder(s)?${recursive ? ' (including subfolders)' : ''}`;
+                const msg = `Start processing ${paths.length} folder(s)?${recursive ? ' (including subfolders)' : ''}` +
+                    (selection.excluded_paths.length ? '\n排除以下目录（更深的显式包含入口仍生效）：\n' + selection.excluded_paths.join('\n') : '');
 
                 if(!confirm(msg)) return;
 
@@ -651,7 +697,8 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         paths: paths,
-                        recursive: recursive
+                        recursive: recursive,
+                        excluded_paths: selection.excluded_paths
                     })
                 })
                 .then(r => r.json())

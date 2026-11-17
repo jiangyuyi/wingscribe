@@ -24,7 +24,8 @@
 | `output.root_dir` | 处理后图片的保存目录（**必填，绝对路径**）。 | `D:/Photos/Birds/Output` |
 | `references_path` | 参考数据目录（相对于项目根目录）。 | `data/references` |
 | `db_path` | SQLite 数据库文件路径（相对于项目根目录）。 | `data/db/wingscribe.db` |
-| `taxonomy_catalogue_path` | 固定版本 AviList CSV 名录路径（相对于项目根目录）。 | `data/references/avilist-v2025b.csv` |
+| `taxonomy_catalogue_path` | 固定版本 AviList CSV 名录路径（相对于项目根目录）。 | `data/references/avilist-v2026.csv` |
+| `china_catalogue_path` | 中国候选CSV及同名JSON；留空使用内置、固定校验的Avibase地域并集。 | `data/references/china-avilist-v2026.csv` |
 | `model_cache_dir` | 模型缓存目录，存放下载的 YOLO、BioCLIP 等模型文件（相对于项目根目录）。 | `data/models` |
 
 #### 源目录定义 (`sources`)
@@ -92,7 +93,7 @@ paths:
 | 参数 | 描述 | 选项 |
 | :--- | :--- | :--- |
 | `mode` | 使用的识别引擎。 | `local` (BioCLIP 本地), `api` (旧式 API 客户端，需配置 URL/key), `dongniao` (懂鸟 API) |
-| `region_filter` | 候选词过滤器。`auto` 会根据文件夹名关键词自动切换。 | `null` (全球), `china` (仅中国分布), `auto` |
+| `region_filter` | 推理前限定候选。`auto`：地点命中国外名称词典用全球，其余（含未知）用中国；`china`固定中国；`global`/旧null全球。中国1,539种，全球11,172种，适配AviList2026。实际范围见任务日志。 | 默认 `auto`；可选 `china`、`global`；兼容 `null` |
 | `top_k` | 保存的备选物种数量。 | `5` |
 | `alternatives_threshold` | 如果首选结果置信度高于此值 (0-100)，Web 界面将不显示备选建议（认为非常可信）。 | `70` |
 | `low_confidence_threshold` | 低于此分数的匹配将被标记为"不确定"。 | `60` |
@@ -169,7 +170,7 @@ paths:
   # 以下路径相对于项目根目录
   references_path: data/references
   db_path: data/db/wingscribe.db
-  taxonomy_catalogue_path: data/references/avilist-v2025b.csv
+  taxonomy_catalogue_path: data/references/avilist-v2026.csv
   model_cache_dir: data/models
 
 processing:
@@ -216,7 +217,7 @@ paths:
   # 以下路径相对于项目根目录
   references_path: data/references
   db_path: data/db/wingscribe.db
-  taxonomy_catalogue_path: data/references/avilist-v2025b.csv
+  taxonomy_catalogue_path: data/references/avilist-v2026.csv
   model_cache_dir: data/models
 
 processing:

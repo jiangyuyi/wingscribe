@@ -16,6 +16,8 @@
 | 模块职责与数据流 | [架构](development/architecture.md) |
 | 原片、分析和任务存储边界 | [存储契约](development/asset-catalogue.md) |
 | 当前能力、实现缺口、后续事项 | [项目状态](development/status.md) |
+| 中国鸟类候选名单迁移与地点筛选恢复 | [地域范围与采集记录](research/china-regional-capture-2026-11-04.md) |
+| 中国名单旧来源与权威替代数据 | [地域名录来源调研](research/china-checklist-sources-2026-11-04.md) |
 | 是否重写与分阶段改造 | [工程评估与改造计划](development/modernization-plan-2026-10-16.md) |
 | 当前批次与验证结果 | [实施记录](development/execution-log.md)、[锁定开发环境](development/environment.md) |
 | 拒绝原片隔离与恢复、安装器后续工作 | [B6e 隔离计划](development/b6e-quarantine-plan.md)、[B7 构建计划](development/b7-packaging-plan.md) |

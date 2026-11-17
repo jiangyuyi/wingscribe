@@ -51,6 +51,7 @@ class TaskManager:
         self.finished_at = None
         self.processed = 0
         self.total = 0
+        self.phase = "initializing"
         self._thread = None
         self.job_id = None
         self.recovered_jobs = 0
@@ -103,7 +104,7 @@ class TaskManager:
         with self._lock:
             return dict(task_id=self.task_id, state=self.state, is_running=self.is_running,
                         error=self.error, started_at=self.started_at, finished_at=self.finished_at,
-                        processed=self.processed, total=self.total, job_id=self.job_id,
+                        processed=self.processed, total=self.total, phase=self.phase, job_id=self.job_id,
                         recovered_jobs=self.recovered_jobs, persisted_job=self.persisted_job)
 
     def stop(self):
@@ -150,6 +151,7 @@ class TaskManager:
             self.finished_at = None
             self.error = None
             self.processed = self.total = 0
+            self.phase = "initializing"
             self.job_id = None
             self.persisted_job = None
             self.recovered_jobs = 0
@@ -169,15 +171,17 @@ class TaskManager:
     def start_pipeline(self, start_date=None, end_date=None):
         return self._start(self._run_pipeline_thread, (start_date, end_date), "Starting pipeline...")
 
-    def start_pipeline_by_folders(self, folder_paths, recursive=True):
-        return self._start(self._run_pipeline_thread_by_folders, (list(folder_paths), recursive),
+    def start_pipeline_by_folders(self, folder_paths, recursive=True, excluded_paths=None):
+        args = (list(folder_paths), recursive, list(excluded_paths)) if excluded_paths else (list(folder_paths), recursive)
+        return self._start(self._run_pipeline_thread_by_folders, args,
                            "Starting pipeline for selected folders...")
 
     def _run_pipeline_thread(self, start_date, end_date):
         self._execute(lambda runner: runner.run(start_date=start_date, end_date=end_date))
 
-    def _run_pipeline_thread_by_folders(self, folder_paths, recursive):
-        self._execute(lambda runner: runner.run_by_folders(folder_paths, recursive=recursive))
+    def _run_pipeline_thread_by_folders(self, folder_paths, recursive, excluded_paths=None):
+        options = {'excluded_paths': excluded_paths} if excluded_paths else {}
+        self._execute(lambda runner: runner.run_by_folders(folder_paths, recursive=recursive, **options))
 
     def _execute(self, run):
         root_logger = logging.getLogger()
@@ -199,6 +203,10 @@ class TaskManager:
                     with self._lock:
                         self.job_id, self.recovered_jobs = job_id, recovered
                 runner._job_callback = job_started
+                def phase_changed(phase):
+                    with self._lock:
+                        self.phase = phase
+                runner._phase_callback = phase_changed
                 runner.set_progress_callback(progress)
                 runner.set_stop_checker(lambda: self.should_stop)
                 with self._lock:

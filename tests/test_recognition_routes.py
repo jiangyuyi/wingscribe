@@ -18,7 +18,7 @@ from src.web.routes import recognition
 def test_recognize_maps_value_error_to_400(monkeypatch):
     class FailingFactory:
         @staticmethod
-        def create(_platform):
+        def create_from_request(_request):
             raise ValueError("bad request")
 
     monkeypatch.setattr(recognition, "RecognizerFactory", FailingFactory)
@@ -35,7 +35,7 @@ def test_recognize_maps_value_error_to_400(monkeypatch):
 def test_recognize_maps_runtime_error_to_503(monkeypatch):
     class FailingFactory:
         @staticmethod
-        def create(_platform):
+        def create_from_request(_request):
             raise RuntimeError("service unavailable")
 
     monkeypatch.setattr(recognition, "RecognizerFactory", FailingFactory)

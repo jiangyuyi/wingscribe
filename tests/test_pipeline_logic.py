@@ -69,7 +69,7 @@ def test_recognize_batch_uses_supplied_candidate_labels(tmp_path):
 
         def predict_batch(self, image_paths, candidate_labels, top_k=5):
             self.calls.append((list(image_paths), list(candidate_labels), top_k))
-            return [[{"scientific_name": "Passer montanus", "confidence": 0.95}] for _ in image_paths]
+            return [[{"scientific_name": candidate_labels[0], "confidence": 0.95}] for _ in image_paths]
 
     pipeline = MockPipeline()
     pipeline.recognizer = FakeRecognizer()
@@ -314,16 +314,19 @@ def test_quality_storage_fields_keep_disabled_or_invalid_results_empty(quality):
 
 def test_select_candidate_labels_respects_region_filter_modes():
     pipeline = MockPipeline()
-    pipeline.all_labels = ["Passer montanus", "Parus minor", "Corvus macrorhynchos"]
-    pipeline.china_allowlist = {"Passer montanus", "Parus minor"}
-    pipeline.foreign_countries = {"Japan", "USA"}
+    from src.metadata.avilist import load_catalogue
+    from src.recognition.region_filter import RegionSelector
+    rows, manifest = load_catalogue()
+    pipeline.all_labels = [row['scientific_name'] for row in rows]
+    pipeline.taxonomy_version = manifest['version']
+    expected = list(RegionSelector(pipeline.all_labels, pipeline.taxonomy_version).select('china').labels)
 
     pipeline.config = {"recognition": {"region_filter": "china"}}
-    assert pipeline._select_candidate_labels("Beijing") == ["Passer montanus", "Parus minor"]
+    assert pipeline._select_candidate_labels("Beijing") == expected
 
     pipeline.config = {"recognition": {"region_filter": "auto"}}
-    assert pipeline._select_candidate_labels("Beijing") == ["Passer montanus", "Parus minor"]
-    assert pipeline._select_candidate_labels("Japan_Tokyo") == pipeline.all_labels
+    assert pipeline._select_candidate_labels("Beijing") == expected
+    assert pipeline._select_candidate_labels("日本东京") == pipeline.all_labels
 
     pipeline.config = {"recognition": {"region_filter": "global"}}
     assert pipeline._select_candidate_labels("Anywhere") == pipeline.all_labels
@@ -464,8 +467,9 @@ def test_run_processes_valid_entries_and_records_scan_history(tmp_path, monkeypa
     pipeline.run(start_date="20260320", end_date="20260320", existing_hashes={"already"})
 
     assert recorded == [("a.jpg", "20260320", "Beijing")]
-    assert pipeline.total_files == 2
-    assert emitted[0] == (0, 2)
+    # The fixed total includes only files eligible for this date range.
+    assert pipeline.total_files == 1
+    assert emitted[0] == (0, 1)
     assert history[0]["range_start"] == "20260320"
     assert history[0]["range_end"] == "20260320"
     assert history[0]["processed_count"] == 1

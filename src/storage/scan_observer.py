@@ -33,6 +33,10 @@ def observe_image(pipeline, provider, entry, meta):
         'output': pipeline.config.get('paths', {}).get('output', {}),
         'metadata': meta,
     }
+    # Persist scope provenance as part of the reuse signature. Old global
+    # analyses must not be mistaken for a China-restricted classification.
+    if hasattr(pipeline, '_select_candidates'):
+        parameters['region_selection'] = pipeline._select_candidates(meta.get('location_tag', '')).metadata
     model = str(parameters['model_type'] or recognition.get('mode', 'local'))
     taxonomy = pipeline.taxonomy_version
     try:

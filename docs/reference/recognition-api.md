@@ -15,6 +15,8 @@
 
 `RecognizeRequest` 使用 `platform`、`top_k`（1–20，默认 5）、`timeout`（1–300 秒，默认 60），图片字段为 `image_path`、`image_url` 或 `image_base64`。协议强制恰好提供一种非空图片来源；本地适配暂支持路径和纯 Base64，不下载 URL。`image_path` 是服务端可访问的路径，不是客户端文件上传。
 
+本地接口支持 `region_filter: china/global/auto` 和可选 `location_tag`（原图地点文本，最多2048字符）。auto命中国外名称词典用全球，其余（含空白）用中国；API未传region_filter仍保留全球语义，与流水线配置缺省auto区分。中国1,539种、全球11,172种；模型在推理前接收有效候选。响应 `region_selection` 包含请求/实际范围、候选数、命中词、选择器/名录版本和摘要；坏名单明确失败，不回退全球。外部统一云接口的china/auto在创建提供方前拒绝，批次中不影响其他global项，未进行云端线上验证。
+
 ```json
 {
   "image_path": "D:/Photos/sample.jpg",

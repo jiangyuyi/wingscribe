@@ -1,4 +1,5 @@
 from pathlib import Path
+from src.core.io.folder_selection import FolderSelection
 
 
 IGNORED_DIRS = {"@Recycle", "$RECYCLE.BIN", ".Trash-", "@eaDir", "System Volume Information"}
@@ -90,11 +91,10 @@ def build_folder_tree(root_path: Path, recursive: bool, base_rel_path: str = "",
                     node["children"] = children
 
             result.append(node)
-    except PermissionError:
-        pass
     except Exception as exc:
         if logger is not None:
             logger.warning("Error scanning %s: %s", root_path, exc)
+        raise
 
     return result
 
@@ -103,10 +103,17 @@ def start_pipeline_by_folders(task_manager, req, logger):
     if task_manager.is_running:
         return {"status": "error", "message": "Pipeline already running"}
 
-    logger.info("Starting pipeline by folders: %s, recursive=%s", req.paths, req.recursive)
-    if not task_manager.start_pipeline_by_folders(req.paths, req.recursive):
+    try:
+        selection = FolderSelection(req.paths, getattr(req, 'excluded_paths', ()), recursive=req.recursive)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+    if not selection.paths:
+        return {"status": "error", "message": "请至少选择一个目录"}
+    logger.info("Starting pipeline by folders: %s, recursive=%s, excluded=%s", selection.paths, req.recursive, selection.excluded_paths)
+    options = {'excluded_paths': selection.excluded_paths} if selection.excluded_paths else {}
+    if not task_manager.start_pipeline_by_folders(selection.paths, req.recursive, **options):
         return {"status": "error", "message": "Pipeline start rejected or failed"}
-    return {"status": "success", "message": f"Pipeline started for {len(req.paths)} folder(s)"}
+    return {"status": "success", "message": f"Pipeline started for {len(selection.paths)} folder(s)"}
 
 
 def stop_pipeline(task_manager):

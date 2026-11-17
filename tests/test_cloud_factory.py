@@ -79,7 +79,7 @@ def test_create_from_request_uses_request_platform(monkeypatch):
         return "recognizer"
 
     monkeypatch.setattr(RecognizerFactory, "create", fake_create)
-    request = SimpleNamespace(platform=RecognitionPlatform.huggingface)
+    request = SimpleNamespace(platform=RecognitionPlatform.huggingface, region_filter=None)
 
     recognizer = RecognizerFactory.create_from_request(request)
 

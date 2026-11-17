@@ -22,12 +22,14 @@ from src.storage.scan_observer import observe_image
 from src.storage.pipeline_jobs import pipeline_job
 from src.storage.archive_publication import ArchivePublisher
 from src.metadata.taxonomy_catalogue import ensure_taxonomy, current_release
+from src.metadata.avilist import DEFAULT_CATALOGUE, VERSION, load_catalogue
 from src.core.detector import BirdDetector
 from src.core.quality import QualityEvaluator, QualityResult
 from src.core.processor import ImageProcessor
 from src.recognition.inference_local import LocalBirdRecognizer
 from src.recognition.inference_dongniao import DongniaoRecognizer
 from src.recognition.inference_api import APIBirdRecognizer
+from src.recognition.region_filter import selector_from_config, RegionFilterError
 from src.metadata.exif_writer import ExifWriter
 from src.utils.config_loader import load_config, validate_paths_config
 from src.utils.env_check import check_system_dependencies
@@ -37,6 +39,7 @@ from src.core.io.temp_manager import TempFileManager
 from src.core.io.path_generator import PathGenerator
 from src.core.io.path_parser import PathParser
 from src.core.io.path_utils import is_within_directory
+from src.core.io.folder_selection import FolderSelection
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -109,6 +112,8 @@ class SmartScanner:
         provider = LocalProvider(str(self.root_path))
         provider.strict = True
         for entry in provider.list_dir(str(current_path), recursive=False):
+            if getattr(self, 'stop_checker', lambda: False)():
+                return
             if not entry.is_dir:
                 yield entry
                 continue
@@ -136,7 +141,7 @@ class WingScribePipeline:
         self.config = (load_config(str(config_file), str(config_file.parent / "secrets.yaml"))
                        if config_override is None else deepcopy(config_override))
         paths = self.config.get("paths", {})
-        for key in ("db_path", "foreign_list", "china_list", "taxonomy_catalogue_path"):
+        for key in ("db_path", "foreign_list", "china_list", "china_catalogue_path", "taxonomy_catalogue_path"):
             if paths.get(key) and not Path(paths[key]).is_absolute():
                 paths[key] = str(Path(PROJECT_ROOT) / paths[key])
         processing = self.config.get("processing", {})
@@ -222,11 +227,12 @@ class WingScribePipeline:
             # Existing hashes for fast deduplication (loaded on demand)
             self.existing_hashes = None
 
-            # Load taxonomy and config lists (with defaults for backward compatibility)
-            paths_config = self.config.get('paths', {})
-            self.foreign_countries = self._load_list(paths_config.get('foreign_list', 'config/dictionaries/foreign_countries.txt'))
-            self.china_allowlist = self._load_list(paths_config.get('china_list', 'config/dictionaries/china_bird_list.txt'))
             self.all_labels = self._get_taxonomy_labels()
+            self._region_selector = selector_from_config(self.all_labels, self.taxonomy_version, self.config)
+            self._logged_regions = set()
+            if self.config.get('recognition', {}).get('region_filter') in ('china', 'auto'):
+                # Validate required regional resources before scheduling photos.
+                self._region_selector.select(self.config['recognition']['region_filter'], '')
         except Exception:
             self.db.close()
             raise
@@ -349,39 +355,31 @@ class WingScribePipeline:
         # Fetch all scientific names from taxonomy table
         cursor = self.db.conn.execute("SELECT scientific_name FROM taxonomy")
         all_labels = [row[0] for row in cursor.fetchall()]
+        if self.taxonomy_version == VERSION:
+            rows, _ = load_catalogue(Path(self.config.get('paths', {}).get('taxonomy_catalogue_path') or DEFAULT_CATALOGUE))
+            ordered = [row['scientific_name'] for row in rows]
+            if len(all_labels) == len(ordered) and set(all_labels) == set(ordered):
+                all_labels = ordered
         logging.info(f"Loaded {len(all_labels)} total labels from DB.")
         return all_labels
 
     def _select_candidate_labels(self, location_tag: str):
-        mode = self.config.get('recognition', {}).get('region_filter')
-        if (mode in {'china', 'auto'}
-                and getattr(self, 'taxonomy_version', '').startswith('AviList-')
-                and self.config.get('paths', {}).get('china_list_taxonomy_version') != self.taxonomy_version):
-            if not getattr(self, '_warned_unversioned_china_list', False):
-                logging.warning("China allowlist has no matching taxonomy version; using full AviList candidates to avoid excluding renamed/split species")
-                self._warned_unversioned_china_list = True
-            return self.all_labels
-        
-        if mode == 'china':
-            if not self.china_allowlist:
-                 return self.all_labels
-            return [name for name in self.all_labels if name in self.china_allowlist]
-            
-        if mode == 'auto':
-            is_foreign = False
-            for country in self.foreign_countries:
-                if country in location_tag:
-                    is_foreign = True
-                    break
-            
-            if is_foreign:
-                return self.all_labels
-            else:
-                if not self.china_allowlist:
-                    return self.all_labels
-                return [name for name in self.all_labels if name in self.china_allowlist]
+        return list(self._select_candidates(location_tag).labels)
 
-        return self.all_labels
+    def _select_candidates(self, location_tag: str):
+        if not hasattr(self, '_region_selector'):
+            self._region_selector = selector_from_config(self.all_labels, self.taxonomy_version, self.config)
+            self._logged_regions = set()
+        selection = self._region_selector.select(
+            self.config.get('recognition', {}).get('region_filter'), location_tag)
+        if (selection.metadata['effective_region'] == 'china'
+                and self.config.get('recognition', {}).get('mode', 'local') == 'dongniao'):
+            raise RegionFilterError('懂鸟不支持推理前限定候选；中国范围请使用 local 模式，或明确选择 global')
+        key = (selection.metadata['effective_region'], selection.metadata['matched_foreign_word'])
+        if key not in self._logged_regions:
+            logging.info('Regional candidates: %s', json.dumps(selection.metadata, ensure_ascii=False))
+            self._logged_regions.add(key)
+        return selection
 
     def _init_recognizer(self):
         """
@@ -440,6 +438,10 @@ class WingScribePipeline:
 
             if len(batch_results) != len(items) or any(not results for results in batch_results):
                 raise RuntimeError('Recognition returned incomplete results')
+            if not isinstance(self.recognizer, DongniaoRecognizer):
+                allowed = set(candidate_labels)
+                if any(result.get('scientific_name') not in allowed for results in batch_results for result in results):
+                    raise RuntimeError('Recognition returned a species outside the supplied candidate set')
             for item, results in zip(items, batch_results):
                 if 'catalogue_detection' in item:
                     item['catalogue_detection']['result']['candidates'] = results
@@ -881,89 +883,104 @@ class WingScribePipeline:
 
         # source.path is now always absolute (required), no conversion needed
 
-        # Use ThreadPool for detection/cropping
-        # One worker owns detector/recognizer state; at most four submitted items.
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
-            futures = []
+        self.total_files = self.processed_count = 0
+        phase_callback = getattr(self, '_phase_callback', None)
+        if phase_callback:
+            phase_callback('scanning')
+        batches = []
+        for source in sources:
+            if self._should_stop():
+                stop_requested = True
+                logging.info("Stop requested before scanning next source, stopping pipeline submission")
+                break
 
-            for source in sources:
+            if not source.get('enabled', True):
+                continue
+
+            path_str = source['path']
+            recursive = source.get('recursive', True)
+            structure_pattern = source.get('structure_pattern', None)
+
+            logging.info(f"Scanning source: {path_str} (Recursive: {recursive})")
+
+            # 使用 LocalProvider 替代 fs_manager
+            provider = LocalProvider(base_dir=path_str)
+            provider.strict = True
+            if not self._source_exists(provider, path_str, failures):
+                continue
+
+            source_root_abs = Path(provider.get_local_path(path_str))
+            parser = PathParser(source_root_abs, structure_pattern)
+
+            # Get output directory to exclude from scanning (use pre-resolved absolute path)
+            exclude_dirs = [self.output_root] if self.output_root else []
+
+            iterator = []
+            if recursive and (start_date or end_date):
+                scanner = SmartScanner(source_root_abs, start_date, end_date, exclude_dirs)
+                scanner.stop_checker = self._should_stop
+                iterator = scanner.scan(source_root_abs)
+            elif recursive:
+                iterator = self._scan_folder_recursive(provider, path_str)
+            else:
+                iterator = provider.list_dir(path_str, recursive=False)
+
+            # 收集有效的图片文件并统计总数
+            valid_entries = []
+            for entry in self._scan_with_failures(provider, path_str, iterator, failures):
                 if self._should_stop():
                     stop_requested = True
-                    logging.info("Stop requested before scanning next source, stopping pipeline submission")
                     break
+                is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
+                if is_dir: continue
 
-                if not source.get('enabled', True):
+                entry_name = entry.name
+                entry_path = entry.path
+
+                # Skip files in output directory
+                if self.output_root:
+                    try:
+                        entry_path_obj = Path(entry_path)
+                        output_path_obj = Path(self.output_root)
+                        if is_within_directory(entry_path_obj, output_path_obj):
+                            logging.debug(f"Skipping output file: {entry_name}")
+                            continue
+                    except:
+                        pass
+
+                if not entry_name.lower().endswith(('.jpg', '.jpeg')):
                     continue
 
-                path_str = source['path']
-                recursive = source.get('recursive', True)
-                structure_pattern = source.get('structure_pattern', None)
+                valid_entries.append((entry, entry_path))
 
-                logging.info(f"Scanning source: {path_str} (Recursive: {recursive})")
-
-                # 使用 LocalProvider 替代 fs_manager
-                provider = LocalProvider(base_dir=path_str)
-                provider.strict = True
-                if not self._source_exists(provider, path_str, failures):
+            selected = []
+            for entry, entry_path in valid_entries:
+                if self._should_stop():
+                    stop_requested = True
+                    break
+                meta = parser.parse(entry_path)
+                c_date = meta.get('captured_date')
+                if start_date and c_date and int(c_date) < int(start_date):
                     continue
+                if end_date and c_date and int(c_date) > int(end_date):
+                    continue
+                selected.append((entry, entry_path, meta))
+            valid_entries = selected
+            batches.append((provider, parser, valid_entries))
 
-                source_root_abs = Path(provider.get_local_path(path_str))
-                parser = PathParser(source_root_abs, structure_pattern)
-
-                # Get output directory to exclude from scanning (use pre-resolved absolute path)
-                exclude_dirs = [self.output_root] if self.output_root else []
-
-                iterator = []
-                if recursive and (start_date or end_date):
-                    scanner = SmartScanner(source_root_abs, start_date, end_date, exclude_dirs)
-                    iterator = scanner.scan(source_root_abs)
-                elif recursive:
-                    iterator = self._scan_folder_recursive(provider, path_str)
-                else:
-                    iterator = provider.list_dir(path_str, recursive=False)
-
-                # 收集有效的图片文件并统计总数
-                valid_entries = []
-                for entry in self._scan_with_failures(provider, path_str, iterator, failures):
-                    is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
-                    if is_dir: continue
-
-                    entry_name = entry.name
-                    entry_path = entry.path
-
-                    # Skip files in output directory
-                    if self.output_root:
-                        try:
-                            entry_path_obj = Path(entry_path)
-                            output_path_obj = Path(self.output_root)
-                            if is_within_directory(entry_path_obj, output_path_obj):
-                                logging.debug(f"Skipping output file: {entry_name}")
-                                continue
-                        except:
-                            pass
-
-                    if not entry_name.lower().endswith(('.jpg', '.jpeg')):
-                        continue
-
-                    valid_entries.append((entry, entry_path))
-
-                # 设置进度总数
-                self.total_files += len(valid_entries)
-                self._emit_progress()
-
-                for entry, entry_path in valid_entries:
+        self.total_files = sum(len(entries) for _, _, entries in batches)
+        if phase_callback and not self._should_stop():
+            phase_callback('processing')
+        self._emit_progress()
+        # Keep one model owner and at most four submitted photos.
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
+            futures = []
+            for provider, parser, valid_entries in batches:
+                for entry, entry_path, meta in valid_entries:
                     if self._should_stop():
                         stop_requested = True
                         logging.info("Stop requested, stopping new task submission")
                         break
-
-                    meta = parser.parse(entry_path)
-                    
-                    c_date = meta.get('captured_date')
-                    if start_date and c_date:
-                        if int(c_date) < int(start_date): continue
-                    if end_date and c_date:
-                        if int(c_date) > int(end_date): continue
 
                     if not hasattr(entry, 'size'):
                         class Adapter:
@@ -1022,12 +1039,16 @@ class WingScribePipeline:
         else:
             logging.info(f"Pipeline completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 
-    def run_by_folders(self, folder_paths: list, recursive: bool = True):
-        with pipeline_job(self, {'mode': 'folders', 'paths': list(folder_paths), 'recursive': recursive}):
+    def run_by_folders(self, folder_paths: list, recursive: bool = True, excluded_paths=None):
+        selection = FolderSelection(folder_paths, excluded_paths, recursive=recursive)
+        parameters = {'mode': 'folders', 'paths': selection.paths, 'recursive': recursive}
+        if selection.excluded_paths:
+            parameters['excluded_paths'] = selection.excluded_paths
+        with pipeline_job(self, parameters):
             self._recognizer_init_error = None
-            return self._run_folders(folder_paths, recursive)
+            return self._run_folders(selection.paths, recursive, selection.excluded_paths)
 
-    def _run_folders(self, folder_paths, recursive=True):
+    def _run_folders(self, folder_paths, recursive=True, excluded_paths=None):
         """
         Run pipeline for specific folders only, ignoring date range filters.
 
@@ -1065,79 +1086,94 @@ class WingScribePipeline:
             source_roots = {self.source_dir: self.source_dir}
 
         # folder_paths are now always absolute, no resolution needed
-        resolved_paths = list(folder_paths)
+        selection = FolderSelection(folder_paths, excluded_paths, recursive=recursive)
+        resolved_paths = selection.paths
+        if selection.excluded_paths:
+            logging.info('Excluded folder subtrees: %s', selection.excluded_paths)
 
-        # Use ThreadPool for detection/cropping
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
-            futures = []
+        self.total_files = self.processed_count = 0
+        phase_callback = getattr(self, '_phase_callback', None)
+        if phase_callback:
+            phase_callback('scanning')
+        batches = []
+        for path_str in resolved_paths:
+            if self._should_stop():
+                stop_requested = True
+                logging.info("Stop requested before scanning next folder, stopping pipeline submission")
+                break
 
-            for path_str in resolved_paths:
-                if self._should_stop():
-                    stop_requested = True
-                    logging.info("Stop requested before scanning next folder, stopping pipeline submission")
+            # Find the correct source_root for PathParser
+            # Use the longest matching source root
+            source_root_abs = None
+            for src_root in sorted(source_roots, key=lambda root: len(Path(root).parts), reverse=True):
+                if src_root and is_within_directory(path_str, src_root):
+                    source_root_abs = Path(src_root)
                     break
 
-                # Find the correct source_root for PathParser
-                # Use the longest matching source root
-                source_root_abs = None
-                for src_root in sorted(source_roots, key=lambda root: len(Path(root).parts), reverse=True):
-                    if src_root and is_within_directory(path_str, src_root):
-                        source_root_abs = Path(src_root)
-                        break
+            if source_root_abs is None:
+                # Fallback: use source_dir or path_str itself
+                source_root_abs = Path(self.source_dir) if self.source_dir else Path(path_str)
 
-                if source_root_abs is None:
-                    # Fallback: use source_dir or path_str itself
-                    source_root_abs = Path(self.source_dir) if self.source_dir else Path(path_str)
+            provider = LocalProvider(base_dir=str(source_root_abs))
+            provider.strict = True
+            if not self._source_exists(provider, path_str, failures):
+                continue
 
-                provider = LocalProvider(base_dir=str(source_root_abs))
-                provider.strict = True
-                if not self._source_exists(provider, path_str, failures):
+            parser = PathParser(source_root_abs, None)
+
+            # Get output directory to exclude
+            exclude_dirs = [self.output_root] if self.output_root else []
+
+            logging.info(f"Scanning folder: {path_str} (Recursive: {recursive}, source_root: {source_root_abs})")
+
+            # List files in folder (recursive or not)
+            if recursive:
+                iterator = (self._scan_folder_recursive(provider, path_str, selection=selection)
+                            if selection.excluded_paths else self._scan_folder_recursive(provider, path_str))
+            else:
+                iterator = provider.list_dir(path_str, recursive=False)
+
+            # 收集有效的图片文件
+            valid_entries = []
+            for entry in self._scan_with_failures(provider, path_str, iterator, failures):
+                if self._should_stop():
+                    stop_requested = True
+                    break
+                is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
+                if is_dir:
                     continue
 
-                parser = PathParser(source_root_abs, None)
+                entry_name = entry.name
+                entry_path = entry.path
 
-                # Get output directory to exclude
-                exclude_dirs = [self.output_root] if self.output_root else []
+                # Skip files in output directory
+                if self.output_root:
+                    try:
+                        entry_path_obj = Path(entry_path)
+                        output_path_obj = Path(self.output_root)
+                        if is_within_directory(entry_path_obj, output_path_obj):
+                            logging.debug(f"Skipping output file: {entry_name}")
+                            continue
+                    except:
+                        pass
 
-                logging.info(f"Scanning folder: {path_str} (Recursive: {recursive}, source_root: {source_root_abs})")
+                if not entry_name.lower().endswith(('.jpg', '.jpeg')):
+                    continue
 
-                # List files in folder (recursive or not)
-                if recursive:
-                    iterator = self._scan_folder_recursive(provider, path_str)
-                else:
-                    iterator = provider.list_dir(path_str, recursive=False)
+                valid_entries.append((entry, entry_path))
 
-                # 收集有效的图片文件
-                valid_entries = []
-                for entry in self._scan_with_failures(provider, path_str, iterator, failures):
-                    is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
-                    if is_dir:
-                        continue
+            valid_entries = [(entry, entry_path, None) for entry, entry_path in valid_entries]
+            batches.append((provider, parser, valid_entries))
 
-                    entry_name = entry.name
-                    entry_path = entry.path
-
-                    # Skip files in output directory
-                    if self.output_root:
-                        try:
-                            entry_path_obj = Path(entry_path)
-                            output_path_obj = Path(self.output_root)
-                            if is_within_directory(entry_path_obj, output_path_obj):
-                                logging.debug(f"Skipping output file: {entry_name}")
-                                continue
-                        except:
-                            pass
-
-                    if not entry_name.lower().endswith(('.jpg', '.jpeg')):
-                        continue
-
-                    valid_entries.append((entry, entry_path))
-
-                # 设置进度总数
-                self.total_files += len(valid_entries)
-                self._emit_progress()
-
-                for entry, entry_path in valid_entries:
+        self.total_files = sum(len(entries) for _, _, entries in batches)
+        if phase_callback and not self._should_stop():
+            phase_callback('processing')
+        self._emit_progress()
+        # Keep one model owner and at most four submitted photos.
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=getattr(self, "worker_thread_prefix", "wingscribe-photo")) as executor:
+            futures = []
+            for provider, parser, valid_entries in batches:
+                for entry, entry_path, meta in valid_entries:
                     if self._should_stop():
                         stop_requested = True
                         logging.info("Stop requested, stopping new task submission")
@@ -1203,20 +1239,29 @@ class WingScribePipeline:
         else:
             logging.info(f"Pipeline (by folders) completed. Processed: {processed_count}. Duration: {duration:.2f}s")
 
-    def _scan_folder_recursive(self, provider, folder_path: str):
+    def _scan_folder_recursive(self, provider, folder_path: str, selection=None):
         """
         Recursively scan a folder, excluding output directories.
         Yields file entries.
         """
         exclude_dirs = [self.output_root] if self.output_root else []
 
+        if selection is not None and not selection.includes(folder_path):
+            return
+
         try:
             for entry in provider.list_dir(folder_path, recursive=False):
+                if self._should_stop():
+                    return
                 is_dir = entry.is_dir() if callable(entry.is_dir) else entry.is_dir
 
                 if is_dir:
                     # Check if should exclude
                     entry_path = str(Path(entry.path))
+                    if selection is not None and not selection.includes(entry_path):
+                        # A re-included descendant is scanned separately as an
+                        # explicit root; never enumerate its excluded siblings.
+                        continue
                     should_exclude = False
                     if exclude_dirs:
                         for excl in exclude_dirs:
@@ -1228,7 +1273,10 @@ class WingScribePipeline:
                         continue
 
                     # Recursively scan subfolder
-                    yield from self._scan_folder_recursive(provider, entry.path)
+                    if selection is None:
+                        yield from self._scan_folder_recursive(provider, entry.path)
+                    else:
+                        yield from self._scan_folder_recursive(provider, entry.path, selection=selection)
                 else:
                     yield entry
         except Exception as e:

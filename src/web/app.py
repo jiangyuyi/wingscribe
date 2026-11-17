@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request, HTTPException, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 
 # Add project root to path for imports
@@ -59,6 +59,7 @@ class StartPipelineRequest(BaseModel):
 class StartPipelineByFoldersRequest(BaseModel):
     paths: List[str]
     recursive: bool = True
+    excluded_paths: List[str] = Field(default_factory=list)
 
 class ConfigItem(BaseModel):
     key: str

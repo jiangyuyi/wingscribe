@@ -1,0 +1,19 @@
+{
+  "version": "Avibase-China-AviList2026-20261104",
+  "taxonomy_version": "AviList-v2026",
+  "taxonomy_sha256": "ea52f38f02ab30f26db7c810d1a834f2c1fa2985b53ca11b372d95dcb7f88ab9",
+  "species_count": 1539,
+  "subset_sha256": "2b7f6a1c1a9c539b35acb48af162d5c0c74e3b3441358ac0b62326d2f93a52ab",
+  "snapshot_sha256": "6edd6f3c8dbc287a8e5421ca16c512c937b8cec6fc9b21709b3663558a858656",
+  "scope": "Union of CN, TW, HK, MO; all listed species including rare/accidental records",
+  "mapping": "Exact first 8 hexadecimal digits of Avibase concept IDs to AviList AvibaseID; names from pinned AviList",
+  "source": "Avibase regional checklists, AviList 2026, Denis Lepage / Birds Canada",
+  "source_urls": {
+    "CN": "https://avibase.bsc-eoc.org/checklist.jsp?lang=ZH&p2=1&list=avilist&synlang=ZH&region=CN&version=text&lifelist=&highlight=0",
+    "TW": "https://avibase.bsc-eoc.org/checklist.jsp?region=TW&list=avilist&lang=EN",
+    "HK": "https://avibase.bsc-eoc.org/checklist.jsp?region=HK&list=avilist&lang=EN",
+    "MO": "https://avibase.bsc-eoc.org/checklist.jsp?region=MO&list=avilist&lang=EN"
+  },
+  "license_note": "Regional membership facts derived from attributed Avibase pages; no page text or display names copied. AviList taxonomy CC BY 4.0 does not license Avibase pages. Public redistribution review remains separate.",
+  "build": "python -m scripts.build_china_catalogue; offline, stable AviList order"
+}

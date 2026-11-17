@@ -53,6 +53,7 @@ class RecognizeRequest(BaseModel):
     region_filter: Optional[Literal["china", "global", "auto"]] = Field(
         None, description="区域过滤"
     )
+    location_tag: str = Field('', max_length=2048, description="auto 模式使用的原图地点文本；空白按中国处理")
 
     @model_validator(mode="after")
     def require_one_image_source(self):
@@ -80,6 +81,7 @@ class RecognizeResponse(BaseModel):
     platform: str = Field(..., description="实际使用的平台")
     processing_time_ms: int = Field(..., description="处理耗时（毫秒）")
     error: Optional[str] = Field(None, description="错误信息")
+    region_selection: Optional[dict] = Field(None, description="本次实际候选范围及版本；仅支持候选限定的平台返回")
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
